@@ -1,0 +1,45 @@
+# Gra Miasto
+
+Przygodowa gra przeglądarkowa (widok z góry + las w widoku pierwszej osoby).
+To pierwszy wycinek gry – bez backendu i bazy danych, cały stan żyje w przeglądarce.
+
+**Stack:** Next.js (App Router) · TypeScript · Tailwind CSS · shadcn/ui · three.js + react-three-fiber · Vitest
+
+## Uruchomienie
+
+```bash
+npm install
+npm run dev        # http://localhost:43217
+```
+
+Inne komendy: `npm run build`, `npm start` (port 43217), `npm run lint`, `npm run typecheck`, `npm test`.
+
+## Co jest w grze
+
+1. **Imię** → ekran ładowania świata → mapa świata z góry.
+2. **Tutorial** – podświetlony las z wykrzyknikiem, reszta wyszarzona. Trzeba kliknąć las.
+3. **Las (FPV)** – chodzenie po lesie w widoku pierwszej osoby: `↑/↓` (lub `W/S`) – przód/tył, `←/→` – obrót, `A/D` – krok w bok, `Esc` – powrót na mapę. Na mobile są przyciski na ekranie. W rączce widać zaznaczony przedmiot (domyślnie telefon).
+4. **Sklep „Żappka”** – wnętrze sklepu: kupno jedzenia (leczy życie), w środku życie nie spada (schronienie). Wyjście: `Esc`.
+5. **Dwa domy na sprzedaż** – losowy wygląd, cena 200–500 tys. zł i 6-cyfrowy numer telefonu.
+6. **Pasek górny** – życie (lewo); portfel (start: 1 000 000 zł), dzień/noc, pora roku i rok (prawo). Start: zima 2030.
+7. **Ekwipunek** – 8 slotów, w pierwszym telefon (nie da się go stracić, także po śmierci). Zaznacz jedzenie i `Zjedz` / `E`, by się uleczyć. Klawisze `1–8` wybierają slot.
+8. **Śmierć i odrodzenie** – przy 0% życia pojawia się ekran śmierci; odrodzenie na mapie z pełnym życiem i samym telefonem.
+
+### Zasady czasu i życia
+
+- 1 godzina w grze = 20 s realnych; doba = 12 h dnia + 12 h nocy (06:00–18:00 dzień); pora roku = 30 dni; start: zima 2030.
+- Wiosna/lato/jesień: dzień – bez strat, noc – −1% / 10 s.
+- Zima: dzień – −1% / 10 s, noc – −1% / 5 s (wskaźnik „Jest zimno”).
+- W sklepie życie nie spada. Czas stoi, dopóki nie klikniesz lasu w tutorialu.
+
+Logika (zegar, spadek życia, sklep, ekwipunek, śmierć) jest w `src/lib/game/engine.ts` i ma testy (`engine.test.ts`).
+
+### Debug
+
+`?speed=20` w adresie przyspiesza czas gry (np. `http://localhost:43217/?speed=30`).
+
+## Struktura
+
+- `src/lib/game/engine.ts` – czysta logika gry (reducer, zegar, przedmioty, domy)
+- `src/components/game/` – ekrany: `NameScreen`/`LoadingScreen`, `WorldMap`, `ShopInterior`, `ForestView` + `ForestScene` (r3f), `Hud`
+- `src/components/ui/` – komponenty shadcn/ui
