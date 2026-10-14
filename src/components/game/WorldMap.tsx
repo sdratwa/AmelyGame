@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,141 +10,188 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
+  HOUSE_LEVEL_NAME,
+  MAX_HOUSE_LEVEL,
   formatMoney,
   formatPhone,
+  houseUpgradeCost,
   type ClockInfo,
   type House,
+  type HouseLevel,
   type View,
 } from "@/lib/game/engine";
 import { cn } from "@/lib/utils";
-import { ForestArt, FrogLogo, GROUND, HouseArt, ShopArt } from "./art";
+import { SceneDefs } from "./scene/Defs";
+import { HouseDrawing, LEVEL_FRAME } from "./scene/houses";
+import { PALETTES } from "./scene/palette";
+import { WorldScene } from "./scene/WorldScene";
 
-type TileProps = {
-  testId: string;
-  label: React.ReactNode;
-  sub?: React.ReactNode;
-  onClick: () => void;
-  locked: boolean;
-  highlight?: boolean;
-  children: React.ReactNode;
-};
+const PORTRAIT_QUERY = "(orientation: portrait)";
 
-function Tile({ testId, label, sub, onClick, locked, highlight, children }: TileProps) {
+function usePortrait(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia(PORTRAIT_QUERY);
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia(PORTRAIT_QUERY).matches,
+    () => false,
+  );
+}
+
+function LevelPips({ level }: { level: HouseLevel }) {
   return (
-    <button
-      data-testid={testId}
-      onClick={onClick}
-      disabled={locked}
-      aria-label={typeof label === "string" ? label : undefined}
-      className={cn(
-        "group relative flex min-h-0 flex-col items-stretch gap-1.5 rounded-3xl text-left transition duration-500",
-        locked
-          ? "pointer-events-none cursor-default opacity-45 grayscale"
-          : "cursor-pointer hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white",
-        highlight && "z-10",
-      )}
-    >
-      <div
-        className={cn(
-          "relative aspect-square w-full overflow-hidden rounded-3xl bg-black/5 shadow-lg ring-2 ring-black/10 transition",
-          !locked && "group-hover:ring-4 group-hover:ring-white/70",
-          highlight && "ring-4 ring-amber-300 shadow-[0_0_40px_6px_rgba(252,211,77,0.6)]",
-        )}
-      >
-        {children}
-        {highlight && (
+    <div className="flex items-center gap-1.5" aria-label={`Poziom ${level} z ${MAX_HOUSE_LEVEL}`}>
+      {Array.from({ length: MAX_HOUSE_LEVEL }, (_, i) => (
+        <span
+          key={i}
+          className={cn(
+            "h-2.5 w-7 rounded-full",
+            i < level ? "bg-amber-300" : "bg-white/15",
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+function HouseDialog({
+  house,
+  wallet,
+  season,
+  onClose,
+  onBuy,
+  onUpgrade,
+}: {
+  house: House | null;
+  wallet: number;
+  season: ClockInfo["season"];
+  onClose: () => void;
+  onBuy: (id: string) => void;
+  onUpgrade: (id: string) => void;
+}) {
+  const frame = house ? LEVEL_FRAME[house.level] : null;
+  const upgradeCost = house ? houseUpgradeCost(house.level) : null;
+  const nextLevel = house && upgradeCost !== null ? ((house.level + 1) as HouseLevel) : null;
+
+  return (
+    <Dialog open={!!house} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md border-white/10 bg-slate-900 text-white" data-testid="house-dialog">
+        {house && frame && (
           <>
-            <span className="absolute inset-0 animate-pulse rounded-3xl ring-4 ring-amber-200/80" aria-hidden />
-            <span
-              data-testid="tutorial-exclamation"
-              className="absolute right-2 top-2 flex h-9 w-9 animate-bounce items-center justify-center rounded-full bg-amber-400 text-xl font-black text-amber-950 shadow-lg ring-2 ring-white sm:h-12 sm:w-12 sm:text-3xl"
-              aria-label="Wymagana akcja"
-            >
-              !
-            </span>
+            <DialogHeader>
+              <DialogTitle>
+                {HOUSE_LEVEL_NAME[house.level]} · {house.name}
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                {house.owned
+                  ? "To Twój dom. Możesz go ulepszać do poziomu 4."
+                  : "Oferta sprzedaży od prywatnego właściciela."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-900/60 to-emerald-950">
+              <svg
+                viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`}
+                className="mx-auto h-48 w-full"
+                role="img"
+                aria-label={HOUSE_LEVEL_NAME[house.level]}
+              >
+                <SceneDefs palette={PALETTES[season]} />
+                <HouseDrawing house={house} season={season} />
+              </svg>
+            </div>
+
+            <dl className="grid grid-cols-2 items-center gap-x-3 gap-y-2 text-sm">
+              <dt className="text-slate-400">Poziom</dt>
+              <dd className="flex justify-end">
+                <LevelPips level={house.level} />
+              </dd>
+              {!house.owned && (
+                <>
+                  <dt className="text-slate-400">Cena</dt>
+                  <dd className="text-right font-semibold text-amber-200">{formatMoney(house.price)}</dd>
+                  <dt className="text-slate-400">Telefon do właściciela</dt>
+                  <dd className="text-right font-mono font-semibold">{formatPhone(house.phone)}</dd>
+                </>
+              )}
+            </dl>
+
+            {!house.owned ? (
+              <Button
+                data-testid="buy-house"
+                disabled={wallet < house.price}
+                onClick={() => onBuy(house.id)}
+                className="h-11 bg-emerald-500 font-semibold text-emerald-950 hover:bg-emerald-400"
+              >
+                {wallet < house.price ? "Brak środków" : `Kup za ${formatMoney(house.price)}`}
+              </Button>
+            ) : nextLevel && upgradeCost !== null ? (
+              <Button
+                data-testid="upgrade-house"
+                disabled={wallet < upgradeCost}
+                onClick={() => onUpgrade(house.id)}
+                className="h-11 bg-amber-400 font-semibold text-amber-950 hover:bg-amber-300"
+              >
+                {wallet < upgradeCost
+                  ? "Brak środków na ulepszenie"
+                  : `Ulepsz do: ${HOUSE_LEVEL_NAME[nextLevel]} · ${formatMoney(upgradeCost)}`}
+              </Button>
+            ) : (
+              <p className="rounded-lg bg-white/5 p-3 text-center text-sm text-amber-200">
+                Maksymalny poziom – rezydencja jest w pełni rozbudowana.
+              </p>
+            )}
+            <Button variant="secondary" onClick={onClose}>
+              Zamknij
+            </Button>
           </>
         )}
-      </div>
-      <div className="rounded-xl bg-slate-900/85 px-2.5 py-1.5 text-white shadow">
-        <div className="text-sm font-semibold leading-tight sm:text-base">{label}</div>
-        {sub && <div className="mt-0.5 text-[11px] leading-snug text-slate-300 sm:text-xs">{sub}</div>}
-      </div>
-    </button>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function WorldMap({
   clock,
   houses,
+  wallet,
   tutorialDone,
   onEnter,
+  onBuyHouse,
+  onUpgradeHouse,
 }: {
   clock: ClockInfo;
   houses: House[];
+  wallet: number;
   tutorialDone: boolean;
   onEnter: (view: View) => void;
+  onBuyHouse: (id: string) => void;
+  onUpgradeHouse: (id: string) => void;
 }) {
-  const [openHouse, setOpenHouse] = useState<House | null>(null);
-  const ground = GROUND[clock.season];
-  const locked = !tutorialDone;
+  const [openId, setOpenId] = useState<string | null>(null);
+  const portrait = usePortrait();
+  const openHouse = houses.find((h) => h.id === openId) ?? null;
+  const open = useCallback((house: House) => setOpenId(house.id), []);
 
   return (
     <section
       data-testid="world-map"
-      className="relative flex h-full w-full items-center justify-center overflow-y-auto p-3 sm:p-6"
-      style={{
-        background: `radial-gradient(circle at 30% 20%, ${ground.accent}, ${ground.base} 70%)`,
-      }}
+      className="relative h-full w-full overflow-hidden"
+      style={{ background: PALETTES[clock.season].edge }}
     >
-      <div className="pointer-events-none absolute inset-0 opacity-30" aria-hidden>
-        <div className="absolute left-0 right-0 top-1/2 h-10 -translate-y-1/2 bg-slate-500" />
-        <div className="absolute bottom-0 top-0 left-1/2 w-10 -translate-x-1/2 bg-slate-500" />
-      </div>
+      <WorldScene
+        layoutName={portrait ? "portrait" : "landscape"}
+        season={clock.season}
+        isDay={clock.isDay}
+        houses={houses}
+        tutorialDone={tutorialDone}
+        onEnter={onEnter}
+        onOpenHouse={open}
+      />
 
-      <div className="relative z-10 my-auto grid w-full max-w-[min(100%,34rem)] grid-cols-2 gap-3 sm:gap-6 lg:max-w-[min(100%,calc((100dvh-16rem)*1.15))]">
-        <Tile
-          testId="tile-forest"
-          label="Las"
-          sub="Idź na spacer"
-          locked={false}
-          highlight={locked}
-          onClick={() => onEnter("forest")}
-        >
-          <ForestArt season={clock.season} />
-        </Tile>
-        <Tile
-          testId="tile-shop"
-          label={
-            <span className="flex items-center gap-1.5">
-              <FrogLogo size={20} /> Żappka
-            </span>
-          }
-          sub="Jedzenie i schronienie"
-          locked={locked}
-          onClick={() => onEnter("shop")}
-        >
-          <ShopArt season={clock.season} />
-        </Tile>
-        {houses.map((house, i) => (
-          <Tile
-            key={house.id}
-            testId={`tile-house-${i}`}
-            label={`Dom na sprzedaż`}
-            sub={
-              <>
-                <span className="font-semibold text-amber-200">{formatMoney(house.price)}</span>
-                <span className="block">tel. {formatPhone(house.phone)}</span>
-              </>
-            }
-            locked={locked}
-            onClick={() => setOpenHouse(house)}
-          >
-            <HouseArt house={house} season={clock.season} />
-          </Tile>
-        ))}
-      </div>
-
-      {locked && (
+      {!tutorialDone && (
         <div
           data-testid="tutorial-hint"
           className="pointer-events-none absolute inset-x-3 top-3 z-20 mx-auto max-w-md rounded-2xl bg-amber-300 px-4 py-3 text-center text-sm font-semibold text-amber-950 shadow-xl sm:top-5"
@@ -153,43 +200,14 @@ export function WorldMap({
         </div>
       )}
 
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-0 z-[5] bg-[#0a1235] transition-opacity duration-1000",
-          clock.isDay ? "opacity-0" : "opacity-45",
-        )}
-        aria-hidden
+      <HouseDialog
+        house={openHouse}
+        wallet={wallet}
+        season={clock.season}
+        onClose={() => setOpenId(null)}
+        onBuy={onBuyHouse}
+        onUpgrade={onUpgradeHouse}
       />
-
-      <Dialog open={!!openHouse} onOpenChange={(o) => !o && setOpenHouse(null)}>
-        <DialogContent className="max-w-sm border-white/10 bg-slate-900 text-white" data-testid="house-dialog">
-          {openHouse && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{openHouse.name}</DialogTitle>
-                <DialogDescription className="text-slate-400">
-                  Oferta sprzedaży od prywatnego właściciela.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="mx-auto aspect-square w-40 overflow-hidden rounded-2xl">
-                <HouseArt house={openHouse} season={clock.season} />
-              </div>
-              <dl className="grid grid-cols-2 gap-2 text-sm">
-                <dt className="text-slate-400">Cena</dt>
-                <dd className="text-right font-semibold text-amber-200">{formatMoney(openHouse.price)}</dd>
-                <dt className="text-slate-400">Telefon do właściciela</dt>
-                <dd className="text-right font-mono font-semibold">{formatPhone(openHouse.phone)}</dd>
-              </dl>
-              <p className="rounded-lg bg-white/5 p-3 text-xs text-slate-400">
-                Kupno i zwiedzanie domów pojawi się w kolejnej wersji gry.
-              </p>
-              <Button variant="secondary" onClick={() => setOpenHouse(null)}>
-                Zamknij
-              </Button>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

@@ -95,17 +95,49 @@ export const SHOP_ITEMS: ItemId[] = [
   "water",
 ];
 
+export type HouseLevel = 1 | 2 | 3 | 4;
+export const MAX_HOUSE_LEVEL: HouseLevel = 4;
+
+export const HOUSE_LEVEL_NAME: Record<HouseLevel, string> = {
+  1: "Chatka",
+  2: "Domek",
+  3: "Dom z poddaszem",
+  4: "Rezydencja",
+};
+
+export const MIN_HOUSE_PRICE = 200_000;
+export const MAX_HOUSE_PRICE = 500_000;
+
+/** Poziom domu wynika z ceny: im drożej, tym bardziej rozbudowany. */
+export function houseLevelForPrice(price: number): HouseLevel {
+  if (price < 275_000) return 1;
+  if (price < 350_000) return 2;
+  if (price < 425_000) return 3;
+  return 4;
+}
+
+const UPGRADE_COSTS: Record<1 | 2 | 3, number> = {
+  1: 60_000,
+  2: 90_000,
+  3: 130_000,
+};
+
+/** Koszt ulepszenia z danego poziomu na następny (null = poziom maksymalny). */
+export function houseUpgradeCost(level: HouseLevel): number | null {
+  return level >= MAX_HOUSE_LEVEL ? null : UPGRADE_COSTS[level as 1 | 2 | 3];
+}
+
 export type House = {
   id: string;
   name: string;
+  level: HouseLevel;
   price: number;
   phone: string;
+  owned: boolean;
   wallColor: string;
   roofColor: string;
   doorColor: string;
-  roofStyle: "gable" | "hip" | "flat";
-  hasChimney: boolean;
-  hasGarage: boolean;
+  flip: boolean;
 };
 
 export type ClockInfo = {
@@ -206,6 +238,8 @@ export type Action =
   | { type: "enter"; view: View }
   | { type: "leave" }
   | { type: "buy"; item: ItemId }
+  | { type: "buyHouse"; id: string }
+  | { type: "upgradeHouse"; id: string }
   | { type: "select"; slot: number }
   | { type: "eat" }
   | { type: "respawn" }
@@ -302,6 +336,41 @@ export function reducer(state: GameState, action: Action): GameState {
       };
     }
 
+    case "buyHouse": {
+      if (state.dead || !state.tutorialDone) return state;
+      const house = state.houses.find((h) => h.id === action.id);
+      if (!house || house.owned) return state;
+      if (state.wallet < house.price) {
+        return { ...state, toast: toast("Za mało pieniędzy na ten dom.", "error") };
+      }
+      return {
+        ...state,
+        wallet: state.wallet - house.price,
+        houses: state.houses.map((h) =>
+          h.id === house.id ? { ...h, owned: true } : h,
+        ),
+        toast: toast(`Kupiono dom: ${house.name}`),
+      };
+    }
+
+    case "upgradeHouse": {
+      if (state.dead) return state;
+      const house = state.houses.find((h) => h.id === action.id);
+      if (!house || !house.owned) return state;
+      const cost = houseUpgradeCost(house.level);
+      if (cost === null) return state;
+      if (state.wallet < cost) {
+        return { ...state, toast: toast("Za mało pieniędzy na ulepszenie.", "error") };
+      }
+      const level = (house.level + 1) as HouseLevel;
+      return {
+        ...state,
+        wallet: state.wallet - cost,
+        houses: state.houses.map((h) => (h.id === house.id ? { ...h, level } : h)),
+        toast: toast(`Ulepszono dom: poziom ${level} – ${HOUSE_LEVEL_NAME[level]}`),
+      };
+    }
+
     case "select":
       if (action.slot < 0 || action.slot >= INVENTORY_SLOTS) return state;
       return { ...state, selected: action.slot };
@@ -346,16 +415,15 @@ export function reducer(state: GameState, action: Action): GameState {
 }
 
 const WALL_COLORS = [
-  "#f4e3c1",
-  "#e8b4a0",
-  "#b5d0e6",
-  "#c9dfb3",
-  "#e6d3f0",
-  "#f2c879",
-  "#d7d7d7",
+  "#b9ad98",
+  "#a89f8f",
+  "#c8b79a",
+  "#9a9486",
+  "#b7a58a",
+  "#cbbfa8",
 ];
-const ROOF_COLORS = ["#a23b2a", "#5b3a29", "#2f4858", "#6b7a8f", "#7a2e4d", "#3a5a40"];
-const DOOR_COLORS = ["#7a4a21", "#1d4e89", "#2d6a4f", "#9b2226", "#333"];
+const ROOF_COLORS = ["#d0662a", "#c4572a", "#b8502a", "#b0662e", "#c97a3a", "#a8523a"];
+const DOOR_COLORS = ["#5b3a22", "#6b4423", "#3f5a3a", "#4a3a5a", "#7a2e2a"];
 const STREETS = ["Zielona", "Lipowa", "Polna", "Krótka", "Słoneczna", "Leśna"];
 
 export function generateHouse(
@@ -363,19 +431,23 @@ export function generateHouse(
   rnd: () => number = Math.random,
 ): House {
   const pick = <T,>(arr: readonly T[]) => arr[Math.floor(rnd() * arr.length)];
-  const price = Math.round((200_000 + rnd() * 300_000) / 1000) * 1000;
+  const raw = MIN_HOUSE_PRICE + rnd() * (MAX_HOUSE_PRICE - MIN_HOUSE_PRICE);
+  const price = Math.min(
+    MAX_HOUSE_PRICE,
+    Math.max(MIN_HOUSE_PRICE, Math.round(raw / 1000) * 1000),
+  );
   const phone = Array.from({ length: 6 }, () => Math.floor(rnd() * 10)).join("");
   return {
     id,
-    name: `Dom, ul. ${pick(STREETS)} ${1 + Math.floor(rnd() * 40)}`,
-    price: Math.min(500_000, Math.max(200_000, price)),
+    name: `ul. ${pick(STREETS)} ${1 + Math.floor(rnd() * 40)}`,
+    level: houseLevelForPrice(price),
+    price,
     phone,
+    owned: false,
     wallColor: pick(WALL_COLORS),
     roofColor: pick(ROOF_COLORS),
     doorColor: pick(DOOR_COLORS),
-    roofStyle: pick(["gable", "hip", "flat"] as const),
-    hasChimney: rnd() > 0.4,
-    hasGarage: rnd() > 0.5,
+    flip: rnd() > 0.5,
   };
 }
 

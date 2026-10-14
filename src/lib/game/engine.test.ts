@@ -5,6 +5,8 @@ import {
   SECONDS_PER_DAY,
   drainPerSecond,
   generateHouse,
+  houseLevelForPrice,
+  houseUpgradeCost,
   getClock,
   initialState,
   reducer,
@@ -125,12 +127,40 @@ describe("tutorial", () => {
 });
 
 describe("domy", () => {
-  it("cena 200-500k, telefon 6 cyfr", () => {
+  it("cena 200-500k, telefon 6 cyfr, poziom zgodny z ceną", () => {
     for (let i = 0; i < 200; i++) {
       const h = generateHouse("h");
       expect(h.price).toBeGreaterThanOrEqual(200_000);
       expect(h.price).toBeLessThanOrEqual(500_000);
       expect(h.phone).toMatch(/^\d{6}$/);
+      expect(h.level).toBe(houseLevelForPrice(h.price));
     }
+  });
+  it("4 poziomy rosnące z ceną", () => {
+    expect(houseLevelForPrice(200_000)).toBe(1);
+    expect(houseLevelForPrice(274_999)).toBe(1);
+    expect(houseLevelForPrice(275_000)).toBe(2);
+    expect(houseLevelForPrice(350_000)).toBe(3);
+    expect(houseLevelForPrice(425_000)).toBe(4);
+    expect(houseLevelForPrice(500_000)).toBe(4);
+  });
+  it("kupno i ulepszanie do maks. poziomu 4", () => {
+    const house = { ...generateHouse("d1", () => 0), level: 1 as const, price: 200_000 };
+    let s = playing({ houses: [house] });
+    s = reducer(s, { type: "upgradeHouse", id: "d1" });
+    expect(s.houses[0].level).toBe(1);
+    s = reducer(s, { type: "buyHouse", id: "d1" });
+    expect(s.houses[0].owned).toBe(true);
+    expect(s.wallet).toBe(800_000);
+    for (let i = 0; i < 5; i++) s = reducer(s, { type: "upgradeHouse", id: "d1" });
+    expect(s.houses[0].level).toBe(4);
+    expect(s.wallet).toBe(800_000 - 60_000 - 90_000 - 130_000);
+    expect(houseUpgradeCost(4)).toBeNull();
+  });
+  it("nie kupisz domu bez pieniędzy", () => {
+    const house = { ...generateHouse("d1", () => 0.9), price: 500_000 };
+    const s = reducer(playing({ houses: [house], wallet: 1000 }), { type: "buyHouse", id: "d1" });
+    expect(s.houses[0].owned).toBe(false);
+    expect(s.wallet).toBe(1000);
   });
 });

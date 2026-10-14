@@ -132,3 +132,76 @@
   0%, 100% { transform: translate(0, 0) rotate(-1deg); }
   50% { transform: translate(-4px, -6px) rotate(1deg); }
 }
+
+.spot {
+  cursor: pointer;
+  outline: none;
+}
+.spot .lift {
+  transition: transform 0.25s ease, filter 0.25s ease;
+}
+.spot:hover .lift,
+.spot:focus-visible .lift {
+  filter: brightness(1.12) drop-shadow(0 0 10px rgba(255, 235, 160, 0.7));
+}
+.spot:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 4px;
+}
+
+.world {
+  filter: none;
+  transition: filter 1.6s ease;
+}
+.world-night {
+  filter: brightness(0.5) saturate(0.85) contrast(1.05);
+}
+.world-night .win {
+  filter: brightness(2.1) saturate(1.3);
+}
+
+.tut-dim {
+  filter: grayscale(1) brightness(0.7);
+  transition: filter 0.6s ease;
+}
+.tut-clear {
+  filter: none;
+  transition: filter 0.6s ease;
+}
+
+.pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: halo-pulse 1.8s ease-in-out infinite;
+}
+.bob {
+  animation: badge-bob 1s ease-in-out infinite;
+}
+.flicker {
+  animation: lamp-flicker 2.6s ease-in-out infinite;
+}
+.smoke {
+  animation: smoke-rise 3.4s ease-in infinite;
+}
+
+@keyframes halo-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+@keyframes badge-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes lamp-flicker {
+  0%, 100% { opacity: 1; }
+  45% { opacity: 0.82; }
+  60% { opacity: 0.95; }
+}
+@keyframes smoke-rise {
+  0% { opacity: 0.85; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-16px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse, .bob, .flicker, .smoke { animation: none; }
+}

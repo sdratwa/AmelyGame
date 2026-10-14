@@ -91,8 +91,11 @@ export function GameApp() {
           <WorldMap
             clock={clock}
             houses={state.houses}
+            wallet={state.wallet}
             tutorialDone={state.tutorialDone}
             onEnter={enter}
+            onBuyHouse={(id) => dispatch({ type: "buyHouse", id })}
+            onUpgradeHouse={(id) => dispatch({ type: "upgradeHouse", id })}
           />
         )}
         {state.view === "shop" && (
