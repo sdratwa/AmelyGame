@@ -34,6 +34,8 @@ Inne komendy: `npm run build`, `npm start` (port 43217), `npm run lint`, `npm ru
 
 Logika (zegar, spadek życia, sklep, ekwipunek, śmierć) jest w `src/lib/game/engine.ts` i ma testy (`engine.test.ts`).
 
+Pełny opis stanu gry, zasad i tego, czego jeszcze nie ma — do wklejenia innemu modelowi — jest w [`docs/opis-gry.md`](docs/opis-gry.md).
+
 ### Debug
 
 `?speed=20` w adresie przyspiesza czas gry (np. `http://localhost:43217/?speed=30`).
