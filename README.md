@@ -43,3 +43,7 @@ Logika (zegar, spadek życia, sklep, ekwipunek, śmierć) jest w `src/lib/game/e
 - `src/lib/game/engine.ts` – czysta logika gry (reducer, zegar, przedmioty, domy)
 - `src/components/game/` – ekrany: `NameScreen`/`LoadingScreen`, `WorldMap`, `ShopInterior`, `ForestView` + `ForestScene` (r3f), `Hud`
 - `src/components/ui/` – komponenty shadcn/ui
+
+### Dostęp z innego hosta (dev)
+
+`next dev` blokuje połączenie HMR (`/_next/hmr`) z hostów spoza `allowedDevOrigins`; wtedy w przeglądarce widać „websocket error” i strona przeładowuje się w pętli. Dozwolone hosty ustawiasz w `next.config.ts` lub zmienną `ALLOWED_DEV_ORIGINS` (lista hostów po przecinku, bez portu), np. `ALLOWED_DEV_ORIGINS=moj-host.example.com npm run dev`.
