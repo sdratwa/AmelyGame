@@ -1,11 +1,13 @@
 # Generator świata - las startowy 300 x 300 m
 
+Stan implementacji rdzenia (współrzędne, teren, indeks, walkable): [swiat-w0.md](swiat-w0.md).
+
 Wymiary i układ dotyczą pierwszego lasu; nie są regułą dla przyszłych lokacji.
 
 ## Skala i organizacja
 
 - 1 jednostka Three.js = 1 metr. Współrzędne x, z w [-150, 150].
-- Logiczne sektory 30 x 30 m (siatka 10 x 10, `sector.{ix}_{iz}`). Siatka jest niewidoczna dla gracza; ruch jest swobodny. Sektory służą do generowania, indeksu kolizji, odkrywania mapy i okna renderowania. Streaming zasobów nie jest potrzebny w etapie 1.
+- Logiczne sektory 30 x 30 m (siatka 10 x 10, `sector.<region>.<ix>_<iz>`, np. `sector.forest_start.3_4`). Siatka jest niewidoczna dla gracza; ruch jest swobodny. Sektory służą do generowania, indeksu kolizji, odkrywania mapy i okna renderowania. Streaming zasobów nie jest potrzebny w etapie 1.
 - Organizacja oparta na `RegionDef { id, bounds, sectorSize, unlockedBy }`, nie na sztywnych 100 sektorach. Regiony startowe: `region.forest_start` i `region.beyond_bridge` (wschodni brzeg ok. 35 m + polana, odblokowywany przez quest). Przyszłe regiony dochodzą jako dane.
 
 ## Baza a zmiany gracza

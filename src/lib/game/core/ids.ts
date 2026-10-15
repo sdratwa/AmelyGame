@@ -13,6 +13,9 @@ export type RecipeId = NamespacedId<"recipe">;
 export type RiddleId = NamespacedId<"riddle">;
 export type ContainerId = NamespacedId<"container">;
 export type DepositId = NamespacedId<"deposit">;
+export type SectorId = NamespacedId<"sector">;
+export type PoiId = NamespacedId<"poi">;
+export type ZoneId = NamespacedId<"zone">;
 
 /** Rodzaj identyfikatora (część przed pierwszą kropką) albo null, jeśli to nie ID z przestrzeni nazw. */
 export function idKind(id: string): string | null {

@@ -36,6 +36,14 @@
 - Seed i `saveId` pochodzą z `crypto.getRandomValues` w warstwie UI i wchodzą do silnika jako dane komendy; silnik nie używa `Math.random` ani zegara (pilnuje test).
 - Pozycja w lesie: zapisywana co 2 s i przy wyjściu; po wczytaniu gracz startuje na mapie, a wejście do lasu przywraca pozycję.
 
+## W0 (rdzeń świata)
+
+- Teren v1 = płaski prototyp; teren v2 jest roboczy (nie rejestrowany w generatorach, nie zapisywany) do czasu wydania w W1a. `CURRENT_GEN_VERSION` pozostaje 1.
+- Etap planowania widzi tylko teren bazowy, a spłaszczenia biorą wysokość z bazy: brak cyklu teren <-> obiekty (wymuszone typami).
+- Identyfikator sektora zawiera region (`sector.forest_start.3_4`), identyfikator obiektu: `rodzaj.region.ix_iz.numer`.
+- Kolizje należą do `WorldObject` (dane generatora), nie do modeli. Ruch dzielony na kroki <= promień gracza.
+- Punkty charakterystyczne i strefy środowiskowe to dane (`FeatureMap`); żadne konkretne lokacje ani pozycje nie zostały ustalone.
+
 ## Otwarte
 
 - Sprzęt referencyjny dla progów FPS (HIGH, LOW).
