@@ -1,5 +1,7 @@
 import type { Bounds } from "./bounds";
 import { fbm2 } from "./noise";
+import { SegmentIndex } from "./polyline";
+import type { Point, RibbonPoint } from "./shape";
 
 export type Vec3 = { x: number; y: number; z: number };
 
@@ -93,6 +95,92 @@ export function bumpModifier(spec: BumpSpec): TerrainModifier {
       const d = Math.hypot(x - cx, z - cz);
       if (d >= radius) return h;
       return h + amplitude * 0.5 * (1 + Math.cos((Math.PI * d) / radius));
+    },
+  };
+}
+
+export type RiverSpec = {
+  id: string;
+  /** Oś rzeki z półszerokością lustra wody `w` w każdym punkcie. */
+  points: readonly RibbonPoint[];
+  /** Wysokość lustra wody w każdym punkcie osi. */
+  waterY: readonly number[];
+  /** Głębokość koryta w osi (m) poniżej lustra wody. */
+  depth: number;
+  /** Szerokość skarpy brzegowej (m), na której teren wznosi się o `bankRise`. */
+  bankWidth: number;
+  bankRise: number;
+  /** Odcinek (m), na którym wysokość brzegu wtapia się w teren naturalny. */
+  blend: number;
+};
+
+/**
+ * Koryto rzeki: wklęsłe dno w obrębie lustra wody, łagodna skarpa brzegowa i wtopienie w teren naturalny.
+ * Profil jest ciągły, a jego nachylenie ograniczone parametrami (skarpa i wtopienie są rozciągnięte na kilka metrów).
+ */
+export function riverModifier(spec: RiverSpec): TerrainModifier {
+  const { id, points, waterY, depth, bankWidth, bankRise, blend } = spec;
+  if (points.length < 2 || waterY.length !== points.length) throw new Error(`Rzeka ${id}: niepoprawne punkty`);
+  const reach = bankWidth + blend;
+  const maxW = Math.max(...points.map((p) => p.w));
+  const index = new SegmentIndex(reach, 24);
+  index.addPolyline(points);
+  const pad = maxW + reach;
+  return {
+    id,
+    kind: "river",
+    bounds: {
+      minX: Math.min(...points.map((p) => p.x)) - pad,
+      minZ: Math.min(...points.map((p) => p.z)) - pad,
+      maxX: Math.max(...points.map((p) => p.x)) + pad,
+      maxZ: Math.max(...points.map((p) => p.z)) + pad,
+    },
+    apply(x, z, h) {
+      const hit = index.nearest(x, z);
+      if (!hit) return h;
+      const wy = waterY[hit.seg] + (waterY[hit.seg + 1] - waterY[hit.seg]) * hit.t;
+      if (hit.gap <= 0) {
+        const u = hit.d / hit.w;
+        return wy - depth * (1 - u * u);
+      }
+      if (hit.gap < bankWidth) return wy + bankRise * smoothstep(hit.gap / bankWidth);
+      const top = wy + bankRise;
+      return top + (h - top) * smoothstep((hit.gap - bankWidth) / blend);
+    },
+  };
+}
+
+export type TrailSpec = {
+  id: string;
+  points: readonly Point[];
+  /** Wysokość ścieżki w każdym punkcie osi (zwykle wygładzony profil terenu). */
+  y: readonly number[];
+  halfWidth: number;
+  blend: number;
+};
+
+/** Ścieżka: stała wysokość w poprzek pasa (profil wzdłuż osi z `y`) i gładkie wtopienie w otoczenie na odcinku `blend`. */
+export function trailModifier(spec: TrailSpec): TerrainModifier {
+  const { id, points, y, halfWidth, blend } = spec;
+  if (points.length < 2 || y.length !== points.length) throw new Error(`Ścieżka ${id}: niepoprawne punkty`);
+  const index = new SegmentIndex(blend, 8);
+  index.addPolyline(points.map((p) => ({ x: p.x, z: p.z, w: halfWidth })));
+  const pad = halfWidth + blend;
+  return {
+    id,
+    kind: "trail",
+    bounds: {
+      minX: Math.min(...points.map((p) => p.x)) - pad,
+      minZ: Math.min(...points.map((p) => p.z)) - pad,
+      maxX: Math.max(...points.map((p) => p.x)) + pad,
+      maxZ: Math.max(...points.map((p) => p.z)) + pad,
+    },
+    apply(x, z, h) {
+      const hit = index.nearest(x, z);
+      if (!hit) return h;
+      const yy = y[hit.seg] + (y[hit.seg + 1] - y[hit.seg]) * hit.t;
+      if (hit.gap <= 0) return yy;
+      return yy + (h - yy) * smoothstep(hit.gap / blend);
     },
   };
 }

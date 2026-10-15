@@ -14,8 +14,14 @@ export type WorldObject = {
   z: number;
   /** Wysokość podstawy: wynik `terrain.height(x, z)` na terenie końcowym. */
   y: number;
+  /** Wariant modelu w obrębie rodzaju (np. `common.3` dla `tree`); identyfikator modelu to `rodzaj.wariant`. */
+  variant?: string;
   yaw?: number;
   scale?: number;
+  /** Skala osi (x, y, z) zamiast jednolitej `scale` (np. skały o zmiennych proporcjach). */
+  scaleXYZ?: readonly [number, number, number];
+  /** Przechył (rad) wokół osi x i z. */
+  tilt?: readonly [number, number];
   /** Promień obwiedni używany przez indeks przestrzenny; zawsze >= zasięg collidera. */
   radius: number;
   collider?: Collider;
