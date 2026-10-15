@@ -11,7 +11,8 @@ import {
 } from "@/lib/game/engine";
 import { SceneDefs } from "./Defs";
 import { HOUSE_LANTERNS, HouseDrawing, SHOP_DOOR_X, ShopDrawing, houseMetrics } from "./houses";
-import { PALETTES, mulberry32, shade, type Palette } from "./palette";
+import { mulberry32 } from "@/lib/game/core/rng";
+import { PALETTES, shade, type Palette } from "./palette";
 import {
   Barrel,
   Bench,

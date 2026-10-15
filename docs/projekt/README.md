@@ -18,6 +18,11 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 
 Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, wyniki testów, problemy i ryzyka, proponowany kolejny etap. Zatrzymanie do zatwierdzenia przed kolejnym etapem. Szczegóły i zależności w planie (sekcja "Kolejność" poniżej).
 
+## Status
+
+- Faza A (dokumentacja i reguły): zrobione.
+- E0 (refaktor silnika): zrobione; nowe: powody pauzy zegara, `nextDayStart`, strumienie rng, zdarzenia. ID przedmiotów (`item.*`) i stosy przechodzą w E2 razem z modelem kontenerów (zmiana ID wymaga zmiany literałów w istniejących testach).
+
 ## Kolejność etapów
 
 1. Faza A: dokumentacja i reguły Cursor.

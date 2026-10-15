@@ -32,7 +32,7 @@ Inne komendy: `npm run build`, `npm start` (port 43217), `npm run lint`, `npm ru
 - Zima: dzień – −1% / 10 s, noc – −1% / 5 s (wskaźnik „Jest zimno”).
 - W sklepie życie nie spada. Czas stoi, dopóki nie klikniesz lasu w tutorialu.
 
-Logika (zegar, spadek życia, sklep, ekwipunek, śmierć) jest w `src/lib/game/engine.ts` i ma testy (`engine.test.ts`).
+Logika (zegar, spadek życia, sklep, ekwipunek, śmierć) jest w `src/lib/game/` (publiczne API: `engine.ts`) i ma testy (`*.test.ts`).
 
 Pełny opis stanu gry, zasad i tego, czego jeszcze nie ma — do wklejenia innemu modelowi — jest w [`docs/opis-gry.md`](docs/opis-gry.md).
 
@@ -46,7 +46,7 @@ Plan i projekt etapu 1 („Most do nieznanego”): [`docs/projekt/README.md`](do
 
 ## Struktura
 
-- `src/lib/game/engine.ts` – czysta logika gry (reducer, zegar, przedmioty, domy)
+- `src/lib/game/` – czysta logika gry bez Reacta i Three: `core/` (stan, zegar, `applyCommand`, zdarzenia, pauza czasu, rng), `content/` (przedmioty, domy), `systems/` (sesja, życie, ekwipunek, domy, śmierć); `engine.ts` to fasada publicznego API
 - `src/components/game/scene/` – ilustrowana scena świata (SVG): teren, ścieżki, drzewa, sklep, domy w 4 poziomach
 - `src/components/game/` – ekrany: `NameScreen`/`LoadingScreen`, `WorldMap`, `ShopInterior`, `ForestView` + `ForestScene` (r3f), `Hud`
 - `src/components/ui/` – komponenty shadcn/ui
