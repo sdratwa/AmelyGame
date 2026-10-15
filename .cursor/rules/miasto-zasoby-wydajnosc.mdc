@@ -1,0 +1,15 @@
+---
+description: Modele 3D (licencje, manifest, placeholdery) i wydajność renderowania w grze "Miasto"
+globs: src/components/game/forest/**,src/components/game/Forest*.tsx,public/models/**,docs/projekt/zasoby-3d.md
+alwaysApply: false
+---
+
+# Zasoby 3D i wydajność
+
+- Każdy model ma wpis w `public/models/manifest.json`: źródło (URL), autor, licencja, wymagana atrybucja, trójkąty, `placeholder`, data zatwierdzenia. Brak wpisu = model nie wchodzi do repozytorium.
+- Preferuj CC0. CC-BY dopiero po sprawdzeniu warunków atrybucji i zapisaniu ich w dokumentacji. Nie pobieraj zasobów z niezweryfikowanych źródeł i nie pobieraj niczego bez zatwierdzenia pakietu przez autora. Niczego nie kupuj bez zgody autora.
+- Zachowuj tekst licencji każdego pakietu obok jego plików.
+- Placeholdery (bryły proceduralne) są dozwolone wyłącznie do testowania mechaniki, muszą być oznaczone `placeholder: true` i nie wolno ich przedstawiać jako ukończonej grafiki. Docelowa roślinność, skały i teren nie powstają z prostych brył.
+- Wygląd (modele) jest rozdzielony od gry: kolizje i geometria pochodzą z profili colliderów wersji generatora, nie z aktualnego pliku modelu.
+- Wydajność: InstancedMesh dla powtarzalnej roślinności (wypełniany dla okna aktywnych sektorów), LOD dla dużych modeli, frustum culling, ograniczanie draw calls, tekstury <= 1024 px, profile jakości LOW/MEDIUM/HIGH, możliwość wyłączenia efektów, skalowanie rozdzielczości, licznik FPS tylko w trybie developerskim. Nie zakładaj WebGPU; zachowaj ścieżkę WebGL2.
+- Zmiany graficzne wymagają krótkiej notatki o wpływie na wydajność (draw calls, trójkąty, pamięć tekstur). Budżety i kryteria: `docs/projekt/wydajnosc.md`, `docs/projekt/prototyp-lasu.md`.

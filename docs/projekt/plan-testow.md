@@ -1,0 +1,56 @@
+# Plan testów
+
+Narzędzia: Vitest (`npm test`), `npm run lint`, `npm run typecheck`, `npm run build`. Weryfikacja wizualna scen 3D po stronie autora.
+
+## Regresja
+
+17 istniejących testów w `src/lib/game/engine.test.ts` muszą pozostać zielone bez zmian w oczekiwaniach (zegar, drenaż, śmierć, sklep, tutorial, domy).
+
+## Silnik i czas (E0)
+
+- `applyCommand` zwraca zdarzenia zgodne z komendą (`item.purchased`, `player.died`, `player.respawned`, `view.entered`, `house.bought`, ...), a `reducer` zwraca ten sam stan.
+- Pauza: powody systemowe; `pause.add` idempotentne; zamknięcie jednego dialogu nie wznawia zegara, gdy drugi trwa; `pause.clearOwner`; `tick` nie zmienia `elapsed` podczas pauzy; pauza nie wpływa na drenaż.
+- `nextDayStart` (granice dnia), `rng` deterministyczny i niezależne strumienie.
+- Toast bez zmiennej modułu (`toastSeq` w stanie), deterministyczne ID.
+
+## Ekwipunek i kontenery (E2)
+
+Stosy i łączenie; limit stosu z definicji; ilości dużo większe niż 20; kontener "magazyn" bez limitu bez zmian w kodzie questów (test z kontenerem testowym); pełny ekwipunek; przedmioty `unique` i `pinned`; odrodzenie (narzędzia i surowce zostają, jedzenie przepada); niezmiennik sumy ilości na losowych sekwencjach komend; brak duplikacji przy wielokrotnym przenoszeniu.
+
+## Questy (E3)
+
+Start questa; zależności podzadań; znalezienie narzędzia przed rozpoczęciem; cel warunkowy odzyskania depozytu; przeczytane vs zaakceptowane; postęp wyliczany ze stanu, nie z przycisków; nagroda raz.
+
+## Skrzynie i pozyskiwanie (C1)
+
+Otwarcie raz; osobne odebranie; pełny ekwipunek zostawia przedmiot w skrzyni; brak duplikacji; pozyskiwanie właściwym narzędziem; brak wydobycia bez narzędzia; liczenie drewna/kamienia 1/2/5; zmiana stanu drzewa/skały i trwałość po zapisie.
+
+## Troll i depozyt (T1)
+
+Troll zabiera wszystko poza telefonem (także narzędzia); przedmioty w depozycie z pełnym stanem; po poprawnej odpowiedzi wraca cały depozyt; brak slotów nie gubi przedmiotów (reszta u trolla); wielokrotne odbieranie nie duplikuje; zapis i odczyt zachowują depozyt; blokady (następny dzień, 1 godzina) działają po zapisie i odczycie z poprawnym pozostałym czasem; odrodzenie nie usuwa depozytu; konfrontacja atomowa; po pierwszej konfrontacji tylko zagadki; porażka nie blokuje ukończenia questa; pauza podczas dialogu nie przesuwa blokad.
+
+## Zagadki
+
+Min. 10 zagadek; walidacja w silniku; liczba jako odpowiedź (normalizacja); stabilny wybór w ramach próby; poprawna/błędna odpowiedź.
+
+## Świat i generator (W0, W1, W2)
+
+- Determinizm: to samo ziarno i wersja -> identyczny `WorldBase` (odcisk); różne ziarna -> różne światy.
+- Golden: odciski dla stałych ziaren dla każdej wydanej wersji generatora; `FROZEN.sha256` plików zamrożonej wersji.
+- Setki ziaren: walidator przechodzi; wszystkie skrzynie osiągalne bez przedmiotów z siebie nawzajem, poza wodą, bez nakładania, odstępy; ścieżki przechodnie; zasoby >= 3x przed mostem; brak przecieku przez rzekę przed mostem i przejście po moście; nachylenie w limitach.
+- `terrainHeight`: identyczne wartości w generatorze, kolizjach i siatce renderera (tolerancja 1 cm).
+- Baza vs delta: zmiana delty nie zmienia bazy; `resolveWorld` poprawne.
+- Zgodność wersji: stary zapis (wersja N) odtwarza ten sam świat po dodaniu wersji N+1; niezgodność odcisku jest wykrywana i nie nadpisuje zapisu; migracja atomowa (wszystko albo nic), z przypiętymi kotwicami i kopią zapasową.
+- Czas generacji w budżecie.
+
+## Zapis (E1)
+
+Round-trip w trakcie questa; uszkodzony zapis i kopia `.bak`; migracje `vN -> vN+1`; jawne pauzy niezapisywane; pozycja w lesie walidowana; reset zapisu; domy z seeda identyczne po wczytaniu.
+
+## Przejście headless (Q)
+
+Bot samymi komendami kończy quest na wielu ziarnach: ścieżka prosta oraz ścieżka z porażką u trolla (konfrontacja, czekanie do następnego dnia, zagadka, zwrot depozytu, budowa). Fuzz niezmienników: krytyczne przedmioty nie znikają, brak softlocka po śmierci.
+
+## Prototyp lasu (V2)
+
+Automatyczne kryteria z [prototyp-lasu.md](prototyp-lasu.md): zgodność manifestu, determinizm sektora, brak instancji w kolizji i na zboczach, jednolitość `terrainHeight`.

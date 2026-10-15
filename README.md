@@ -40,6 +40,10 @@ Pełny opis stanu gry, zasad i tego, czego jeszcze nie ma — do wklejenia innem
 
 `?speed=20` w adresie przyspiesza czas gry (np. `http://localhost:43217/?speed=30`).
 
+## Dokumentacja projektowa i reguły
+
+Plan i projekt etapu 1 („Most do nieznanego”): [`docs/projekt/README.md`](docs/projekt/README.md). Trwałe reguły dla agentów: `.cursor/rules/`.
+
 ## Struktura
 
 - `src/lib/game/engine.ts` – czysta logika gry (reducer, zegar, przedmioty, domy)

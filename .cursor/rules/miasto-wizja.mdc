@@ -1,0 +1,17 @@
+---
+description: Wizja i stałe zasady gry "Miasto" (odbiorcy, bezpieczeństwo, język, waluta, zakres)
+alwaysApply: true
+---
+
+# Miasto - wizja i zasady stałe
+
+- Gra przygodowa dla dzieci od 8 lat: kolorowa, przyjazna, bez brutalnej przemocy i realistycznych obrażeń. Każde zadanie da się ukończyć bez agresji.
+- Nie projektujemy mechanik pay-to-win, uciążliwego grindu, wymuszania codziennego logowania ani trwałych kar blokujących postęp.
+- Porażka może kosztować czas lub wymagać odzyskania przedmiotów, ale nigdy nie blokuje trwale głównego wątku fabularnego.
+- Język gry i interfejsu: polski. Waluta: PLN (start 1 000 000 zł, bez zmian bez osobnej decyzji).
+- Mapa miasta jest 2D (SVG); wybrane lokacje (np. las) są osobnymi widokami 3D. Nie przebudowujemy miasta na 3D bez decyzji autora.
+- Stos: Next.js, React, TypeScript, Tailwind, shadcn/ui, Three.js + React Three Fiber, Vitest. Bez migracji do innego silnika.
+- Teraz obowiązuje tryb single-player. Multiplayer jest celem docelowym, ale nie implementujemy serwera, synchronizacji, lobby ani czatu bez osobnej decyzji. Projektuj logikę tak, aby autorytatywny stan dało się przenieść na serwer.
+- Nie usuwaj istniejących funkcji bez uzasadnienia i akceptacji autora. Wartości życia, śmierci, drenażu i zegara zmieniaj tylko po osobnej propozycji.
+- Pracuj etapami i zatrzymuj się do zatwierdzenia po każdym większym etapie, podając: zmienione pliki, funkcjonalności, wyniki testów, problemy i ryzyka, proponowany kolejny krok.
+- Dokumenty projektowe: `docs/projekt/` (zacznij od `README.md`). Szczegóły konkretnych questów i lokacji zapisuj tam, nie w regułach.

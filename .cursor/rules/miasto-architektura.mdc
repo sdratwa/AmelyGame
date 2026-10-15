@@ -1,0 +1,18 @@
+---
+description: Architektura kodu gry "Miasto": czysty silnik, komendy i zdarzenia, dane zamiast kodu, zapis, pauza czasu
+globs: src/**
+alwaysApply: false
+---
+
+# Architektura
+
+- Silnik gry w `src/lib/game/**` nie importuje Reacta ani Three.js i nie używa `Math.random`, `Date.now`, `setTimeout` jako źródła prawdy. RNG i czas są wstrzykiwane (`core/rng`, `elapsed`).
+- Każda istotna zmiana stanu przechodzi przez jedno API: `applyCommand(state, command) -> { state, events }`. Komponenty tylko wysyłają komendy i czytają stan. Zdarzenia (`GameEvent`) są obsługiwane centralnie.
+- Nie duplikuj stanu gry w komponentach. Stan UI (otwarte panele, toasty) nie jest częścią zapisu.
+- Questy, przedmioty, surowce, receptury, zagadki, dialogi i ogłoszenia to dane w `content/`, nie rozgałęzienia w komponentach. Nie umieszczaj logiki questów w komponentach lasu (np. `ForestScene.tsx`).
+- Używaj stabilnych identyfikatorów `rodzaj.nazwa` (`quest.bridge_01`, `item.pickaxe`, `resource.wood`). Nigdy nie porównuj polskich nazw wyświetlanych.
+- Pauza czasu: wyłącznie przez centralny mechanizm powodów pauzy (`pause.add` / `pause.remove` z `reason` i `owner`). Zamknięcie jednego okna nie może wznowić zegara, jeśli inny powód nadal go zatrzymuje. Nie ustawiaj flag "paused" w komponentach.
+- Zapis: wersjonowany (`version`), serializowalny, bez obiektów Three, refów i instancji klas. Zmiana formatu = nowa wersja + migracja i test migracji.
+- Ekwipunek i kontenery: ilości są liczbami bez zakładania limitu 20; limity wynikają z definicji przedmiotu i kontenera (`maxStack`, liczba slotów). Przenoszenie przedmiotów jest atomowe (plan, potem zastosowanie) i zachowuje sumę ilości.
+- Wysokość terenu pochodzi wyłącznie z `terrainHeight` (generator, kolizje, rozmieszczanie i renderer korzystają z tej samej funkcji).
+- Przy zmianach Next.js 16 czytaj dokumentację w `node_modules/next/dist/docs/` (patrz `AGENTS.md`).

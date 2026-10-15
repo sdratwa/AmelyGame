@@ -1,0 +1,26 @@
+---
+description: Zasady trwałe dla generowania świata, zapisów, depozytów i blokad czasowych w grze "Miasto"
+globs: src/lib/game/world/**,src/lib/game/save/**,src/lib/game/systems/**,src/lib/game/content/**
+alwaysApply: false
+---
+
+# Świat, zapis, depozyty, blokady
+
+1. Świat gry jest deterministyczny i oparty na `worldSeed` oraz `worldGenVersion`.
+2. Losowe pozycje obiektów są ustalane przy tworzeniu nowego świata, nigdy podczas renderowania.
+3. Zmiany stanu świata (otwarte skrzynie, ścięte drzewa, most, odkryta mapa) są zapisywane niezależnie od bazowej generacji (`WorldBase` vs `WorldDelta`).
+4. Obiekty niezbędne do ukończenia głównych questów muszą być osiągalne pieszo bez przedmiotów, które same zawierają.
+5. Porażka nie powoduje trwałej utraty przedmiotów krytycznych.
+6. Przedmioty przenoszone do depozytów zachowują pełny stan (ID, ilość, metadane, właściciel/zapis).
+7. Blokady czasowe bazują na zegarze gry (`elapsed`) i są zapisywalne jako bezwzględny czas; nie używaj czasu ściennego ani `setTimeout`.
+8. Generowanie proceduralne jest testowalne i odtwarzalne: każdy generator ma wersję, testy na wielu ziarnach i test "golden".
+9. Ekwipunek chroni przed utratą i duplikacją przedmiotów (operacje atomowe, zachowanie sumy ilości).
+10. Świat umożliwia odblokowywanie kolejnych regionów (regiony jako dane, nie na sztywno).
+
+## Zgodność zapisów (worldGenVersion)
+
+- Wydana wersja generatora jest zamrożona: nie edytuj jej. Ulepszenia = nowa wersja generatora. Nowe gry używają najnowszej, istniejące zapisy zachowują swoją.
+- Teren, rzeka, kolizje, profile colliderów, rozsiew i walidator należą do wersji generatora. Zmiana modelu 3D (wygląd) nie może zmieniać kolizji ani geometrii gry.
+- Zapis przechowuje `worldGenVersion` i odcisk `worldFingerprint` wygenerowanego świata. Niezgodność odcisku nie jest ignorowana: nie nadpisuj zapisu, pokaż komunikat i zachowaj kopię.
+- Podniesienie wersji generatora istniejącego świata wyłącznie przez jawną, atomową migrację z kopią zapasową i walidacją (nigdy automatycznie przy aktualizacji gry).
+- Szczegóły: `docs/projekt/swiat-generator.md`. Konkretne wymiary pierwszego lasu, trolla i lokalizacje skrzyń opisuje dokumentacja, a nie reguły.
