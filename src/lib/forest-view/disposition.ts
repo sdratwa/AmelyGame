@@ -38,3 +38,17 @@ export const FOLIAGE: Readonly<Record<string, FoliageWind>> = {
   leaves_pine: { height: 9, amplitude: 0.07, rootShade: 0 },
   leaves_twistedtree: { height: 12, amplitude: 0.1, rootShade: 0 },
 };
+
+/** Rodzaj materiału dla korekty koloru: liście (pochylone normalne, zmienność wzoru) albo twarde powierzchnie. */
+export const MATERIAL_TYPES: Readonly<Record<string, "foliage" | "solid">> = {
+  bark_normaltree: "solid",
+  bark_twistedtree: "solid",
+  rocks: "solid",
+  mushrooms: "solid",
+  leaves_pine: "foliage",
+  leaves_normaltree: "foliage",
+  leaves_twistedtree: "foliage",
+  leaves: "foliage",
+  grass: "foliage",
+  flowers: "foliage",
+};

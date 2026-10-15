@@ -6,7 +6,8 @@ import {
   type InstancedModel,
   type ModelAsset,
 } from "@/lib/assets";
-import { FOLIAGE, HUE_SWAP_TO_GREEN } from "./disposition";
+import { FOLIAGE, HUE_SWAP_TO_GREEN, MATERIAL_TYPES } from "./disposition";
+import { GRADE_UNIFORM_DECL, NOISE_GLSL, NORMAL_UP_FRAGMENT, PHASE_VERTEX, PaletteStore, gradeFragment } from "./grading";
 import { SHADOW_CASTERS, type ForestViewProfile, type ViewOverrides } from "./profiles";
 import { createBatchSelector, frustumFor } from "./selector";
 import type { ForestWindow, ModelBatch } from "./window";
@@ -18,25 +19,26 @@ export function createFoliageUniforms(): FoliageUniforms {
 }
 
 /**
- * Dopracowanie współdzielonych materiałów liści (bez kopiowania): wiatr zależny od wysokości wierzchołka i pozycji
- * instancji, przyciemnienie nasady roślin (wtopienie w grunt) oraz zamiana czerwonej tekstury starych drzew na zieloną.
- * Kora, skały i grzyby zostają bez zmian. Idempotentne.
+ * Dopracowanie współdzielonych materiałów (bez kopiowania): korekta koloru sterowana uniformami (paleta V2b), wiatr
+ * zależny od wysokości wierzchołka i pozycji instancji, przyciemnienie nasady roślin (wtopienie w grunt), pochylenie
+ * normalnych liści ku górze oraz zamiana czerwonej tekstury starych drzew na zieloną (jak w V2a, gdy paleta nie ma tintu).
+ * Idempotentne. Bez `palette` (testy) korekta jest neutralna i daje kolory V2a.
  */
-export function tuneMaterial(material: THREE.Material, uniforms: FoliageUniforms): void {
+export function tuneMaterial(material: THREE.Material, uniforms: FoliageUniforms, palette: PaletteStore = new PaletteStore()): void {
   const id = String(material.userData.assetMaterialId ?? material.name);
+  if (!(id in MATERIAL_TYPES) || material.userData.forestTuned) return;
   const foliage = FOLIAGE[id];
   const swap = HUE_SWAP_TO_GREEN.has(id);
-  if ((!foliage && !swap) || material.userData.forestTuned) return;
+  const leafy = MATERIAL_TYPES[id] === "foliage";
+  const grade = palette.get(id);
   material.userData.forestTuned = true;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uniforms.uTime;
     shader.uniforms.uWind = uniforms.uWind;
-    if (foliage) {
-      shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", `#include <common>\nuniform float uTime;\nuniform float uWind;\nvarying float vForestH;`)
-        .replace(
-          "#include <begin_vertex>",
-          `#include <begin_vertex>
+    shader.uniforms.uGreenSat = palette.greenSat;
+    Object.assign(shader.uniforms, grade);
+    const wind = foliage
+      ? `
           vForestH = position.y;
           #ifdef USE_INSTANCING
             float fPhase = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.29;
@@ -47,21 +49,18 @@ export function tuneMaterial(material: THREE.Material, uniforms: FoliageUniforms
           float fW = fH * fH * uWind * ${foliage.amplitude.toFixed(3)};
           float fS = sin(uTime * 1.5 + fPhase + position.x * 0.9) * 0.6 + sin(uTime * 2.6 + fPhase * 1.7 + position.z * 1.1) * 0.4;
           transformed.x += fS * fW;
-          transformed.z += fS * fW * 0.6;`,
-        );
-      shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", `#include <common>\nvarying float vForestH;`)
-        .replace(
-          "#include <map_fragment>",
-          `#include <map_fragment>
-          ${swap ? "diffuseColor.rgb = diffuseColor.grb;" : ""}
-          ${foliage.rootShade > 0 ? `diffuseColor.rgb *= mix(0.55, 1.0, smoothstep(0.0, ${foliage.rootShade.toFixed(2)}, vForestH));` : ""}`,
-        );
-    } else if (swap) {
-      shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>\ndiffuseColor.rgb = diffuseColor.grb;`);
-    }
+          transformed.z += fS * fW * 0.6;`
+      : "";
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `#include <common>\nuniform float uTime;\nuniform float uWind;\nvarying float vForestH;\nvarying float vGrPhase;`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>${PHASE_VERTEX}${wind}`);
+    const root = foliage && foliage.rootShade > 0 ? `diffuseColor.rgb *= mix(0.55, 1.0, smoothstep(0.0, ${foliage.rootShade.toFixed(2)}, vForestH));` : "";
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>\n${GRADE_UNIFORM_DECL}\nvarying float vForestH;\n${NOISE_GLSL}`)
+      .replace("#include <map_fragment>", `#include <map_fragment>${gradeFragment({ swap, foliage: leafy })}\n${root}`)
+      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>${leafy ? NORMAL_UP_FRAGMENT : ""}`);
   };
-  material.customProgramCacheKey = () => `forest:${id}`;
+  material.customProgramCacheKey = () => `forest2:${id}`;
   material.needsUpdate = true;
 }
 
@@ -94,6 +93,7 @@ export class ForestInstancer {
     readonly window: ForestWindow,
     readonly profile: ForestViewProfile,
     private overrides: ViewOverrides,
+    readonly palette: PaletteStore = new PaletteStore(),
   ) {
     this.group.name = "forest-instances";
   }
@@ -105,7 +105,7 @@ export class ForestInstancer {
     const wantShadow = this.profile.shadows.enabled && this.overrides.shadows;
     for (const { batch, asset } of loaded) {
       if (asset.fallback) failed.push(asset.id);
-      for (const lod of asset.levels) for (const part of lod.parts) tuneMaterial(part.material, this.uniforms);
+      for (const lod of asset.levels) for (const part of lod.parts) tuneMaterial(part.material, this.uniforms, this.palette);
       const casts = SHADOW_CASTERS.has(batch.kind);
       const model = createInstancedModel(asset, batch.placements, {
         profile: this.profile.assets,

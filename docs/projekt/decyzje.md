@@ -74,6 +74,15 @@
 - Instancing V1 rozszerzony zgodnie wstecz (`updateWith`); LOD z histerezą i rozrzutem progów zamiast billboardów.
 - Żadnego progu FPS nie uznajemy za osiągnięty bez pomiaru autora (instrukcja w [prototyp-v2a.md](prototyp-v2a.md)).
 
+## V2b (jakość wizualna)
+
+- V2a zatwierdzone technicznie; wyniki M3 Max (HIGH, `?stress=49`): średnio 60 FPS, 1% low 56,8 FPS, ok. 2,35 mln trójkątów, 106 draw calls. Nie przerzedzamy lasu ani nie zmniejszamy gęstości tylko z powodu przekroczenia wcześniejszego budżetu trójkątów.
+- Przyczyny zbyt ciemnych drzew to płaskie, ciemne tekstury liści (sosna 0,075 luminancji liniowej), twarde cienie z pełnym zasłanianiem słońca (usunięty w Three 0.186 `PCFSoftShadowMap`) i mało światła w cieniu, a nie błąd przestrzeni kolorów ani materiałów. Naprawa jest w materiałach (paleta) i cieniach, a nie w samym podbiciu światła.
+- Wygląd regulują presety: ORIGINAL (V2a, bez zmian), NATURAL (domyślny), FAIRYTALE; przełączają się bez przeładowania modeli i świata (uniformy shaderów, światła, tekstura gruntu).
+- Paleta ma zostawić pomarańczowe, niebieskie i różowe odmiany na strefy magiczne; nie zmieniamy ID modeli ani manifestu.
+- Krzywa dnia V2b ("lato", wschód 5:00, zachód 21:00) obowiązuje w NATURAL i FAIRYTALE; ORIGINAL ma krzywą V2a (19:00 pod horyzontem).
+- Konfiguracja wizualna zapisywana jest jako JSON `forest-visual/1` (kopiowanie i wczytywanie w panelu).
+
 ## Otwarte
 
 - Sprzęt referencyjny dla progów FPS (HIGH, LOW).

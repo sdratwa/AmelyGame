@@ -4,10 +4,12 @@ import { BENCHMARK_SECONDS, benchmarkPose, buildBenchmarkRoute, type BenchmarkRo
 import { atmosphereAt, DEFAULT_HOUR, type AtmosphereState, type Rgb } from "./atmosphere";
 import { FirstPersonController, type MoveInput } from "./controller";
 import { FrameStats } from "./frameStats";
-import { buildGroundMesh, buildWaterMesh, createGroundBuilder, type GroundMeshData } from "./ground";
+import { buildGroundMesh, buildWaterMesh, createGroundBuilder, type GroundMeshData, type GroundStyle } from "./ground";
+import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PaletteStore, gradeFragment } from "./grading";
 import { ForestInstancer, type InstancerStats } from "./instancer";
 import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOverrides } from "./profiles";
 import { buildForestWindow, type ForestWindow, type WindowOptions } from "./window";
+import { DEFAULT_PRESET, isModified, presetConfig, sanitizeTuning, tintedFog, type PresetId, type VisualConfig, type VisualTuning } from "./visual";
 
 export type PanelStats = {
   fps: number;
@@ -36,6 +38,8 @@ export type PanelStats = {
   benchmark: { running: boolean; progress: number };
   showcase: { id: string; ix: number; iz: number; qualifies: boolean }[];
   stress: boolean;
+  preset: PresetId;
+  presetModified: boolean;
 };
 
 export type BenchmarkReport = {
@@ -58,6 +62,7 @@ export type BenchmarkReport = {
   gpu: string;
   userAgent: string;
   overrides: ViewOverrides;
+  visual: VisualConfig;
   note: string;
 };
 
@@ -67,6 +72,7 @@ export type RendererOptions = {
   quality?: QualityId;
   hour?: number;
   overrides?: Partial<ViewOverrides>;
+  visual?: VisualConfig;
   onStats?: (stats: PanelStats) => void;
 };
 
@@ -136,6 +142,7 @@ type Built = {
   water: THREE.Mesh | null;
   groundTriangles: number;
   groundTextureSize: number;
+  textures: Map<GroundStyle, THREE.DataTexture>;
 };
 
 /**
@@ -177,6 +184,9 @@ export class ForestRenderer {
   private quality: QualityId;
   private overrides: ViewOverrides;
   private atmosphere: AtmosphereState;
+  private visual: VisualConfig;
+  private readonly palette = new PaletteStore();
+  private groundJob = 0;
   private hour: number;
   private windowOptions: WindowOptions;
   private generation = 0;
@@ -204,18 +214,17 @@ export class ForestRenderer {
     this.profile = VIEW_PROFILES[this.quality];
     this.overrides = { ...DEFAULT_OVERRIDES, ...options.overrides };
     this.hour = options.hour ?? DEFAULT_HOUR;
-    this.atmosphere = atmosphereAt(this.hour);
+    this.visual = options.visual ? structuredClone(options.visual) : presetConfig(DEFAULT_PRESET);
+    this.atmosphere = atmosphereAt(this.hour, this.visual.look.dayModel);
+    this.palette.setPalette(this.visual.look.palette, this.visual.tuning.greenSaturation, this.visual.look.groundDetail);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.domElement.style.cssText = "display:block;width:100%;height:100%;outline:none";
     this.renderer.domElement.tabIndex = 0;
     this.container.appendChild(this.renderer.domElement);
 
     this.scene.add(this.hemi, this.sun, this.sun.target);
-    this.sun.shadow.bias = -0.0004;
-    this.sun.shadow.normalBias = 0.05;
     this.camera.rotation.order = "YXZ";
 
     this.sky = new THREE.Mesh(
@@ -269,12 +278,39 @@ export class ForestRenderer {
 
   setHour(hour: number): void {
     this.hour = hour;
-    this.atmosphere = atmosphereAt(hour);
+    this.atmosphere = atmosphereAt(hour, this.visual.look.dayModel);
     this.applyAtmosphere();
   }
 
   getHour(): number {
     return this.hour;
+  }
+
+  getVisual(): VisualConfig {
+    return this.visual;
+  }
+
+  /** Szybka zmiana presetu: tylko uniformy, światła i (jeśli trzeba) tekstura gruntu; modele i świat zostają. */
+  setPreset(id: PresetId): void {
+    this.setVisual(presetConfig(id));
+  }
+
+  setVisual(config: VisualConfig): void {
+    this.visual = structuredClone(config);
+    this.visual.tuning = sanitizeTuning(this.visual.tuning);
+    this.atmosphere = atmosphereAt(this.hour, this.visual.look.dayModel);
+    this.palette.setPalette(this.visual.look.palette, this.visual.tuning.greenSaturation, this.visual.look.groundDetail);
+    this.applyAtmosphere();
+    this.applyProfileToRenderer();
+    void this.ensureGroundStyle();
+  }
+
+  /** Zmiana suwaków VISUAL TUNING bez zmiany presetu bazowego. */
+  setTuning(partial: Partial<VisualTuning>): void {
+    this.visual = { ...this.visual, tuning: sanitizeTuning({ ...this.visual.tuning, ...partial }) };
+    this.palette.setPalette(this.visual.look.palette, this.visual.tuning.greenSaturation, this.visual.look.groundDetail);
+    this.applyAtmosphere();
+    this.applyProfileToRenderer();
   }
 
   setOverrides(partial: Partial<ViewOverrides>): void {
@@ -393,30 +429,47 @@ export class ForestRenderer {
     }
   }
 
-  private async buildGround(win: ForestWindow, gen: number): Promise<Built | null> {
-    const profile = this.profile;
+  private groundSize(): number {
     const stress = (this.windowOptions.radius ?? 1) > 1;
-    const size = stress ? Math.max(profile.groundTexture, 2048) : profile.groundTexture;
-    const builder = createGroundBuilder({ forest: win.forest, bounds: win.windowBounds, objects: win.objects, size });
-    while (!builder.step(64)) {
-      this.loading = `Tekstura gruntu ${Math.round(builder.progress() * 100)}%`;
+    return stress ? Math.max(this.profile.groundTexture, 2048) : this.profile.groundTexture;
+  }
+
+  /** Tekstura gruntu w danym stylu; `gen` przerywa pracę po zmianie świata, `report` pokazuje postęp na ekranie ładowania. */
+  private async buildGroundTexture(win: ForestWindow, size: number, style: GroundStyle, accept: () => boolean, report: boolean): Promise<THREE.DataTexture | null> {
+    const builder = createGroundBuilder({ forest: win.forest, bounds: win.windowBounds, objects: win.objects, size, style });
+    const rows = report ? 64 : 24;
+    while (!builder.step(rows)) {
+      if (report) this.loading = `Tekstura gruntu ${Math.round(builder.progress() * 100)}%`;
       await tick();
-      if (gen !== this.generation || this.disposed) return null;
+      if (!accept() || this.disposed) return null;
     }
     const texture = new THREE.DataTexture(builder.data, size, size, THREE.RGBAFormat, THREE.UnsignedByteType);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.generateMipmaps = true;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.magFilter = THREE.LinearFilter;
-    texture.anisotropy = Math.min(profile.assets.anisotropy, this.renderer.capabilities.getMaxAnisotropy());
+    texture.anisotropy = Math.min(this.profile.assets.anisotropy, this.renderer.capabilities.getMaxAnisotropy());
     texture.needsUpdate = true;
+    return texture;
+  }
+
+  private async buildGround(win: ForestWindow, gen: number): Promise<Built | null> {
+    const profile = this.profile;
+    const stress = (this.windowOptions.radius ?? 1) > 1;
+    const size = this.groundSize();
+    const style = this.visual.look.groundStyle;
+    const texture = await this.buildGroundTexture(win, size, style, () => gen === this.generation, true);
+    if (!texture) return null;
+    const textures = new Map<GroundStyle, THREE.DataTexture>([[style, texture]]);
 
     const cell = stress ? Math.max(profile.groundCell, 1.4) : profile.groundCell;
     const mesh = buildGroundMesh(win.forest.terrain, win.windowBounds, cell);
-    const ground = new THREE.Mesh(toGeometry(mesh), new THREE.MeshStandardMaterial({ map: texture, roughness: 1, metalness: 0 }));
+    const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 1, metalness: 0 });
+    tuneGroundMaterial(material, this.palette);
+    const ground = new THREE.Mesh(toGeometry(mesh), material);
     ground.name = "ground";
     ground.receiveShadow = true;
-    ground.userData.texture = texture;
+    ground.userData.textures = textures;
 
     const waterData = buildWaterMesh(win.forest, win.windowBounds);
     const water = waterData
@@ -426,7 +479,28 @@ export class ForestRenderer {
         )
       : null;
     if (water) water.name = "water";
-    return { window: win, ground, water, groundTriangles: mesh.triangleCount + (waterData?.triangleCount ?? 0), groundTextureSize: size };
+    return { window: win, ground, water, groundTriangles: mesh.triangleCount + (waterData?.triangleCount ?? 0), groundTextureSize: size, textures };
+  }
+
+  /**
+   * Dopasowuje teksturę gruntu do stylu aktualnego presetu. Tekstury obu stylów są trzymane w pamięci, więc powrót do
+   * już zbudowanego stylu jest natychmiastowy; pierwsza zmiana buduje drugi styl w tle (porcjami, bez blokowania klatek).
+   */
+  private async ensureGroundStyle(): Promise<void> {
+    const built = this.built;
+    if (!built) return;
+    const style = this.visual.look.groundStyle;
+    const material = built.ground.material as THREE.MeshStandardMaterial;
+    const have = built.textures.get(style);
+    const job = ++this.groundJob;
+    if (have) {
+      if (material.map !== have) material.map = have;
+      return;
+    }
+    const texture = await this.buildGroundTexture(built.window, built.groundTextureSize, style, () => job === this.groundJob && this.built === built, false);
+    if (!texture) return;
+    built.textures.set(style, texture);
+    if (this.visual.look.groundStyle === style && this.built === built) material.map = texture;
   }
 
   private async buildInstances(gen: number): Promise<void> {
@@ -437,7 +511,7 @@ export class ForestRenderer {
         this.error = e.message;
       },
     });
-    const instancer = new ForestInstancer(library, this.built.window, this.profile, this.overrides);
+    const instancer = new ForestInstancer(library, this.built.window, this.profile, this.overrides, this.palette);
     this.loading = `Ładowanie modeli (${this.quality})`;
     await instancer.init();
     if (gen !== this.generation || this.disposed) {
@@ -502,6 +576,11 @@ export class ForestRenderer {
     sc.near = 1;
     sc.far = 260;
     sc.updateProjectionMatrix();
+    const look = this.visual.look;
+    this.sun.shadow.bias = look.shadowBias;
+    this.sun.shadow.normalBias = look.shadowNormalBias;
+    this.sun.shadow.radius = look.shadowRadius;
+    this.sun.shadow.intensity = this.visual.tuning.shadow;
     if (this.sun.shadow.mapSize.x !== p.shadows.mapSize) {
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
@@ -515,16 +594,18 @@ export class ForestRenderer {
 
   private applyAtmosphere(): void {
     const a = this.atmosphere;
+    const t = this.visual.tuning;
+    const look = this.visual.look;
     this.sun.color.copy(toLinear(a.sunColor));
-    this.sun.intensity = a.sunIntensity;
+    this.sun.intensity = a.sunIntensity * t.sun;
     this.hemi.color.copy(toLinear(a.hemiSky));
-    this.hemi.groundColor.copy(toLinear(a.hemiGround));
-    this.hemi.intensity = a.hemiIntensity;
-    this.renderer.toneMappingExposure = a.exposure;
-    const fogColor = toLinear(a.fogColor);
-    if (this.overrides.fog) {
+    this.hemi.groundColor.copy(toLinear([a.hemiGround[0] * look.groundBounce, a.hemiGround[1] * look.groundBounce, a.hemiGround[2] * look.groundBounce]));
+    this.hemi.intensity = a.hemiIntensity * t.ambient;
+    this.renderer.toneMappingExposure = a.exposure * t.exposure;
+    const fogColor = toLinear(tintedFog(a.fogColor, t));
+    if (this.overrides.fog && t.fogDensity > 0) {
       const vis = this.profile.fogVisibility;
-      const density = (1.8 / vis) * a.fogDensity;
+      const density = (1.8 / vis) * a.fogDensity * t.fogDensity;
       this.scene.fog = new THREE.FogExp2(fogColor, density);
     } else {
       this.scene.fog = null;
@@ -534,7 +615,7 @@ export class ForestRenderer {
     this.skyUniforms.uSunDir.value.set(...a.sunDir);
     this.skyUniforms.uSunColor.value.copy(toLinear(a.sunColor));
     this.skyUniforms.uGlow.value = a.daylight;
-    this.particleUniforms.uOpacity.value = 0.55 * a.daylight;
+    this.particleUniforms.uOpacity.value = 0.55 * a.daylight * look.particleBoost;
     this.particleUniforms.uColor.value.copy(toLinear(a.sunColor)).lerp(new THREE.Color(1, 1, 1), 0.4);
   }
 
@@ -726,6 +807,7 @@ export class ForestRenderer {
       gpu: this.gpuName(),
       userAgent: navigator.userAgent,
       overrides: this.overrides,
+      visual: this.visual,
       note: "FPS jest ograniczany przez odświeżanie monitora (vsync). Wartości zależą od GPU i przeglądarki.",
     };
   }
@@ -762,6 +844,8 @@ export class ForestRenderer {
       benchmark: { running: this.bench !== null, progress: this.bench ? Math.min(1, this.bench.t / BENCHMARK_SECONDS) : 0 },
       showcase: (this.built?.window.showcase ?? []).map((q) => ({ id: q.id, ix: q.ix, iz: q.iz, qualifies: q.qualifies })),
       stress: (this.windowOptions.radius ?? 1) > 1,
+      preset: this.visual.preset,
+      presetModified: isModified(this.visual),
     });
   }
 }
@@ -793,7 +877,24 @@ function disposeBuilt(b: Built): void {
 
 function disposeMesh(mesh: THREE.Mesh): void {
   mesh.geometry.dispose();
-  const tex = mesh.userData.texture as THREE.Texture | undefined;
-  tex?.dispose();
+  const textures = mesh.userData.textures as Map<unknown, THREE.Texture> | undefined;
+  textures?.forEach((t) => t.dispose());
   (mesh.material as THREE.Material).dispose();
+}
+
+
+function tuneGroundMaterial(material: THREE.MeshStandardMaterial, palette: PaletteStore): void {
+  const grade = palette.get("ground");
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uGreenSat = palette.greenSat;
+    shader.uniforms.uDetail = palette.groundDetail;
+    Object.assign(shader.uniforms, grade);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vGroundXZ;\nvarying float vGrPhase;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGroundXZ = position.xz;\nvGrPhase = 0.5;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>\n${GRADE_UNIFORM_DECL}\nuniform float uDetail;\nvarying vec2 vGroundXZ;\n${NOISE_GLSL}`)
+      .replace("#include <map_fragment>", `#include <map_fragment>${gradeFragment({ swap: false, foliage: false })}\n${GROUND_DETAIL_FRAGMENT}`);
+  };
+  material.customProgramCacheKey = () => "forest2:ground";
 }

@@ -37,6 +37,10 @@ Cały świat 300 x 300 m: ok. 22 tys. obiektów (ok. 2 tys. z kolizją), wszystk
 
 Seed 2030, sektor 5_5, okno 3 x 3: trójkąty modeli ok. 184-242 tys. (LOW), 329-411 tys. (MEDIUM), 487-602 tys. (HIGH) plus grunt 10-33 tys.; okno 7 x 7 (`?stress=49`): ok. 0,7-1,0 mln (LOW), 1,1-1,5 mln (MEDIUM), 1,6-1,9 mln (HIGH). Budżety z tej strony są przekroczone w HIGH i MEDIUM; decyzja po teście FPS autora. Szczegóły i instrukcja: [prototyp-v2a.md](prototyp-v2a.md); raport: `npm run forest:report`.
 
+## V2b
+
+V2b nie zmienia liczby instancji, trójkątów, draw calls, zasięgów ani LOD. Dodaje pracę w shaderach liści (korekta koloru, pochylenie normalnych, szum zmienności) i gruntu (szum szczegółu z wygaszaniem po 14-46 m) oraz miększy filtr cieni (promień PCF 2,6 zamiast 1 w NATURAL i FAIRYTALE; rozdzielczość i zasięg mapy cieni bez zmian). Wpływ na FPS nie był mierzony; do zmierzenia przez autora testem `Uruchom test` w każdym presecie.
+
 ## Pomiar
 
 Overlay (`?debug=1`): FPS średni i 1% low, czas klatki, draw calls, trójkąty, tekstury, geometrie (`renderer.info`), przełącznik profilu, suwak skali rozdzielczości, przycisk "Kopiuj raport" (JSON). Logika (generator) ma budżet czasu sprawdzany w testach Vitest. Agent nie uruchamia przeglądarki; wyniki FPS dostarcza autor.

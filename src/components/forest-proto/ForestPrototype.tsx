@@ -7,13 +7,23 @@ import {
   BENCHMARK_SECONDS,
   DEFAULT_HOUR,
   DEFAULT_OVERRIDES,
+  DEFAULT_PRESET,
   DEFAULT_SEED,
   ForestRenderer,
+  PRESET_IDS,
+  TUNING_RANGES,
+  parsePreset,
   parseSectorParam,
+  presetConfig,
   stressRadius,
+  visualFromJson,
+  visualToJson,
   type BenchmarkReport,
   type PanelStats,
+  type PresetId,
   type ViewOverrides,
+  type VisualConfig,
+  type VisualTuning,
 } from "@/lib/forest-view";
 
 const QUALITIES: QualityId[] = ["LOW", "MEDIUM", "HIGH"];
@@ -22,6 +32,14 @@ const LODS: { value: ViewOverrides["forceLod"]; label: string }[] = [
   { value: 0, label: "LOD0" },
   { value: 1, label: "LOD1" },
 ];
+
+const TUNING_KEYS = ["exposure", "ambient", "sun", "shadow", "greenSaturation", "fogDensity"] as const;
+const COMPARE_HOURS = [7, 12, 19];
+const PRESET_HINTS: Record<PresetId, string> = {
+  ORIGINAL: "Wygląd z V2a (do porównań)",
+  NATURAL: "Poprawiony, naturalny las",
+  FAIRYTALE: "Delikatnie baśniowy las",
+};
 
 function parseQuality(text: string | null): QualityId {
   const q = (text ?? "").toUpperCase();
@@ -75,6 +93,8 @@ export function ForestPrototype() {
     forceLod: params.get("lod") === "0" ? 0 : params.get("lod") === "1" ? 1 : null,
     wind: params.get("wind") !== "0",
   }));
+  const [visual, setVisual] = useState<VisualConfig>(() => presetConfig(parsePreset(params.get("preset")) ?? DEFAULT_PRESET));
+  const [visualNote, setVisualNote] = useState<string | null>(null);
   const [seedText, setSeedText] = useState(() => params.get("seed") ?? String(DEFAULT_SEED));
   const [bench, setBench] = useState<BenchmarkReport | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -84,7 +104,7 @@ export function ForestPrototype() {
     return params.get("stress") ? stressRadius(n) : null;
   }, [params]);
 
-  const initial = useRef({ quality, hour, overrides, params, stress });
+  const initial = useRef({ quality, hour, overrides, params, stress, visual });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -96,6 +116,7 @@ export function ForestPrototype() {
       quality: init.quality,
       hour: init.hour,
       overrides: init.overrides,
+      visual: init.visual,
       window: {
         seed: init.params.get("seed") !== null && Number.isFinite(seed) ? seed >>> 0 : DEFAULT_SEED,
         sector: parseSectorParam(init.params.get("sector")) ?? undefined,
@@ -138,6 +159,45 @@ export function ForestPrototype() {
     setOverrides((o) => ({ ...o, ...patch }));
     rendererRef.current?.setOverrides(patch);
   }, []);
+
+  const changePreset = useCallback(
+    (id: PresetId) => {
+      rendererRef.current?.setPreset(id);
+      setVisual(presetConfig(id));
+      setVisualNote(null);
+      updateUrl({ preset: id.toLowerCase() });
+    },
+    [updateUrl],
+  );
+  const changeTuning = useCallback((patch: Partial<VisualTuning>) => {
+    rendererRef.current?.setTuning(patch);
+    const r = rendererRef.current?.getVisual();
+    if (r) setVisual(structuredClone(r));
+  }, []);
+  const copyVisual = useCallback(async () => {
+    const payload = JSON.stringify(visualToJson(visual, hour, quality), null, 2);
+    try {
+      await navigator.clipboard.writeText(payload);
+      setVisualNote("Skopiowano konfigurację wizualną (JSON)");
+    } catch {
+      window.prompt("Skopiuj konfigurację wizualną", payload);
+    }
+    setTimeout(() => setVisualNote(null), 2000);
+  }, [visual, hour, quality]);
+  const loadVisual = useCallback(() => {
+    const text = window.prompt("Wklej JSON konfiguracji wizualnej (forest-visual/1)");
+    if (!text) return;
+    const parsed = visualFromJson(text);
+    if (!parsed) {
+      setVisualNote("Nieprawidłowy JSON konfiguracji");
+      setTimeout(() => setVisualNote(null), 2500);
+      return;
+    }
+    rendererRef.current?.setVisual(parsed.config);
+    if (parsed.hour !== null) changeHour(parsed.hour);
+    setVisual(structuredClone(parsed.config));
+    updateUrl({ preset: parsed.config.preset.toLowerCase() });
+  }, [changeHour, updateUrl]);
 
   const applySeed = useCallback(() => {
     const n = Number(seedText);
@@ -183,6 +243,12 @@ export function ForestPrototype() {
       if (e.code === "Digit1") changeQuality("LOW");
       else if (e.code === "Digit2") changeQuality("MEDIUM");
       else if (e.code === "Digit3") changeQuality("HIGH");
+      else if (e.code === "Digit4") changePreset("ORIGINAL");
+      else if (e.code === "Digit5") changePreset("NATURAL");
+      else if (e.code === "Digit6") changePreset("FAIRYTALE");
+      else if (e.code === "Digit7") changeHour(7);
+      else if (e.code === "Digit8") changeHour(12);
+      else if (e.code === "Digit9") changeHour(19);
       else if (e.code === "KeyF") changeOverrides({ fog: !(rendererRef.current?.getOverrides().fog ?? true) });
       else if (e.code === "KeyH") changeOverrides({ shadows: !(rendererRef.current?.getOverrides().shadows ?? true) });
       else if (e.code === "KeyL") {
@@ -195,7 +261,7 @@ export function ForestPrototype() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [changeQuality, changeOverrides, changeHour]);
+  }, [changeQuality, changeOverrides, changeHour, changePreset]);
 
   const lodLabel = overrides.forceLod === null ? "Auto" : `LOD${overrides.forceLod}`;
 
@@ -209,7 +275,7 @@ export function ForestPrototype() {
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-slate-100">
           <div className="rounded-lg bg-slate-900/90 px-5 py-4 text-center shadow-xl ring-1 ring-slate-700">
             <div className="text-sm font-medium">{stats.loading}</div>
-            <div className="mt-1 text-xs text-slate-400">Prototyp V2a: las z generatora W1a</div>
+            <div className="mt-1 text-xs text-slate-400">Prototyp V2b: las z generatora W1a</div>
           </div>
         </div>
       )}
@@ -230,7 +296,7 @@ export function ForestPrototype() {
 
       <div className="absolute left-3 top-3 z-20 w-72 rounded-lg bg-slate-950/75 p-3 text-xs shadow-lg ring-1 ring-slate-700 backdrop-blur">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">V2a diagnostyka</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">V2b diagnostyka</span>
           <button type="button" onClick={() => setPanelOpen((v) => !v)} className="text-[11px] text-slate-400 hover:text-slate-100">
             {panelOpen ? "ukryj sterowanie" : "pokaż sterowanie"}
           </button>
@@ -247,6 +313,7 @@ export function ForestPrototype() {
             <Row k="Aktywne modele" v={String(stats.activeModels)} />
             <Row k="Geometrie / tekstury" v={`${stats.geometries} / ${stats.textures}`} />
             <Row k="Profil jakości" v={stats.quality} />
+            <Row k="Preset wyglądu" v={`${stats.preset}${stats.presetModified ? " *" : ""}`} />
             <Row k="Seed" v={String(stats.seed)} />
             <Row k="Sektor" v={stats.sectorId.replace("sector.forest_start.", "")} title={stats.sectorId} />
             <Row k="Okno" v={`${stats.windowSectors} sektorów${stats.stress ? " (stress)" : ""}`} />
@@ -282,6 +349,101 @@ export function ForestPrototype() {
               <span className="font-mono normal-case text-slate-100">{hourLabel(hour)}</span>
             </div>
             <input type="range" min={0} max={24} step={0.25} value={hour} onChange={(e) => changeHour(Number(e.target.value) % 24)} className="w-full accent-emerald-400" />
+          </section>
+
+          <section className="space-y-1.5">
+            <div className="text-[11px] uppercase tracking-wide text-slate-400">Pora dnia: szybkie porównanie (7 / 8 / 9)</div>
+            <div className="flex gap-1">
+              {COMPARE_HOURS.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => changeHour(h)}
+                  className={`flex-1 rounded px-2 py-1 font-mono ring-1 transition ${Math.abs(hour - h) < 0.01 ? "bg-emerald-500/30 ring-emerald-400" : "bg-slate-800/80 ring-slate-600 hover:bg-slate-700"}`}
+                >
+                  {hourLabel(h)}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-2 rounded-md bg-slate-900/60 p-2 ring-1 ring-slate-700">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">Visual tuning</span>
+              {stats.presetModified && <span className="text-[10px] text-amber-300">zmieniony względem {stats.preset}</span>}
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              {PRESET_IDS.map((id, i) => (
+                <button
+                  key={id}
+                  type="button"
+                  title={`${PRESET_HINTS[id]} (klawisz ${4 + i})`}
+                  onClick={() => changePreset(id)}
+                  className={`rounded px-1 py-1.5 text-[11px] font-medium ring-1 transition ${visual.preset === id ? "bg-emerald-500/30 text-emerald-50 ring-emerald-400" : "bg-slate-800/80 text-slate-300 ring-slate-600 hover:bg-slate-700"}`}
+                >
+                  {id}
+                </button>
+              ))}
+            </div>
+            <div className="text-[10px] leading-snug text-slate-400">{PRESET_HINTS[visual.preset]}. Presety przełączają się bez przeładowania modeli i świata.</div>
+            {TUNING_KEYS.map((key) => {
+              const r = TUNING_RANGES[key];
+              return (
+                <label key={key} className="block">
+                  <span className="flex justify-between text-slate-300">
+                    <span>{r.label}</span>
+                    <span className="font-mono tabular-nums text-slate-100">{visual.tuning[key].toFixed(2)}</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={r.min}
+                    max={r.max}
+                    step={r.step}
+                    value={visual.tuning[key]}
+                    onChange={(e) => changeTuning({ [key]: Number(e.target.value) })}
+                    className="w-full accent-emerald-400"
+                  />
+                </label>
+              );
+            })}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-300">Kolor mgły</span>
+              <input
+                type="color"
+                value={visual.tuning.fogTint}
+                onChange={(e) => changeTuning({ fogTint: e.target.value })}
+                className="h-6 w-10 cursor-pointer rounded bg-transparent"
+                aria-label="Kolor mgły"
+              />
+              <span className="font-mono text-slate-400">{visual.tuning.fogTint}</span>
+            </div>
+            <label className="block">
+              <span className="flex justify-between text-slate-300">
+                <span>{TUNING_RANGES.fogTintAmount.label}</span>
+                <span className="font-mono tabular-nums text-slate-100">{visual.tuning.fogTintAmount.toFixed(2)}</span>
+              </span>
+              <input
+                type="range"
+                min={TUNING_RANGES.fogTintAmount.min}
+                max={TUNING_RANGES.fogTintAmount.max}
+                step={TUNING_RANGES.fogTintAmount.step}
+                value={visual.tuning.fogTintAmount}
+                onChange={(e) => changeTuning({ fogTintAmount: Number(e.target.value) })}
+                className="w-full accent-emerald-400"
+              />
+            </label>
+            <div className="flex gap-1">
+              <button type="button" onClick={() => changePreset(visual.preset)} className="flex-1 rounded bg-slate-800 px-2 py-1 ring-1 ring-slate-600 hover:bg-slate-700">
+                Reset do presetu
+              </button>
+              <button type="button" onClick={copyVisual} className="flex-1 rounded bg-emerald-600/80 px-2 py-1 font-medium text-white">
+                Kopiuj JSON
+              </button>
+              <button type="button" onClick={loadVisual} className="rounded bg-slate-800 px-2 py-1 ring-1 ring-slate-600 hover:bg-slate-700" title="Wczytaj zapisany JSON">
+                Wczytaj
+              </button>
+            </div>
+            {visualNote && <div className="text-[11px] text-emerald-300">{visualNote}</div>}
           </section>
 
           <section className="space-y-1.5">

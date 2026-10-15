@@ -140,6 +140,25 @@ const EARTH: Rgb = [102, 88, 68];
 
 const lerp3 = (a: Rgb, b: Rgb, t: number): [number, number, number] => [mixN(a[0], b[0], t), mixN(a[1], b[1], t), mixN(a[2], b[2], t)];
 
+const N_GRASS_DARK: Rgb = [58, 82, 46];
+const N_GRASS_LUSH: Rgb = [92, 118, 54];
+const N_GRASS_SUN: Rgb = [128, 138, 70];
+const N_GRASS_DRY: Rgb = [138, 128, 78];
+const N_MOSS: Rgb = [60, 88, 56];
+const N_LITTER_A: Rgb = [126, 94, 58];
+const N_LITTER_B: Rgb = [88, 66, 44];
+const N_NEEDLES: Rgb = [140, 104, 60];
+const N_EARTH: Rgb = [110, 92, 70];
+const N_PATH_A: Rgb = [166, 130, 90];
+const N_PATH_B: Rgb = [136, 104, 70];
+const N_TROD: Rgb = [112, 98, 62];
+const FLECKS: readonly Rgb[] = [
+  [182, 132, 56],
+  [118, 74, 42],
+  [154, 150, 66],
+  [96, 56, 34],
+];
+
 const FIELD_CELL = 0.5;
 
 type Fields = {
@@ -202,12 +221,13 @@ function sampleField(arr: Float32Array, n: number, fx: number, fz: number): numb
   return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
 }
 
-type Brushes = { litter: Uint8Array; shade: Uint8Array };
+type Brushes = { litter: Uint8Array; shade: Uint8Array; needles: Uint8Array };
 
 /** Malowanie pędzlami pod obiektami: ściółka i cień pod koronami, ciemny kontakt przy skałach i krzewach (wtopienie w grunt). */
 function paintBrushes(objects: readonly WorldObject[], bounds: Bounds, size: number, mpp: number, seed: number): Brushes {
   const litter = new Uint8Array(size * size);
   const shade = new Uint8Array(size * size);
+  const needles = new Uint8Array(size * size);
   const stamp = (target: Uint8Array, cx: number, cz: number, radius: number, power: number, strength: number, dapple: number) => {
     const px = (cx - bounds.minX) / mpp;
     const pz = (cz - bounds.minZ) / mpp;
@@ -234,6 +254,7 @@ function paintBrushes(objects: readonly WorldObject[], bounds: Bounds, size: num
     const crown = SPECIES_BY_MODEL.get(id)?.crown ?? 1;
     if (o.x < bounds.minX - 6 || o.x > bounds.maxX + 6 || o.z < bounds.minZ - 6 || o.z > bounds.maxZ + 6) continue;
     if (o.kind === "tree") {
+      if (o.variant?.startsWith("pine")) stamp(needles, o.x, o.z, crown * scale * 1.6 + 0.9, 1.1, 0.95, 0.35);
       stamp(litter, o.x, o.z, crown * scale * 1.5 + 0.8, 1.4, 0.95, 0.3);
       stamp(shade, o.x, o.z, 0.9 * scale + 0.4, 1.2, 0.9, 0);
       stamp(shade, o.x, o.z, crown * scale * 1.7, 1.6, 0.3, 0.6);
@@ -245,10 +266,12 @@ function paintBrushes(objects: readonly WorldObject[], bounds: Bounds, size: num
       stamp(shade, o.x, o.z, (SPECIES_BY_MODEL.get(id)?.footprint ?? 0.8) * scale * 0.9, 1, 0.45, 0);
     }
   }
-  return { litter, shade };
+  return { litter, shade, needles };
 }
 
-export type GroundInputs = { forest: ForestWorld; bounds: Bounds; objects: readonly WorldObject[]; size: number };
+export type GroundStyle = "v2a" | "natural";
+
+export type GroundInputs = { forest: ForestWorld; bounds: Bounds; objects: readonly WorldObject[]; size: number; style?: GroundStyle };
 
 export type GroundBuilder = {
   size: number;
@@ -336,13 +359,100 @@ export function createGroundBuilder(inputs: GroundInputs): GroundBuilder {
     }
   };
 
+  const fillRowNatural = (j: number) => {
+    const z = bounds.minZ + (j + 0.5) * mpp;
+    const fz = (z - bounds.minZ) / FIELD_CELL;
+    for (let i = 0; i < size; i++) {
+      const x = bounds.minX + (i + 0.5) * mpp;
+      const fx = (x - bounds.minX) / FIELD_CELL;
+      const k = j * size + i;
+      const trail = sampleField(fields.trail, fields.n, fx, fz);
+      const water = sampleField(fields.water, fields.n, fx, fz);
+      const slope = sampleField(fields.slope, fields.n, fx, fz);
+      const clearing = sampleField(fields.clearing, fields.n, fx, fz);
+      const dense = sampleField(fields.dense, fields.n, fx, fz);
+      const sunny = sampleField(fields.sunny, fields.n, fx, fz);
+      const riverside = sampleField(fields.riverside, fields.n, fx, fz);
+
+      const wx = x + (vnoise(x / 6.5, z / 6.5, seed + 11) - 0.5) * 5;
+      const wz = z + (vnoise(x / 6.5 + 9.1, z / 6.5 - 3.7, seed + 12) - 0.5) * 5;
+      const nLarge = vnoise(wx / 14, wz / 14, seed);
+      const nMid = vnoise(wx / 4.2, wz / 4.2, seed + 1);
+      const nSmall = vnoise(x / 0.7, z / 0.7, seed + 2);
+      const nFine = vnoise(x / 0.17, z / 0.17, seed + 3);
+      const grain = lattice(i, j, seed + 4);
+      const litterBrush = brushes.litter[k] / 255;
+      const needleBrush = brushes.needles[k] / 255;
+
+      const cover = smooth(
+        0.22,
+        0.66,
+        0.58 + 0.85 * (nMid - 0.5) + 0.7 * (nLarge - 0.5) + 0.3 * clearing + 0.12 * sunny - 0.2 * dense - 0.7 * litterBrush - 0.3 * needleBrush,
+      );
+
+      let grass = lerp3(N_GRASS_DARK, N_GRASS_LUSH, Math.min(1, nLarge * 0.7 + nMid * 0.45));
+      grass = lerp3(grass, N_GRASS_SUN, Math.min(1, clearing * 0.5 + sunny * 0.25) * (0.3 + 0.7 * nMid));
+      grass = lerp3(grass, N_GRASS_DRY, 0.35 * smooth(0.55, 0.85, nSmall) * (1 - dense));
+      grass = lerp3(grass, N_MOSS, Math.min(1, dense * 0.55 * smooth(0.35, 0.7, nMid) + riverside * 0.3));
+
+      let litter = lerp3(N_LITTER_B, N_LITTER_A, Math.min(1, nSmall * 0.7 + nMid * 0.35));
+      litter = lerp3(litter, N_NEEDLES, needleBrush * (0.55 + 0.45 * nFine));
+
+      let color = lerp3(litter, grass, cover * (0.7 + 0.3 * nFine));
+
+      const earthAmt = smooth(0.34, 0.62, slope) * (0.5 + 0.5 * nSmall);
+      color = lerp3(color, N_EARTH, earthAmt);
+
+      const wet = smooth(5.5, 0.3, water);
+      color = lerp3(color, MUD, wet * 0.65 * (0.6 + 0.4 * nMid));
+      const gravel = smooth(1.8, -0.1, water);
+      color = lerp3(color, lerp3(GRAVEL, PEBBLE, nFine), gravel * (0.55 + 0.4 * nSmall));
+      if (water < 0) color = lerp3(color, MUD, 0.5);
+
+      const edge = 0.15 + (nSmall - 0.5) * 0.55 + (nFine - 0.5) * 0.3;
+      const pathAmt = smooth(edge + 0.55, edge - 0.2, trail);
+      const trod = smooth(1.9, 0.3, trail) * (1 - pathAmt) * 0.5;
+      if (trod > 0) color = lerp3(color, N_TROD, trod * (0.6 + 0.4 * nMid));
+      if (pathAmt > 0) {
+        let dirt = lerp3(N_PATH_B, N_PATH_A, Math.min(1, nMid * 0.55 + nSmall * 0.55));
+        if (grain > 0.96 && trail < 0.3) dirt = lerp3(dirt, PEBBLE, 0.75);
+        color = lerp3(color, dirt, pathAmt * 0.96);
+      }
+
+      const shade = 1 - 0.34 * (brushes.shade[k] / 255) - 0.1 * dense;
+      let fleck = 0;
+      let flecked: Rgb | null = null;
+      if (pathAmt < 0.5 && grain > 0.975) {
+        flecked = FLECKS[Math.floor(lattice(i, j, seed + 5) * FLECKS.length) % FLECKS.length];
+        fleck = 0.7;
+      }
+      const speck = (grain - 0.5) * 12 + (nFine - 0.5) * 14;
+      const blade = pathAmt < 0.3 && grain > 0.985 && !flecked ? 18 : grain < 0.01 ? -16 : 0;
+      const o = k * 4;
+      let r = color[0] * shade + speck + blade;
+      let g = color[1] * shade + speck + blade;
+      let b = color[2] * shade + speck * 0.8 + blade * 0.6;
+      if (flecked) {
+        r = mixN(r, flecked[0] * shade, fleck);
+        g = mixN(g, flecked[1] * shade, fleck);
+        b = mixN(b, flecked[2] * shade, fleck);
+      }
+      data[o] = Math.max(0, Math.min(255, r));
+      data[o + 1] = Math.max(0, Math.min(255, g));
+      data[o + 2] = Math.max(0, Math.min(255, b));
+      data[o + 3] = 255;
+    }
+  };
+
+  const fill = inputs.style === "natural" ? fillRowNatural : fillRow;
+
   return {
     size,
     metersPerPixel: mpp,
     data,
     step(rows) {
       const end = Math.min(size, row + rows);
-      while (row < end) fillRow(row++);
+      while (row < end) fill(row++);
       return row >= size;
     },
     progress: () => row / size,

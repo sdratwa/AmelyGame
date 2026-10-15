@@ -1,5 +1,7 @@
 # Prototyp wizualny V2a - grywalny fragment lasu
 
+Następny etap: [prototyp-v2b.md](prototyp-v2b.md) (jakość wizualna, presety, VISUAL TUNING).
+
 Strona deweloperska `/dev/forest` (tylko `next dev`; w buildzie produkcyjnym zwraca 404). Kod: `src/lib/forest-view/` (logika i renderer Three.js), `src/components/forest-proto/ForestPrototype.tsx` (panel), `src/app/dev/forest/page.tsx`.
 
 **Status:** prototyp jakości wizualnej i wydajności. Nie rusza `ForestScene`, mechaniki gry, zapisów ani rejestru generatorów. Wygląd i FPS NIE zostały jeszcze ocenione w przeglądarce (decyzja autora: bez testów w przeglądarce po stronie agenta); zmierzone są tylko dane liczbowe niezależne od GPU.

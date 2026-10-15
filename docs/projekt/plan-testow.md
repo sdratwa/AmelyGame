@@ -74,6 +74,10 @@ Szczegóły w [swiat-w1a.md](swiat-w1a.md): determinizm i niezależność strumi
 
 `src/lib/forest-view/forestView.test.ts`: deterministyczny wybór sektora i okna, pozycje instancji = wysokość terenu (skały zagłębione), start na ścieżce, ruch niezależny od FPS, kolizje z pniami i skałami z różnych kierunków, granica strefy chodzenia, LOD z histerezą, ładowanie prawdziwych GLB dla LOW/MEDIUM/HIGH bez zastępników, wymuszenie LOD0/LOD1 i przełączanie ustawień, rzadzenie i frustum culling, grunt i woda, tekstura gruntu, atmosfera, statystyki klatek, trasa testu FPS. Poza automatami: wygląd i FPS w przeglądarce (autor).
 
+## Prototyp V2b
+
+`src/lib/forest-view/forestVisual.test.ts`: ORIGINAL neutralny względem V2a (paleta, strojenie, krzywa dnia, zamiana kanałów); presety jako niezależne kopie, zakresy suwaków i walidacja JSON (round-trip, śmieci, wartości skrajne); mgła; estymator jasności (Lambert + półsfera + ACES) dla pni, sosen i skał o 7:00, 12:00, 19:00: cień czytelny, kontrast słońce/cień, brak przepalenia, spód koron; ograniczenia ekspozycji i światła; krzywa letnia (słońce nad horyzontem, ciągłość, zawinięcie); uspokojenie zieleni i różnice między gatunkami; suwak nasycenia tylko dla zielonych pikseli; shadery (korekta w odpowiednich materiałach, normalne liści, zamiana kanałów tylko dla starych drzew, uniformy aktualizowane w miejscu); grunt natural (determinizm, udział zieleni, kontrast ścieżki). Jednorazowo: kompilacja GLSL złożonych shaderów w `glslangValidator`. Poza automatami: ocena wyglądu i FPS w przeglądarce (autor).
+
 ## Rdzeń świata (W0)
 
 Zrealizowane w `src/lib/game/world/*.test.ts`: determinizm i zróżnicowanie terenu, zgodność wysokości/normalnych/nachylenia (także na płaszczyźnie analitycznej), modyfikacje terenu (porównanie z przejściem pełnym), granice sektorów i obiekty na granicach, indeks przestrzenny (porównanie z przeszukaniem pełnym, 20 000 obiektów), walkable (granice, zbocza, obiekty, rzeka, most, regiony odblokowywane flagą), BFS, potok budowy (determinizm, warianty, niezależność strumieni, walidacja), dane punktów i stref, brak importów React/Three i odwołań do GLB.
