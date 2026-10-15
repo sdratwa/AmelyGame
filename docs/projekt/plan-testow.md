@@ -85,3 +85,11 @@ Szczegóły w [swiat-w1a.md](swiat-w1a.md): determinizm i niezależność strumi
 ## Rdzeń świata (W0)
 
 Zrealizowane w `src/lib/game/world/*.test.ts`: determinizm i zróżnicowanie terenu, zgodność wysokości/normalnych/nachylenia (także na płaszczyźnie analitycznej), modyfikacje terenu (porównanie z przejściem pełnym), granice sektorów i obiekty na granicach, indeks przestrzenny (porównanie z przeszukaniem pełnym, 20 000 obiektów), walkable (granice, zbocza, obiekty, rzeka, most, regiony odblokowywane flagą), BFS, potok budowy (determinizm, warianty, niezależność strumieni, walidacja), dane punktów i stref, brak importów React/Three i odwołań do GLB.
+
+## Zrealizowane w E2 + Q1 + W1b
+
+- `systems/containers.test.ts`: stosy, limity, konfiskata i odzysk (niezmiennik księgi), kolejność odzysku (niezbywalne najpierw).
+- `systems/quest.test.ts`: tablica (przeczytane vs przyjęte), cele `obtained`/`holding`/`flag`, skrzynie, pozyskiwanie (narzędzie, limit noszenia, atomowość), troll (konfiskata bez pieniędzy i telefonu, blokada do następnego dnia, +1 godzina po błędnej odpowiedzi, zagadki, depozyt), budowa mostu, nagroda raz, pauza z wieloma przyczynami (zamknięcie jednego okna nie wznawia zegara), zapis i odczyt po każdym kamieniu milowym (przyjęcie, każda skrzynia, konfiskata, odzysk depozytu, materiały, most, ukończenie) z kontrolą braku duplikacji i utraty zasobów, 5 scenariuszy kolejności zdarzeń oraz fuzz na 60 seedach z solverem `autoComplete` (każdy dozwolony stan da się doprowadzić do ukończenia questa).
+- `save/migration.test.ts`: migracja v1 -> v2 (zachowane domy, portfel, czas, zdrowie, imię; mapowanie przedmiotów; pozycja poprawna zachowana, niepoprawna przeniesiona do punktu wejścia; zapis legacy czytelny przez `LocalStorageSaveStore`; kopie `premigration` i `.bak`; uszkodzony SaveV1 jest odrzucany bez zgadywania; migracja jest czysta i deterministyczna; po migracji quest da się ukończyć).
+- `save/save.test.ts`: m.in. `Autosaver` traktuje postęp questa jako istotną zmianę.
+- `world/generators/v2/anchors.test.ts`: patrz [swiat-w1a.md](swiat-w1a.md).

@@ -40,7 +40,7 @@ Pełny opis stanu gry, zasad i tego, czego jeszcze nie ma — do wklejenia innem
 
 ### Zapis gry
 
-Postęp zapisuje się automatycznie w `localStorage` przeglądarki (imię, czas, życie, portfel, ekwipunek, domy, pozycja w lesie, seed świata). Po odświeżeniu pojawia się ekran „Kontynuuj / Nowa gra”. Zapis jest wersjonowany, z kopią zapasową i migracjami – szczegóły w [`docs/projekt/zapis-gry.md`](docs/projekt/zapis-gry.md).
+Postęp zapisuje się automatycznie w `localStorage` przeglądarki (imię, czas, życie, portfel, ekwipunek ze stosami, domy, pozycja w lesie, seed świata, postęp questa „Most do nieznanego”: zadania, skrzynie, troll z depozytem, most). Po odświeżeniu pojawia się ekran „Kontynuuj / Nowa gra”. Zapis (SaveV2) jest wersjonowany, z kopią zapasową i migracją ze starych zapisów v1 – szczegóły w [`docs/projekt/zapis-gry.md`](docs/projekt/zapis-gry.md).
 
 ### Debug
 
@@ -54,7 +54,7 @@ Plan i projekt etapu 1 („Most do nieznanego”): [`docs/projekt/README.md`](do
 
 ## Struktura
 
-- `src/lib/game/` – czysta logika gry bez Reacta i Three: `core/` (stan, zegar, `applyCommand`, zdarzenia, pauza czasu, rng), `content/` (przedmioty, domy), `systems/` (sesja, życie, ekwipunek, domy, śmierć), `world/` (wersjonowany generator świata z seeda, odcisk), `save/` (zapis, walidacja, migracje, magazyn, autosave); `engine.ts` to fasada publicznego API
+- `src/lib/game/` – czysta logika gry bez Reacta i Three: `core/` (stan, zegar, `applyCommand`, zdarzenia, pauza czasu, rng), `content/` (przedmioty, domy, zagadki, questy), `systems/` (sesja, życie, ekwipunek, kontenery, domy, śmierć, questy, skrzynie/troll/most), `world/` (wersjonowany generator świata z seeda, odcisk), `save/` (zapis, walidacja, migracje, magazyn, autosave); `engine.ts` to fasada publicznego API
 - `src/components/game/scene/` – ilustrowana scena świata (SVG): teren, ścieżki, drzewa, sklep, domy w 4 poziomach
 - `src/components/game/` – ekrany: `NameScreen`/`LoadingScreen`, `WorldMap`, `ShopInterior`, `ForestView` + `ForestScene` (r3f), `Hud`
 - `src/components/ui/` – komponenty shadcn/ui

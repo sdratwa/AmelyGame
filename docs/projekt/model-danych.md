@@ -65,7 +65,9 @@ Konfrontacja jest jedną transakcją: wszystkie przedmioty poza `pinned` trafiaj
 
 Wszystkie blokady to bezwzględny czas gry (`lockedUntil`, `retryAt`). Pozostały czas = `lockedUntil - elapsed`. `nextDayStart(elapsed)` zwraca najbliższą wielokrotność `SECONDS_PER_DAY` większą od `elapsed` (czyli kolejne 06:00). Po wczytaniu zapisu nie doliczamy czasu ściennego. Pauza zegara: patrz [architektura.md](architektura.md).
 
-## Zapis (`SaveV1`)
+## Zapis (`SaveV1` - plan, `SaveV2` - stan w kodzie)
+
+> Stan po E2 + Q1: bieżący format to `SaveV2`, opisany w [zapis-gry.md](zapis-gry.md). Zrealizowane: stosy z `maxStack` (jedzenie 1, surowce 20, narzędzia i schemat 1), flagi `protected` (telefon), `keepOnDeath`, `discardable` (tylko jedzenie), księga `{ gained, spent }`, depozyt trolla jako kontener, zadania sterowane danymi (cele `obtained`, `holding`, `flag`), skrzynie, troll (`unmet`, `confronted`, `solved`) z `lockUntil` i `attempts`. Różnice względem szkicu poniżej: jeden ekwipunek (bez osobnych kontenerów i magazynu), brak `noticeboard.readIds` (przeczytane są w `quests`), kotwice nie są zapisywane, tylko liczone z seeda.
 
 > Stan implementacji po E1 (to, co jest dziś zapisywane, i szczegóły magazynu): [zapis-gry.md](zapis-gry.md). Poniżej docelowy kształt; pola dla questów, skrzyń, trolla itd. dochodzą w kolejnych wersjach formatu z migracjami. Nazwy pól w kodzie: `world { seed, genVersion, fingerprint, genHistory }`, `player.forestPose`, `genHistory[].atElapsed` (czas gry zamiast czasu ściennego).
 

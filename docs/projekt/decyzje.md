@@ -57,7 +57,7 @@
 
 ## W1a (generator lasu v2)
 
-- Generator v2 jest wersją roboczą: nie rejestrujemy go w `registry.ts` i nie zapisujemy; zapisy zostają na v1 do osobnej decyzji (migracja z `pins`).
+- Generator v2 był wersją roboczą; zarejestrowany w W1b (patrz niżej).
 - Rozszerzenia W0 są kompatybilne wstecz (wstęga, żądania `river`/`trail`, `prepareWorld`, `validate`, indeks chodzenia tylko z kolizjami).
 - Rzeka na wschodzie (x ok. 100-106, 10-14 m), przekracza mapę z zapasem; most to tylko dane (punkt, lądowiska, przejście z flagą `bridge.built`).
 - Profile środowiskowe to dane (`sunny_forest`, `dense_forest`, `clearing`, `riverside` + tło `mixed_forest`); renderer nie decyduje o rozmieszczeniu.
@@ -85,10 +85,26 @@
 - Migotanie trawy (V2b): przyczyną było odwracanie normalnej na tylnej ściance `DoubleSide` (normalne trawy wskazują w górę, kierunek trójkątów nie) razem z pochyleniem normalnej `up` = 0,5, które zerowało wektor. Naprawa jest w shaderze materiału `grass` (stała normalna z wierzchołków) i w zabezpieczeniu przed zerem dla liści; nie wyłączamy cieni, nie usuwamy trawy ani nie podnosimy ekspozycji. Atmosferyczne światło wschodu i zachodu (ORIGINAL) pozostaje do osobnej decyzji po ocenie autora.
 - Konfiguracja wizualna zapisywana jest jako JSON `forest-visual/1` (kopiowanie i wczytywanie w panelu).
 
+## E2 + Q1 + W1b (quest "Most do nieznanego" - silnik, zapis, świat)
+
+- Zapis SaveV2 z kontrolowaną migracją v1 -> v2; stare zapisy pozostają czytelne (kopie `premigration` i `.bak`). Zachowujemy domy, pieniądze, czas, zdrowie, imię i tutorial; niepoprawna pozycja w lesie przenosi gracza do bezpiecznego punktu wejścia.
+- Generator v2 jest zarejestrowany jako bieżący; jego odcisk obejmuje kotwice i skrót planu, kotwice nie są zapisywane (wynikają z seeda i wersji).
+- Limit noszenia surowców to jeden stos (20) na rodzaj: depozyt po konfiskacie zawsze mieści się w ekwipunku, więc odzysk nie może zablokować questa.
+- Surowce, narzędzia i schemat są niezbywalne (`discardable: false`): nie da się zmarnować skończonej puli. Odrzucić można tylko jedzenie.
+- Kolejność odzysku z depozytu: najpierw przedmioty niezbywalne, żeby ewentualny brak miejsca dotknął jedzenia.
+- Odrodzenie zachowuje narzędzia i surowce (`keepOnDeath`), traci jedzenie.
+- Troll: pierwsza nieudana konfrontacja zabiera wszystko poza telefonem (pieniądze zostają), blokada do następnego dnia gry; błędna odpowiedź to blokada +1 godzina (zawsze `max` z istniejącą); zamknięcie okna zagadki nie zużywa próby; kolejność zagadek to stabilne tasowanie ze strumienia `troll.riddles`.
+- Pauza: dialog dodaje własną przyczynę systemową (`system.dialog`, z `state.dialog`); zegar rusza dopiero, gdy nie ma żadnej przyczyny.
+- Most zbudowany przed przyjęciem questa kończy quest przy przyjęciu. Toast ukończenia questa zastępuje toast budowy mostu.
+- Silnik ufa klientowi co do `at` (pozycji gracza) i identyfikatora pozyskiwanego obiektu w granicach zasięgu kotwic; pełna weryfikacja po stronie serwera nie jest potrzebna dla gry lokalnej.
+- Wada znaleziona przez walidator na 200 seedach (skała na osi mostu) naprawiona strefami `poi.bridge_axis_*`.
+
 ## Otwarte
 
 - Sprzęt referencyjny dla progów FPS (HIGH, LOW).
 - Treść dwóch zapowiedzi na tablicy.
+- Interfejs questa (tablica, dziennik, skrzynie, troll, pozyskiwanie, budowa, minimapa) jeszcze nie istnieje; silnik jest gotowy i przetestowany. Stary `ForestScene` pozostaje lasem w grze do punktu kontrolnego B.
+- Tutorial jako maszyna kroków (zastąpienie `tutorialDone`).
 - Wygląd trolla (pod kątem dzieci od 8 lat).
 - Skały S/M/L i paprocie: wybrano wariant A (V1); decyzja o B (inny pakiet CC0) lub C (płatna wersja Pro, wymaga zgody autora) po ocenie wizualnej w V2 - patrz [zasoby-3d.md](zasoby-3d.md).
 - Ocena wizualna modeli (które kolory liści zostają, jakość LOD1, potrzeba billboardów) i progi profili jakości - V2.

@@ -7,8 +7,8 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 - [architektura.md](architektura.md) - moduły, komendy i zdarzenia, pauza czasu, dane vs kod.
 - [model-danych.md](model-danych.md) - stan gry, ekwipunek i kontenery, skrzynie, depozyt trolla, docelowy zapis.
 - [swiat-w0.md](swiat-w0.md) - rdzeń świata po W0: współrzędne i sektory, teren, indeks przestrzenny, walkable, punkty i strefy.
-- [zapis-gry.md](zapis-gry.md) - system zapisu po E1: SaveV1, SaveStore, migracje, kopie, autosave, generator v1.
-- [swiat-w1a.md](swiat-w1a.md) - generator lasu W1a (v2, wersja robocza): teren, rzeka, ścieżki, profile, roślinność, sektory, testy i ryzyka.
+- [zapis-gry.md](zapis-gry.md) - system zapisu: SaveV2, migracja v1 -> v2, SaveStore, kopie, autosave, generatory v1 i v2.
+- [swiat-w1a.md](swiat-w1a.md) - generator lasu W1a (v2): teren, rzeka, ścieżki, profile, roślinność, sektory, testy i ryzyka; sekcja W1b: kotwice questa, walidacja 200 seedów.
 - [swiat-generator.md](swiat-generator.md) - las 300x300 m, sektory, `terrainHeight`, walidator, zgodność wersji generatora.
 - [quest-bridge-01.md](quest-bridge-01.md) - quest "Most do nieznanego".
 - [plan-testow.md](plan-testow.md) - testy mechanik, generatora, zapisu.
@@ -35,6 +35,7 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 - V2a zatwierdzone technicznie (M3 Max, HIGH, `?stress=49`: średnio 60 FPS, 1% low 56,8 FPS, ok. 2,35 mln trójkątów, 106 draw calls); budżet trójkątów z `wydajnosc.md` nie jest powodem do przerzedzania lasu.
 - V2b: poprawka migotania trawy zatwierdzona technicznie (e9e3391, końcowa kontrola wizualna po stronie autora); domyślny preset to MIASTO_DEFAULT (ORIGINAL z wybranymi suwakami). Laboratorium trawy i strojenie grafiki nie są dalej rozwijane.
 - V2b (jakość wizualna): zrobione, czeka na ocenę autora w przeglądarce; opis i szacunki w [prototyp-v2b.md](prototyp-v2b.md). Nie zmienia generatora, `worldGenVersion`, zapisów ani liczby obiektów.
+- E2 + Q1 + W1b (silnik questa, SaveV2, kotwice w generatorze v2): zrobione, czeka na akceptację raportu. Brak jeszcze interfejsu questa (UI1) i lasu v2 w grze (F1); patrz [decyzje.md](decyzje.md).
 
 ## Kolejność etapów
 

@@ -65,3 +65,29 @@ Zbocza (<= 33 stopnie poza korytem), rzeka nieprzekraczalna (także przy krawęd
 4. Jakość obejścia rzeki jest sprawdzana BFS na siatce 1-2 m i ruchem przy krawędziach; nie ma jeszcze testu F1 z prawdziwym kontrolerem gracza.
 5. `Math.cos` w spłaszczeniach i pagórkach (patrz Determinizm).
 6. Sektory z wodą mają mniej obiektów; sektory wzorcowe wybierane są automatycznie, ale nie wszystkie seedy mają trzy kwalifikujące się.
+
+## W1b: kotwice questa i generator v2 w grze
+
+Generator v2 jest zarejestrowany (`CURRENT_GEN_VERSION = 2`). Domy są identyczne z v1 (`generateHousesV1(rngStream(seed, "houses"))`), a `WorldBase.forest` niesie `{ anchors, planDigest }`. Odcisk świata obejmuje kotwice i skrót planu. `generateWorld` ma cache (LRU 6) i zwraca `structuredClone`. Zapisy v1 przechodzą kontrolowaną migrację (patrz [zapis-gry.md](zapis-gry.md)).
+
+### Kotwice (`world/anchors.ts`, plan w `generators/v2/plan.ts`)
+
+Strumień `forest.anchors` raz tasuje 4 polany (a-d). Trzy skrzynie stoją w środkach trzech różnych polan (kilof, piła, schemat), troll 3,4 m od skrzyni ze schematem (strefa `keep_clear` 1,6 m), `poi.beyond_bridge` 5 m za wschodnim lądowiskiem, a wzdłuż osi mostu jest strefa `keep_clear` o promieniu 3,0 m (`poi.bridge_axis_*`). Silnik waliduje komendy z pozycją `at: {x, z}` względem kotwic: skrzynia 3,5 m, troll 6 m, budowa 8 m od zachodniego lądowiska.
+
+### Reguły walidatora (`validateAnchors`)
+
+Kotwice istnieją, nie leżą w wodzie, są >= 25 m od startu, nie są zablokowane, są osiągalne bez żadnych przedmiotów (BFS), skrzynie są oddalone o >= 30 m, miejsce budowy < 20 m od zachodniego brzegu mostu, troll <= 6 m od skrzyni ze schematem, punkt za mostem leży po wschodniej stronie i nie jest osiągalny bez mostu, a zapas drewna i kamienia przed mostem wynosi >= 3x zapotrzebowanie (15 drewna i 30 kamienia w skali jednostek `harvestOf`).
+
+### Wynik walidacji 200 seedów
+
+0 naruszeń po poprawce. Zasób osiągalny na zachodnim brzegu: drewno min 2964, mediana 3846, maks 4538 (potrzeba 5); kamień min 157, mediana 243, maks 372 (potrzeba 10). Pełna walidacja 200 seedów trwa ok. 108 s. Walidator znalazł realny błąd: seed 547482912 miał skałę na osi mostu (`bridge_unusable`); naprawa to strefy `poi.bridge_axis_*` plus test regresji.
+
+### Zamrożone odciski po W1b
+
+`generateWorld` (v2): seed 1 `fp1:006ce794502340`, 2030 `fp1:1eb6e9ff488396`, 777 `fp1:1d9c51b07b48df`. `buildForest`: seed 1 `fp1:12ad25dddae36f`, 2030 `fp1:04a4d162135474`, 4000000000 `fp1:00ff46cf3225dd`. Odciski lasu zmieniły się względem W1a (dodane kotwice i strefy mostu); dopuszczalne, bo v2 nie było wcześniej w żadnym zapisie.
+
+### Zbieranie zasobów (`world/harvest.ts`)
+
+`harvestOf(obj)`: drzewa `tree.twisted*` lub skala >= 1,2 dają 5, skala >= 0,95 daje 2, reszta 1; skały wg tagów `size_s|m|l` (1/2/5). Limit noszenia to jeden stos (20) na surowiec, więc depozyt zawsze mieści się w ekwipunku po odzyskaniu.
+
+Testy: `generators/v2/anchors.test.ts` (stabilność generatora v2, 300 planów, regresja osi mostu, 200 pełnych walidacji z podsumowaniem zapasów; `W1B_REPORT=1 W1B_REPORT_FILE=...` zapisuje raport).
