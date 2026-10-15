@@ -2,12 +2,14 @@ import { ITEMS, type ItemId } from "../content/items";
 import { RIDDLE_BY_ID, RIDDLES } from "../content/riddles";
 import { RECIPE_BRIDGE_01 } from "../content/quests";
 import { nextDayStart, gameHoursToSeconds } from "../core/clock";
-import { BUILD_RANGE, CHEST_RANGE, RIDDLE_LOCK_HOURS, TROLL_RANGE } from "../core/constants";
+import { BUILD_RANGE, CHEST_RANGE, HARVEST_RANGE, RIDDLE_LOCK_HOURS, TROLL_RANGE } from "../core/constants";
 import type { ChestId, RegionId } from "../core/ids";
 import { rngStream } from "../core/rng";
 import { result, unchanged, withToast, type CommandResult } from "../core/result";
 import type { GameState } from "../core/state";
 import { distance2, type Point2 } from "../world/anchors";
+import { harvestOf } from "../world/harvest";
+import { forestObject } from "../world/lookup";
 import { addToPile, addToSlots, canAdd, confiscate, countOf, gain, recover, removeFromSlots, spend } from "./containers";
 
 export type At = Point2;
@@ -22,7 +24,9 @@ export const CHEST_CONTENTS: Readonly<Record<string, ItemId>> = {
 const validAt = (at: unknown): at is At =>
   typeof at === "object" && at !== null && Number.isFinite((at as At).x) && Number.isFinite((at as At).z);
 
-const alive = (state: GameState) => state.phase === "playing" && !state.dead && state.world?.anchors != null;
+/** Akcje w lesie wymagają żywego gracza, który jest w lesie, oraz świata z kotwicami. */
+const alive = (state: GameState) =>
+  state.phase === "playing" && !state.dead && state.view === "forest" && state.world?.anchors != null;
 
 function chestPoint(state: GameState, id: string): Point2 | null {
   const anchors = state.world?.anchors;
@@ -82,24 +86,30 @@ export function takeChest(state: GameState, id: ChestId, at: At): CommandResult 
 
 /* ---------- pozyskiwanie ---------- */
 
-export type HarvestCommand = { objectId: string; kind: "tree" | "rock"; size: "s" | "m" | "l" };
-const HARVEST_AMOUNT = { s: 1, m: 2, l: 5 } as const;
+export type HarvestCommand = { objectId: string; at: At };
 
+/**
+ * Pozyskanie drewna lub kamienia. Silnik nie ufa klientowi: obiekt musi istnieć w świecie danego seeda, być
+ * drzewem lub skałą, nie może być już pozyskany, a gracz musi stać w zasięgu. Rodzaj i ilość wynikają z obiektu.
+ */
 export function harvest(state: GameState, cmd: HarvestCommand): CommandResult {
-  if (state.phase !== "playing" || state.dead) return unchanged(state);
+  if (!alive(state) || !validAt(cmd.at)) return unchanged(state);
   if (typeof cmd.objectId !== "string" || cmd.objectId.length === 0 || cmd.objectId.length > 80) return unchanged(state);
-  if (!(cmd.kind === "tree" || cmd.kind === "rock") || !(cmd.size in HARVEST_AMOUNT)) return unchanged(state);
   if (state.harvested.includes(cmd.objectId)) return unchanged(state);
-  const tool: ItemId = cmd.kind === "tree" ? "item.saw" : "item.pickaxe";
-  const resource: ItemId = cmd.kind === "tree" ? "resource.wood" : "resource.stone";
+  const obj = forestObject(state.world!.seed, cmd.objectId);
+  const target = obj ? harvestOf(obj) : null;
+  if (!obj || !target) return unchanged(state);
+  if (distance2(cmd.at, obj) > HARVEST_RANGE) return unchanged(state);
+  const tool: ItemId = target.kind === "tree" ? "item.saw" : "item.pickaxe";
+  const resource: ItemId = target.kind === "tree" ? "resource.wood" : "resource.stone";
   if (countOf(state.slots, tool) < 1) {
-    return fail(state, cmd.kind === "tree" ? "Potrzebujesz piły, aby pozyskać drewno." : "Potrzebujesz kilofa, aby pozyskać kamień.", {
+    return fail(state, target.kind === "tree" ? "Potrzebujesz piły, aby pozyskać drewno." : "Potrzebujesz kilofa, aby pozyskać kamień.", {
       type: "harvest.failed",
       objectId: cmd.objectId,
       reason: "no_tool",
     });
   }
-  const amount = HARVEST_AMOUNT[cmd.size];
+  const amount = target.amount;
   // Limit jednego stosu: surowce zajmują najwyżej jedno miejsce, więc nie da się zapchać ekwipunku przedmiotami
   // niewyrzucalnymi (to gwarantuje, że depozyt trolla zawsze da się odzyskać).
   if (countOf(state.slots, resource) + amount > ITEMS[resource].maxStack) {
@@ -271,7 +281,7 @@ export function buildBridge(state: GameState, at: At): CommandResult {
     ledger = spend(ledger, r.id, r.count);
   }
   return result(
-    withToast({ ...state, slots, ledger, bridge: { built: true, builtAt: state.elapsed } }, "Most odbudowany! Rzeka jest już przejezdna."),
+    withToast({ ...state, slots, ledger, bridge: { built: true, builtAt: state.elapsed } }, "Most odbudowany! Przejdź na drugą stronę rzeki."),
     { type: "bridge.built" },
   );
 }

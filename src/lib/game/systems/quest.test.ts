@@ -11,9 +11,10 @@ import type { GameState } from "../core/state";
 import { hydrateState } from "../save/hydrate";
 import { serializeState } from "../save/serialize";
 import { validateSaveV2 } from "../save/validate";
-import { anchorsOf, autoComplete, near, newPlaying, run } from "../testkit";
+import { anchorsOf, autoComplete, harvestTarget, harvestTargets, inForest, near, newPlaying, run } from "../testkit";
 import { countOf, inventoryProblems } from "./containers";
 import { riddleFor } from "./forestQuest";
+import { forestOf } from "../world/lookup";
 import { boardHasUnread, questProgress } from "./quests";
 
 const BRIDGE = "quest.bridge_01" as const;
@@ -22,8 +23,13 @@ const BRIDGE = "quest.bridge_01" as const;
 class Game {
   state: GameState;
   events: GameEvent[] = [];
+  readonly seed: number;
   constructor(seed = 777) {
-    this.state = newPlaying(seed);
+    this.seed = seed;
+    this.state = inForest(newPlaying(seed));
+  }
+  forest() {
+    this.state = inForest(this.state);
   }
   do(command: Command): GameEvent[] {
     const out = applyCommand(this.state, command);
@@ -47,6 +53,7 @@ class Game {
     if (!valid.ok) throw new Error(valid.problems.join("; "));
     this.state = hydrateState(valid.value);
     this.check();
+    this.forest();
   }
   get a() {
     return anchorsOf(this.state);
@@ -59,14 +66,19 @@ class Game {
   }
   /** Przesunięcie zegara gry (z uzupełnieniem zdrowia, żeby test nie zależał od drenażu). */
   advanceTo(t: number) {
-    this.state = { ...this.state, elapsed: Math.max(this.state.elapsed, t), health: 100 };
+    this.state = inForest({ ...this.state, elapsed: Math.max(this.state.elapsed, t), health: 100 });
   }
   openAndTake(id: "chest.bridge.pickaxe" | "chest.bridge.saw" | "chest.bridge.blueprint") {
     this.do({ type: "chest.open", id, at: near(this.chest(id)) });
     this.do({ type: "chest.take", id, at: near(this.chest(id)) });
   }
+  /** Dziesięć kamieni z pięciu średnich skał (duże skały są rzadkie, więc nie liczymy na nie). */
+  stone10(from = 0) {
+    for (let i = 0; i < 5; i++) this.harvest("rock", "m", from + i);
+  }
   harvest(kind: "tree" | "rock", size: "s" | "m" | "l", n: number) {
-    this.do({ type: "harvest", objectId: `${kind}.t.${n}`, kind, size });
+    const target = harvestTarget(this.seed, kind, size, n);
+    this.do({ type: "harvest", objectId: target.id, at: target.at });
   }
 }
 
@@ -99,9 +111,9 @@ describe("Q1: tablica i przyjęcie zadania", () => {
     expect(applyCommand(dead, { type: "quest.accept", id: BRIDGE }).state).toBe(dead);
   });
 
-  it("zawartość zadania jest danymi: 4 etapy, nagroda 5000 zł i odznaka, zapowiedzi bez celów", () => {
+  it("zawartość zadania jest danymi: 5 etapów, nagroda 5000 zł i odznaka, zapowiedzi bez celów", () => {
     const def = QUESTS.find((q) => q.id === BRIDGE)!;
-    expect(def.stages.map((s) => s.id)).toEqual(["tools", "blueprint", "materials", "build"]);
+    expect(def.stages.map((s) => s.id)).toEqual(["tools", "blueprint", "materials", "build", "cross"]);
     expect(def.reward).toEqual({ money: 5000, badge: "badge.explorer" });
     expect(QUESTS.filter((q) => q.preview)).toHaveLength(2);
   });
@@ -327,9 +339,11 @@ describe("Q1: troll, konfiskata i depozyt", () => {
 describe("Q1: pozyskiwanie surowców", () => {
   it("wymaga narzędzia, daje 1/2/5, jest skończone i ma limit jednego stosu", () => {
     const g = new Game();
-    expect(eventTypes(g.do({ type: "harvest", objectId: "tree.a", kind: "tree", size: "l" }))).toEqual(["harvest.failed"]);
+    const tree = harvestTarget(g.seed, "tree", "l", 0);
+    const rock = harvestTarget(g.seed, "rock", "m", 0);
+    expect(eventTypes(g.do({ type: "harvest", objectId: tree.id, at: tree.at }))).toEqual(["harvest.failed"]);
     expect(g.state.toast?.text).toBe("Potrzebujesz piły, aby pozyskać drewno.");
-    expect(eventTypes(g.do({ type: "harvest", objectId: "rock.a", kind: "rock", size: "l" }))).toEqual(["harvest.failed"]);
+    expect(eventTypes(g.do({ type: "harvest", objectId: rock.id, at: rock.at }))).toEqual(["harvest.failed"]);
     expect(g.state.toast?.text).toBe("Potrzebujesz kilofa, aby pozyskać kamień.");
     g.openAndTake("chest.bridge.pickaxe");
     g.openAndTake("chest.bridge.saw");
@@ -337,20 +351,48 @@ describe("Q1: pozyskiwanie surowców", () => {
     g.harvest("tree", "m", 2);
     g.harvest("tree", "l", 3);
     expect(g.has("resource.wood")).toBe(8);
-    g.do({ type: "harvest", objectId: "tree.t.3", kind: "tree", size: "l" });
+    g.harvest("tree", "l", 3);
     expect(g.has("resource.wood")).toBe(8);
-    g.harvest("rock", "l", 4);
-    g.harvest("rock", "l", 5);
-    g.harvest("rock", "m", 6);
+    for (let n = 4; n < 10; n++) g.harvest("rock", "m", n);
     g.harvest("rock", "s", 7);
     expect(g.has("resource.stone")).toBe(13);
     for (let n = 10; n < 20; n++) g.harvest("tree", "l", n);
     expect(g.has("resource.wood")).toBe(18);
-    expect(g.state.harvested).toHaveLength(3 + 4 + 2);
+    expect(g.state.harvested).toHaveLength(3 + 7 + 2);
     g.reload();
-    expect(g.state.harvested).toHaveLength(9);
+    expect(g.state.harvested).toHaveLength(12);
     g.harvest("tree", "s", 1);
-    expect(g.state.harvested).toHaveLength(9);
+    expect(g.state.harvested).toHaveLength(12);
+  });
+
+  it("silnik nie ufa klientowi: nieistniejący, obcy lub niepozyskiwalny obiekt, zły dystans i widok są odrzucane", () => {
+    const g = new Game();
+    g.openAndTake("chest.bridge.saw");
+    g.openAndTake("chest.bridge.pickaxe");
+    const tree = harvestTarget(g.seed, "tree", "m", 0);
+    const rock = harvestTarget(g.seed, "rock", "s", 0);
+    const bush = forestOf(g.seed)
+      .allSectors()
+      .flatMap((sec) => sec.objects)
+      .find((o) => o.kind === "bush")!;
+    const unchanged = (command: Command, state = g.state) => expect(applyCommand(state, command).state).toBe(state);
+    unchanged({ type: "harvest", objectId: "tree.forest_start.0_0.99999", at: tree.at });
+    unchanged({ type: "harvest", objectId: "tree.forest_start.99_99.1", at: tree.at });
+    unchanged({ type: "harvest", objectId: "tree.inna_kraina.1_1.1", at: tree.at });
+    unchanged({ type: "harvest", objectId: "to nie jest id", at: tree.at });
+    unchanged({ type: "harvest", objectId: bush.id, at: { x: bush.x + 1, z: bush.z } });
+    unchanged({ type: "harvest", objectId: tree.id, at: { x: tree.at.x + 30, z: tree.at.z } });
+    unchanged({ type: "harvest", objectId: tree.id, at: { x: Number.NaN, z: 0 } });
+    unchanged({ type: "harvest", objectId: tree.id, at: tree.at }, { ...g.state, view: "world" });
+    unchanged({ type: "harvest", objectId: tree.id, at: tree.at }, { ...g.state, dead: true });
+    const wood = g.has("resource.wood");
+    g.do({ type: "harvest", objectId: tree.id, at: tree.at });
+    expect(g.has("resource.wood")).toBe(wood + 2);
+    unchanged({ type: "harvest", objectId: tree.id, at: tree.at });
+    // ilość i rodzaj wynikają z obiektu, nie z komendy klienta
+    g.do({ type: "harvest", objectId: rock.id, at: rock.at });
+    expect(g.has("resource.stone")).toBe(1);
+    expect(g.has("resource.wood")).toBe(wood + 2);
   });
 
   it("brak miejsca nie zużywa obiektu: surowiec nie ginie", () => {
@@ -358,7 +400,8 @@ describe("Q1: pozyskiwanie surowców", () => {
     g.openAndTake("chest.bridge.saw");
     for (let i = 0; i < 6; i++) g.do({ type: "buy", item: "item.water" });
     const before = g.state.harvested.length;
-    expect(eventTypes(g.do({ type: "harvest", objectId: "tree.full", kind: "tree", size: "l" }))).toEqual(["harvest.failed"]);
+    const full = harvestTarget(g.seed, "tree", "l", 5);
+    expect(eventTypes(g.do({ type: "harvest", objectId: full.id, at: full.at }))).toEqual(["harvest.failed"]);
     expect(g.state.harvested).toHaveLength(before);
   });
 });
@@ -374,8 +417,7 @@ describe("Q1: most, nagroda i odkrycie", () => {
     g.do({ type: "riddle.answer", value: RIDDLE_BY_ID.get(g.state.dialog!.riddle!)!.answer });
     g.openAndTake("chest.bridge.blueprint");
     g.harvest("tree", "l", 1);
-    g.harvest("rock", "l", 2);
-    g.harvest("rock", "l", 3);
+    g.stone10();
     return g;
   }
 
@@ -392,10 +434,16 @@ describe("Q1: most, nagroda i odkrycie", () => {
     g.reload();
     const wallet = g.state.wallet;
     const ev = g.do({ type: "bridge.build", at: near(west) });
-    expect(eventTypes(ev)).toEqual(["bridge.built", "quest.completed"]);
+    expect(eventTypes(ev)).toEqual(["bridge.built"]);
+    expect(g.state.toast?.text).toMatch(/Most odbudowany/);
     expect(g.has("resource.wood")).toBe(0);
     expect(g.has("resource.stone")).toBe(0);
     expect(g.has("item.bridge_blueprint")).toBe(1);
+    expect(g.state.wallet).toBe(wallet);
+    expect(g.state.quests.completed[BRIDGE]).toBeUndefined();
+    const crossing = g.do({ type: "region.discover", id: g.a.beyond.region, at: near(g.a.beyond) });
+    expect(eventTypes(crossing)).toEqual(["region.discovered", "quest.completed"]);
+    expect(g.state.toast?.text).toMatch(/Zadanie ukończone/);
     expect(g.state.wallet).toBe(wallet + 5000);
     expect(g.state.badges).toEqual(["badge.explorer"]);
     expect(g.state.quests.completed[BRIDGE]).toBeDefined();
@@ -411,21 +459,31 @@ describe("Q1: most, nagroda i odkrycie", () => {
     g.openAndTake("chest.bridge.saw");
     g.openAndTake("chest.bridge.pickaxe");
     g.harvest("tree", "l", 1);
-    g.harvest("rock", "l", 2);
-    g.harvest("rock", "l", 3);
+    g.stone10();
     const ev = g.do({ type: "bridge.build", at: near(g.a.bridge.west) });
     expect(ev).toEqual([{ type: "bridge.build_failed", reason: "no_blueprint" }]);
   });
 
-  it("most zbudowany przed przyjęciem zadania kończy je od razu po przyjęciu (kolejność nie blokuje)", () => {
+  it("most zbudowany przed przyjęciem zadania nie blokuje go: przejście na drugi brzeg po przyjęciu kończy zadanie", () => {
     const g = ready();
     const fresh = { ...g.state, quests: { accepted: {}, completed: {}, read: [] } };
     g.state = fresh;
     g.do({ type: "bridge.build", at: near(g.a.bridge.west) });
     expect(g.state.quests.completed[BRIDGE]).toBeUndefined();
     const ev = g.do({ type: "quest.accept", id: BRIDGE });
-    expect(eventTypes(ev)).toEqual(["quest.accepted", "quest.completed"]);
+    expect(eventTypes(ev)).toEqual(["quest.accepted"]);
+    expect(questProgress(g.state, BRIDGE)!.stages.at(-1)!.done).toBe(false);
+    expect(eventTypes(g.do({ type: "region.discover", id: g.a.beyond.region, at: near(g.a.beyond) }))).toEqual(["region.discovered", "quest.completed"]);
     expect(g.state.badges).toEqual(["badge.explorer"]);
+  });
+
+  it("drugi brzeg odkryty przed przyjęciem zadania kończy je od razu po przyjęciu", () => {
+    const g = ready();
+    g.state = { ...g.state, quests: { accepted: {}, completed: {}, read: [] } };
+    g.do({ type: "bridge.build", at: near(g.a.bridge.west) });
+    g.do({ type: "region.discover", id: g.a.beyond.region, at: near(g.a.beyond) });
+    expect(g.state.quests.completed[BRIDGE]).toBeUndefined();
+    expect(eventTypes(g.do({ type: "quest.accept", id: BRIDGE }))).toEqual(["quest.accepted", "quest.completed"]);
   });
 
   it("nowy obszar odkrywa się dopiero po moście i wejściu w jego strefę, tylko raz", () => {
@@ -434,8 +492,7 @@ describe("Q1: most, nagroda i odkrycie", () => {
     expect(g.do({ type: "region.discover", id: beyond.region, at: near(beyond, 0, 0) })).toEqual([]);
     g.do({ type: "bridge.build", at: near(g.a.bridge.west) });
     expect(g.do({ type: "region.discover", id: beyond.region, at: { x: beyond.x - 60, z: beyond.z } })).toEqual([]);
-    expect(eventTypes(g.do({ type: "region.discover", id: beyond.region, at: near(beyond, 1, 1) }))).toEqual(["region.discovered"]);
-    expect(g.state.toast?.text).toBe("Odkryto nowy obszar!");
+    expect(eventTypes(g.do({ type: "region.discover", id: beyond.region, at: near(beyond, 1, 1) }))).toEqual(["region.discovered", "quest.completed"]);
     expect(g.do({ type: "region.discover", id: beyond.region, at: near(beyond, 1, 1) })).toEqual([]);
     g.reload();
     expect(g.state.discovered).toEqual([beyond.region]);
@@ -473,15 +530,18 @@ describe("Q1: zapis i wczytanie na każdym etapie zadania (bez duplikatów, stra
     g.openAndTake("chest.bridge.blueprint");
     checkpoint();
     g.harvest("tree", "l", 3);
-    g.harvest("rock", "l", 4);
-    checkpoint(); // po zebraniu materiałów
-    expect(g.has("resource.stone")).toBe(7);
+    g.harvest("rock", "m", 4);
     g.harvest("rock", "m", 5);
-    g.harvest("rock", "s", 6);
+    g.harvest("rock", "m", 6);
+    checkpoint(); // po zebraniu materiałów
+    expect(g.has("resource.stone")).toBe(8);
+    g.harvest("rock", "m", 7);
     checkpoint();
     expect(g.has("resource.stone")).toBe(10);
     g.do({ type: "bridge.build", at: near(g.a.bridge.west) });
     checkpoint(); // po wybudowaniu mostu
+    expect(g.state.quests.completed[BRIDGE]).toBeUndefined();
+    g.do({ type: "region.discover", id: g.a.beyond.region, at: near(g.a.beyond) });
     expect(g.state.quests.completed[BRIDGE]).toBeDefined();
     checkpoint(); // po ukończeniu questa
     expect(g.state.badges).toEqual(["badge.explorer"]);
@@ -569,14 +629,16 @@ describe("Q1: odrodzenie i dyskretne scenariusze bez softlocka", () => {
         g.harvest("tree", "l", 1);
         g.do({ type: "troll.talk", at: near(g.a.troll) });
         g.do({ type: "troll.choose", choice: "fight" });
+        g.forest();
         g.openAndTake("chest.bridge.pickaxe");
-        g.harvest("rock", "l", 2);
+        g.harvest("rock", "m", 2);
         g.harvest("tree", "l", 3);
       },
       (g) => {
         for (let i = 0; i < 7; i++) g.do({ type: "buy", item: "item.water" });
         g.do({ type: "troll.talk", at: near(g.a.troll) });
         g.do({ type: "troll.choose", choice: "fight" });
+        g.forest();
         for (let i = 0; i < 7; i++) g.do({ type: "buy", item: "item.coffee" });
       },
       (g) => {
@@ -607,9 +669,15 @@ describe("Q1: odrodzenie i dyskretne scenariusze bez softlocka", () => {
       };
       const pick = <T,>(list: readonly T[]): T => list[Math.floor(rnd() * list.length)];
       const chests = ["chest.bridge.pickaxe", "chest.bridge.saw", "chest.bridge.blueprint"] as const;
+      const targets = harvestTargets(5000 + n);
+      const harvestPoint = () => {
+        const t = pick(targets);
+        return { x: t.at.x, z: t.at.z };
+      };
       for (let step = 0; step < 90; step++) {
         const a = g.a;
         const cid = pick(chests);
+        const ht = pick(targets);
         const commands: Command[] = [
           { type: "buy", item: pick(["item.hotdog", "item.water", "item.coffee"] as const) },
           { type: "eat" },
@@ -619,8 +687,10 @@ describe("Q1: odrodzenie i dyskretne scenariusze bez softlocka", () => {
           { type: "chest.open", id: cid, at: near(g.chest(cid), 0.3, 0) },
           { type: "chest.take", id: cid, at: near(g.chest(cid), 0.2, 0.2) },
           { type: "chest.take", id: cid, at: near(g.chest(cid), 0.2, 0.2) },
-          { type: "harvest", objectId: `o.${Math.floor(rnd() * 40)}`, kind: pick(["tree", "rock"] as const), size: pick(["s", "m", "l"] as const) },
-          { type: "harvest", objectId: `o.${Math.floor(rnd() * 40)}`, kind: pick(["tree", "rock"] as const), size: pick(["s", "m", "l"] as const) },
+          { type: "harvest", objectId: ht.id, at: ht.at },
+          { type: "harvest", objectId: ht.id, at: harvestPoint() },
+          { type: "enter", view: "forest" },
+          { type: "region.discover", id: a.beyond.region, at: near(a.beyond) },
           { type: "troll.talk", at: near(a.troll) },
           { type: "troll.talk", at: near(a.troll, rnd() * 8 - 4, 0) },
           { type: "troll.choose", choice: pick(["fight", "talk"] as const) },
@@ -630,6 +700,7 @@ describe("Q1: odrodzenie i dyskretne scenariusze bez softlocka", () => {
           { type: "bridge.build", at: near(a.bridge.west, rnd() * 20 - 10, 0) },
           { type: "quest.accept", id: BRIDGE },
           { type: "tick", dt: rnd() * 200 },
+          { type: "leave" },
           { type: "leave" },
         ];
         g.do(pick(commands));

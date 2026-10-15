@@ -5,14 +5,14 @@ import type { ItemId } from "./items";
  * Cele zadań są danymi wyliczanymi ze stanu gry:
  * - `obtained`: monotoniczne ("znaleziono"), liczone z księgi zdobytych przedmiotów;
  * - `holding`: ilościowe, liczone z bieżącego ekwipunku;
- * - `flag`: zdarzenie świata (most zbudowany, depozyt odzyskany).
+ * - `flag`: zdarzenie świata (most zbudowany, drugi brzeg odkryty, depozyt odzyskany).
  */
 export type ObjectiveDef =
   | { id: string; title: string; kind: "obtained"; item: ItemId; count: number }
   | { id: string; title: string; kind: "holding"; item: ItemId; count: number }
   | { id: string; title: string; kind: "flag"; flag: QuestFlag; visibleWhen?: "troll_deposit_nonempty" };
 
-export type QuestFlag = "bridge.built" | "troll.deposit_empty";
+export type QuestFlag = "bridge.built" | "beyond.discovered" | "troll.deposit_empty";
 
 export type StageDef = { id: string; title: string; objectives: readonly ObjectiveDef[] };
 
@@ -77,8 +77,13 @@ export const QUESTS: readonly QuestDef[] = [
         title: "Budowa",
         objectives: [{ id: "bridge", title: "Zbuduj most przy rzece", kind: "flag", flag: "bridge.built" }],
       },
+      {
+        id: "cross",
+        title: "Przeprawa",
+        objectives: [{ id: "cross", title: "Przejdź przez most na drugi brzeg", kind: "flag", flag: "beyond.discovered" }],
+      },
     ],
-    completeWhen: "bridge.built",
+    completeWhen: "beyond.discovered",
     reward: { money: 5000, badge: BADGE_EXPLORER },
   },
   {

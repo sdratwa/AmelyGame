@@ -33,10 +33,50 @@ export const anchorsOf = (s: GameState) => {
 export const near = (p: Point2, dx = 0.5, dz = 0): Point2 => ({ x: p.x + dx, z: p.z + dz });
 
 import { RIDDLE_BY_ID } from "./content/riddles";
+import { harvestOf, type HarvestKind, type HarvestSize } from "./world/harvest";
+import { forestOf } from "./world/lookup";
+import { FOREST_START } from "./world/generators/v2";
 import { ITEMS } from "./content/items";
 import { MAX_HEALTH } from "./core/constants";
 import { countOf } from "./systems/containers";
 import { CHEST_CONTENTS } from "./systems/forestQuest";
+
+export type HarvestTarget = { id: string; at: Point2; kind: HarvestKind; size: HarvestSize };
+
+const targetCache = new Map<number, HarvestTarget[]>();
+
+/** Tylko testy: prawdziwe drzewa i skały z lasu danego seeda (zachodni brzeg, od najbliższych startu). */
+export function harvestTargets(seed: number): HarvestTarget[] {
+  const hit = targetCache.get(seed);
+  if (hit) return hit;
+  const forest = forestOf(seed);
+  const out: HarvestTarget[] = [];
+  for (const sector of forest.allSectors()) {
+    for (const o of sector.objects) {
+      const h = harvestOf(o);
+      if (!h) continue;
+      const river = forest.geometry.riverAt(o.z);
+      if (o.x > river.x - river.w - 8) continue;
+      out.push({ id: o.id, at: { x: o.x + 1.5, z: o.z }, kind: h.kind, size: h.size });
+    }
+  }
+  out.sort((a, b) => Math.hypot(a.at.x - FOREST_START.x, a.at.z - FOREST_START.z) - Math.hypot(b.at.x - FOREST_START.x, b.at.z - FOREST_START.z) || (a.id < b.id ? -1 : 1));
+  targetCache.set(seed, out);
+  return out;
+}
+
+/** n-ta (cyklicznie) pozycja z listy celów danego rodzaju i rozmiaru. */
+export function harvestTarget(seed: number, kind: HarvestKind, size: HarvestSize, n: number): HarvestTarget {
+  const list = harvestTargets(seed).filter((t) => t.kind === kind && t.size === size);
+  if (list.length === 0) throw new Error(`brak celów ${kind}/${size} w seedzie ${seed}`);
+  return list[n % list.length];
+}
+
+/** Tylko testy: gracz w lesie (jeśli jest w mieście lub w sklepie). */
+export function inForest(state: GameState): GameState {
+  if (state.view === "forest") return state;
+  return run(state, { type: "leave" }, { type: "enter", view: "forest" });
+}
 
 const healed = (s: GameState): GameState => (s.dead ? s : { ...s, health: MAX_HEALTH });
 
@@ -50,6 +90,9 @@ export function autoComplete(start: GameState): GameState {
   const step = (...c: Command[]) => {
     s = run(s, ...c);
   };
+  const forest = () => {
+    s = inForest(s);
+  };
   const guard = (cond: boolean, what: string) => {
     if (!cond) throw new Error(`autoComplete: utknięto: ${what}`);
   };
@@ -57,6 +100,7 @@ export function autoComplete(start: GameState): GameState {
   step({ type: "dialog.close" }, { type: "leave" });
   step({ type: "board.read", id: "quest.bridge_01" }, { type: "quest.accept", id: "quest.bridge_01" });
   s.slots.forEach((_, i) => step({ type: "discard", slot: i }));
+  forest();
 
   const chestAt = (id: keyof typeof CHEST_CONTENTS) => (a.chests as Record<string, Point2>)[id];
   const getChest = (id: keyof typeof CHEST_CONTENTS) => {
@@ -70,12 +114,14 @@ export function autoComplete(start: GameState): GameState {
     if (s.elapsed < s.troll.lockUntil) {
       s = healed({ ...s, elapsed: s.troll.lockUntil });
     }
+    forest();
     step({ type: "troll.talk", at: near(a.troll) });
     if (s.dialog?.stage === "intro") step({ type: "troll.choose", choice: "talk" });
     guard(s.dialog?.stage === "riddle", "brak zagadki");
     step({ type: "riddle.answer", value: RIDDLE_BY_ID.get(s.dialog!.riddle!)!.answer });
   }
   guard(s.troll.phase === "solved", "troll nie rozwiązany");
+  forest();
   s.slots.forEach((slot, i) => {
     if (slot && ITEMS[slot.id].discardable) step({ type: "discard", slot: i });
   });
@@ -85,15 +131,26 @@ export function autoComplete(start: GameState): GameState {
       if (slot && ITEMS[slot.id].discardable) step({ type: "discard", slot: j });
     });
   }
+  forest();
   getChest("chest.bridge.blueprint");
   guard(countOf(s.slots, "item.pickaxe") === 1 && countOf(s.slots, "item.saw") === 1, "brak narzędzi");
   guard(countOf(s.slots, "item.bridge_blueprint") === 1, "brak schematu");
 
-  let n = 0;
-  while (countOf(s.slots, "resource.wood") < 5) step({ type: "harvest", objectId: `tree.auto.${n++}`, kind: "tree", size: "l" });
-  while (countOf(s.slots, "resource.stone") < 10) step({ type: "harvest", objectId: `rock.auto.${n++}`, kind: "rock", size: "l" });
+  const seed = s.world!.seed;
+  const gather = (kind: HarvestKind, item: "resource.wood" | "resource.stone", need: number) => {
+    const list = harvestTargets(seed).filter((t) => t.kind === kind && !s.harvested.includes(t.id));
+    for (const t of list) {
+      if (countOf(s.slots, item) >= need) break;
+      step({ type: "harvest", objectId: t.id, at: t.at });
+    }
+    guard(countOf(s.slots, item) >= need, `brak surowca ${item}`);
+  };
+  gather("tree", "resource.wood", 5);
+  gather("rock", "resource.stone", 10);
   step({ type: "bridge.build", at: near(a.bridge.west) });
   guard(s.bridge.built, "most niezbudowany");
+  guard(!s.quests.completed["quest.bridge_01"], "quest nie powinien kończyć się przy budowie");
+  step({ type: "region.discover", id: a.beyond.region, at: near(a.beyond) });
   guard(!!s.quests.completed["quest.bridge_01"], "quest nieukończony");
   return s;
 }

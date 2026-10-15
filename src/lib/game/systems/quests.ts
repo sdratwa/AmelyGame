@@ -36,6 +36,10 @@ export function flagValue(state: GameState, flag: QuestFlag): boolean {
   switch (flag) {
     case "bridge.built":
       return state.bridge.built;
+    case "beyond.discovered": {
+      const region = state.world?.anchors?.beyond.region;
+      return region ? state.discovered.includes(region) : false;
+    }
     case "troll.deposit_empty":
       return trollDepositEmpty(state);
   }
