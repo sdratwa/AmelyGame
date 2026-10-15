@@ -81,6 +81,7 @@
 - Wygląd regulują presety: ORIGINAL (V2a, bez zmian), NATURAL (domyślny), FAIRYTALE; przełączają się bez przeładowania modeli i świata (uniformy shaderów, światła, tekstura gruntu).
 - Paleta ma zostawić pomarańczowe, niebieskie i różowe odmiany na strefy magiczne; nie zmieniamy ID modeli ani manifestu.
 - Krzywa dnia V2b ("lato", wschód 5:00, zachód 21:00) obowiązuje w NATURAL i FAIRYTALE; ORIGINAL ma krzywą V2a (19:00 pod horyzontem).
+- Domyślny wygląd lasu w grze: preset `MIASTO_DEFAULT` = charakter ORIGINAL (krzywa dnia V2a, grunt V2a, paleta bez korekt) z suwakami 1,00 / 1,22 / 0,67 / 0,58 / 1,00, mgła 1,58, `#c8dcd2`, 0,00. Godzina nie jest ustalona na stałe, światło reaguje na porę dnia. ORIGINAL, NATURAL i FAIRYTALE zostają w panelu deweloperskim do porównań; dalsze strojenie grafiki wstrzymane do czasu questa.
 - Migotanie trawy (V2b): przyczyną było odwracanie normalnej na tylnej ściance `DoubleSide` (normalne trawy wskazują w górę, kierunek trójkątów nie) razem z pochyleniem normalnej `up` = 0,5, które zerowało wektor. Naprawa jest w shaderze materiału `grass` (stała normalna z wierzchołków) i w zabezpieczeniu przed zerem dla liści; nie wyłączamy cieni, nie usuwamy trawy ani nie podnosimy ekspozycji. Atmosferyczne światło wschodu i zachodu (ORIGINAL) pozostaje do osobnej decyzji po ocenie autora.
 - Konfiguracja wizualna zapisywana jest jako JSON `forest-visual/1` (kopiowanie i wczytywanie w panelu).
 

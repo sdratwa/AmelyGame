@@ -15,7 +15,7 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 - [zasoby-3d.md](zasoby-3d.md) - modele 3D po V1: pakiet i licencja, wybrane modele, potok optymalizacji, manifest, ładowanie w R3F, ograniczenia.
 - [wydajnosc.md](wydajnosc.md) - budżety, profile jakości, pomiary.
 - [prototyp-v2a.md](prototyp-v2a.md) - V2a: strona `/dev/forest`, sterowanie, profile jakości, LOD i odcinanie, diagnostyka, instrukcja testu FPS, pomiary i ryzyka.
-- [prototyp-v2b.md](prototyp-v2b.md) - V2b: poprawa jakości wizualnej (światło, cienie, paleta roślin, grunt), panel VISUAL TUNING, presety ORIGINAL / NATURAL / FAIRYTALE, format JSON.
+- [prototyp-v2b.md](prototyp-v2b.md) - V2b: poprawa jakości wizualnej (światło, cienie, paleta roślin, grunt), panel VISUAL TUNING, presety MIASTO_DEFAULT (domyślny) / ORIGINAL / NATURAL / FAIRYTALE, format JSON, poprawka migotania trawy.
 - [prototyp-lasu.md](prototyp-lasu.md) - wizualny prototyp sektora 30x30 m i jego kryteria.
 - [decyzje.md](decyzje.md) - decyzje zatwierdzone i robocze, sprawy otwarte.
 
@@ -33,6 +33,7 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 - W1a (generator lasu v2): zrobione; patrz [swiat-w1a.md](swiat-w1a.md). Wersja robocza, niezarejestrowana: zapisy, generator v1 i `CURRENT_GEN_VERSION` bez zmian. Brak renderowania. Następny krok po akceptacji: V2 (prototyp sektora 30x30 m).
 - V2a (grywalny prototyp wizualny): zrobione; strona `/dev/forest`, patrz [prototyp-v2a.md](prototyp-v2a.md). Wygląd i FPS czekają na ocenę autora w przeglądarce; budżet trójkątów jest przekroczony (opisane). Nie rusza gry ani zapisów. Następny krok po ocenie: poprawki V2b (LOD/wygląd) albo kolejny etap wg decyzji autora.
 - V2a zatwierdzone technicznie (M3 Max, HIGH, `?stress=49`: średnio 60 FPS, 1% low 56,8 FPS, ok. 2,35 mln trójkątów, 106 draw calls); budżet trójkątów z `wydajnosc.md` nie jest powodem do przerzedzania lasu.
+- V2b: poprawka migotania trawy zatwierdzona technicznie (e9e3391, końcowa kontrola wizualna po stronie autora); domyślny preset to MIASTO_DEFAULT (ORIGINAL z wybranymi suwakami). Laboratorium trawy i strojenie grafiki nie są dalej rozwijane.
 - V2b (jakość wizualna): zrobione, czeka na ocenę autora w przeglądarce; opis i szacunki w [prototyp-v2b.md](prototyp-v2b.md). Nie zmienia generatora, `worldGenVersion`, zapisów ani liczby obiektów.
 
 ## Kolejność etapów

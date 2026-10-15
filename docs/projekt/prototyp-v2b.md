@@ -75,6 +75,14 @@ Domyślny preset to NATURAL. Przełączanie presetów zmienia tylko uniformy sha
 
 `src/lib/forest-view/forestVisual.test.ts` (29 testów, w tym migotanie trawy): ORIGINAL neutralny względem V2a, presety jako niezależne kopie, walidacja suwaków i JSON, mgła, jasność pni i sosen o 7:00 / 12:00 / 19:00 (cień, kontrast, brak przepalenia, spód koron), łagodniejsze cienie, ograniczenia ekspozycji i światła, krzywa letnia (słońce nad horyzontem, ciągłość), uspokojenie zieleni, różnice gatunków, suwak nasycenia tylko dla zieleni, shadery (wstawki tylko tam, gdzie trzeba, uniformy aktualizowane w miejscu), grunt (determinizm, brak zielonego dywanu, kontrast ścieżki). Poza testami jednostkowymi składane shadery (Standard i Lambert, sosna / krzew / trawa / kora / skały / grunt) przeszły kompilator `glslangValidator` w harnessie ES 3.0 (jednorazowo, nie jest częścią CI).
 
+## Preset MIASTO_DEFAULT (domyślny wygląd gry)
+
+Wybrany przez autora po testach wizualnych. To charakter ORIGINAL (krzywa dnia V2a z długimi cieniami o wschodzie i zachodzie, grunt V2a, paleta bez korekt, cienie jak w V2a) z suwakami: ekspozycja 1,00, światło otoczenia 1,22, słońce 0,67, cienie 0,58, nasycenie zieleni 1,00, gęstość mgły 1,58, kolor mgły `#c8dcd2`, udział koloru mgły 0,00. Dane: `MIASTO_DEFAULT_CONFIG` w `visual.ts`, `DEFAULT_PRESET = "MIASTO_DEFAULT"` (jedno źródło prawdy dla gry i `/dev/forest`).
+
+- Godzina nie jest częścią presetu (`DEFAULT_HOUR` bez zmian, 10:30): światło reaguje na porę dnia, a suwaki działają w całym cyklu dobowym.
+- W panelu deweloperskim zostają ORIGINAL, NATURAL i FAIRYTALE (klawisze 4 / 5 / 6); MIASTO ma klawisz 0 i adres `?preset=miasto_default` (alias `miasto`).
+- Normalna gra nadal używa starego `ForestScene`, więc preset zacznie obowiązywać w niej wraz z integracją lasu w runtime (F1), która ma czytać `DEFAULT_PRESET`.
+
 ## Migotanie trawy (poprawka po testach wizualnych)
 
 **Objaw.** W NATURAL i FAIRYTALE (nie w ORIGINAL) źdźbła konkretnych kęp przy minimalnej zmianie kąta patrzenia przełączały się z jasnozielonych na prawie czarne.

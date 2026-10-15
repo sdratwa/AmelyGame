@@ -25,6 +25,9 @@ import {
   tintedFog,
   tuneMaterial,
   visualFromJson,
+  DEFAULT_PRESET,
+  DEFAULT_HOUR,
+  MIASTO_DEFAULT_CONFIG,
   MATERIAL_TYPES,
   STABLE_NORMAL,
   LEGACY_SHADING,
@@ -473,5 +476,54 @@ describe("migotanie trawy: normalna dwustronnego źdźbła", () => {
       }
     }
     expect(presetConfig("NATURAL").look.palette.grass.up, "to właśnie ta wartość uruchamiała błąd").toBe(0.5);
+  });
+});
+
+describe("preset MIASTO_DEFAULT (domyślny wygląd lasu w grze)", () => {
+  it("ma wybrane przez autora suwaki i jest domyślnym presetem; pozostałe presety zostają do porównań", () => {
+    expect(DEFAULT_PRESET).toBe("MIASTO_DEFAULT");
+    expect(presetConfig(DEFAULT_PRESET).tuning).toEqual({
+      exposure: 1,
+      ambient: 1.22,
+      sun: 0.67,
+      shadow: 0.58,
+      greenSaturation: 1,
+      fogTint: "#c8dcd2",
+      fogTintAmount: 0,
+      fogDensity: 1.58,
+    });
+    expect([...PRESET_IDS].sort()).toEqual(["FAIRYTALE", "MIASTO_DEFAULT", "NATURAL", "ORIGINAL"]);
+    expect(presetConfig("ORIGINAL").tuning).toEqual(NEUTRAL_TUNING);
+    expect(presetConfig("NATURAL").tuning.ambient).toBe(1.75);
+    expect(presetConfig("FAIRYTALE").tuning.fogTintAmount).toBe(0.45);
+  });
+
+  it("zachowuje charakter ORIGINAL: krzywa dnia V2a, grunt V2a, paleta bez korekt, cienie jak w V2a", () => {
+    expect(MIASTO_DEFAULT_CONFIG.look).toEqual(ORIGINAL_CONFIG.look);
+    expect(MIASTO_DEFAULT_CONFIG.look.dayModel).toBe("v2a");
+    expect(MIASTO_DEFAULT_CONFIG.look.groundStyle).toBe("v2a");
+    for (const id of MATERIAL_IDS) expect(MIASTO_DEFAULT_CONFIG.look.palette[id].tint).toBeUndefined();
+  });
+
+  it("nie ustala godziny: światło dalej zależy od pory dnia w całym cyklu, a suwaki są stałe", () => {
+    expect(DEFAULT_HOUR).not.toBeCloseTo(17.75, 2);
+    expect("hour" in MIASTO_DEFAULT_CONFIG).toBe(false);
+    const cfg = presetConfig("MIASTO_DEFAULT");
+    const sun = [6.5, 7, 12, 17.75, 19, 22].map((h) => atmosphereAt(h, cfg.look.dayModel));
+    expect(new Set(sun.map((a) => a.sunDir.map((v) => v.toFixed(3)).join())).size).toBe(sun.length);
+    expect(sunElevationDeg(12, cfg.look.dayModel)).toBeGreaterThan(sunElevationDeg(7, cfg.look.dayModel));
+    expect(sun[2].sunIntensity).toBeGreaterThan(sun[0].sunIntensity);
+    expect(sun[2].exposure).toBeGreaterThan(0);
+  });
+
+  it("nazwa presetu daje się wczytać z adresu i z JSON (także aliasy), a zły preset wraca do domyślnego", () => {
+    expect(parsePreset("miasto_default")).toBe("MIASTO_DEFAULT");
+    expect(parsePreset("Miasto Default")).toBe("MIASTO_DEFAULT");
+    expect(parsePreset("miasto")).toBe("MIASTO_DEFAULT");
+    const back = visualFromJson(JSON.stringify(visualToJson(presetConfig("MIASTO_DEFAULT"), 7, "HIGH")));
+    expect(back?.config.preset).toBe("MIASTO_DEFAULT");
+    expect(back?.config).toEqual(presetConfig("MIASTO_DEFAULT"));
+    const unknown = visualFromJson(JSON.stringify({ format: "forest-visual/1", preset: "x" }));
+    expect(unknown?.config.preset).toBe("MIASTO_DEFAULT");
   });
 });

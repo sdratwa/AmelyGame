@@ -5,9 +5,9 @@ import type { DayModel, Rgb } from "./atmosphere";
  * Wszystko tu jest wizualne: nie zmienia świata, liczby ani pozycji obiektów, ID modeli ani zapisów.
  * Zmiana presetu nie przeładowuje modeli ani nie generuje świata od nowa (uniformy shaderów + parametry świateł).
  */
-export type PresetId = "ORIGINAL" | "NATURAL" | "FAIRYTALE";
+export type PresetId = "MIASTO_DEFAULT" | "ORIGINAL" | "NATURAL" | "FAIRYTALE";
 
-export const PRESET_IDS: readonly PresetId[] = ["ORIGINAL", "NATURAL", "FAIRYTALE"];
+export const PRESET_IDS: readonly PresetId[] = ["MIASTO_DEFAULT", "ORIGINAL", "NATURAL", "FAIRYTALE"];
 
 /** Parametry dostępne w panelu VISUAL TUNING. Wartości neutralne (1, 1, 1, 1, 1, 0, 1) odtwarzają V2a. */
 export type VisualTuning = {
@@ -207,16 +207,39 @@ export const FAIRYTALE_CONFIG: VisualConfig = {
   },
 };
 
+/**
+ * Domyślny wygląd lasu w grze (wybrany przez autora po testach wizualnych): charakter ORIGINAL (krzywa dnia V2a z
+ * długimi cieniami o wschodzie i zachodzie, ciemniejsze drzewa, grunt i paleta bez korekt) z własnymi suwakami. Parametry
+ * dotyczą całego cyklu dobowego: godzina nie jest ustawiana na stałe, a światło nadal zależy od pory dnia.
+ */
+export const MIASTO_DEFAULT_CONFIG: VisualConfig = {
+  preset: "MIASTO_DEFAULT",
+  tuning: {
+    exposure: 1,
+    ambient: 1.22,
+    sun: 0.67,
+    shadow: 0.58,
+    greenSaturation: 1,
+    fogTint: "#c8dcd2",
+    fogTintAmount: 0,
+    fogDensity: 1.58,
+  },
+  look: ORIGINAL_CONFIG.look,
+};
+
 export const PRESETS: Record<PresetId, VisualConfig> = {
+  MIASTO_DEFAULT: MIASTO_DEFAULT_CONFIG,
   ORIGINAL: ORIGINAL_CONFIG,
   NATURAL: NATURAL_CONFIG,
   FAIRYTALE: FAIRYTALE_CONFIG,
 };
 
-export const DEFAULT_PRESET: PresetId = "NATURAL";
+/** Preset używany, gdy nic innego nie wybrano (w tym w normalnej grze). Presety deweloperskie służą do porównań. */
+export const DEFAULT_PRESET: PresetId = "MIASTO_DEFAULT";
 
 export function parsePreset(text: string | null | undefined): PresetId | null {
-  const p = (text ?? "").toUpperCase();
+  const p = (text ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (p === "MIASTO") return "MIASTO_DEFAULT";
   return (PRESET_IDS as readonly string[]).includes(p) ? (p as PresetId) : null;
 }
 
@@ -296,7 +319,7 @@ export function visualFromJson(text: string): { config: VisualConfig; hour: numb
   if (!raw || typeof raw !== "object") return null;
   const j = raw as Partial<VisualJson>;
   if (j.format !== "forest-visual/1") return null;
-  const preset = parsePreset(j.preset) ?? "NATURAL";
+  const preset = parsePreset(j.preset) ?? DEFAULT_PRESET;
   const base = presetConfig(preset);
   const look: VisualLook = { ...base.look, ...(j.look ?? {}), palette: { ...base.look.palette, ...(j.look?.palette ?? {}) } };
   if (look.dayModel !== "v2a" && look.dayModel !== "summer") look.dayModel = base.look.dayModel;

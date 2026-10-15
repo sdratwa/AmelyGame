@@ -39,7 +39,15 @@ const LODS: { value: ViewOverrides["forceLod"]; label: string }[] = [
 
 const TUNING_KEYS = ["exposure", "ambient", "sun", "shadow", "greenSaturation", "fogDensity"] as const;
 const COMPARE_HOURS = [7, 12, 19];
+const PRESET_LABELS: Record<PresetId, string> = {
+  MIASTO_DEFAULT: "MIASTO",
+  ORIGINAL: "ORIGINAL",
+  NATURAL: "NATURAL",
+  FAIRYTALE: "FAIRYTALE",
+};
+const PRESET_KEYS: Record<PresetId, string> = { MIASTO_DEFAULT: "0", ORIGINAL: "4", NATURAL: "5", FAIRYTALE: "6" };
 const PRESET_HINTS: Record<PresetId, string> = {
+  MIASTO_DEFAULT: "Domyślny wygląd gry: charakter ORIGINAL z wybranymi suwakami",
   ORIGINAL: "Wygląd z V2a (do porównań)",
   NATURAL: "Poprawiony, naturalny las",
   FAIRYTALE: "Delikatnie baśniowy las",
@@ -271,6 +279,7 @@ export function ForestPrototype() {
       if (e.code === "Digit1") changeQuality("LOW");
       else if (e.code === "Digit2") changeQuality("MEDIUM");
       else if (e.code === "Digit3") changeQuality("HIGH");
+      else if (e.code === "Digit0") changePreset("MIASTO_DEFAULT");
       else if (e.code === "Digit4") changePreset("ORIGINAL");
       else if (e.code === "Digit5") changePreset("NATURAL");
       else if (e.code === "Digit6") changePreset("FAIRYTALE");
@@ -413,16 +422,16 @@ export function ForestPrototype() {
               <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">Visual tuning</span>
               {stats.presetModified && <span className="text-[10px] text-amber-300">zmieniony względem {stats.preset}</span>}
             </div>
-            <div className="grid grid-cols-3 gap-1">
-              {PRESET_IDS.map((id, i) => (
+            <div className="grid grid-cols-2 gap-1">
+              {PRESET_IDS.map((id) => (
                 <button
                   key={id}
                   type="button"
-                  title={`${PRESET_HINTS[id]} (klawisz ${4 + i})`}
+                  title={`${PRESET_HINTS[id]} (klawisz ${PRESET_KEYS[id]})`}
                   onClick={() => changePreset(id)}
                   className={`rounded px-1 py-1.5 text-[11px] font-medium ring-1 transition ${visual.preset === id ? "bg-emerald-500/30 text-emerald-50 ring-emerald-400" : "bg-slate-800/80 text-slate-300 ring-slate-600 hover:bg-slate-700"}`}
                 >
-                  {id}
+                  {PRESET_LABELS[id]}
                 </button>
               ))}
             </div>
