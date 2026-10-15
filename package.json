@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "assets:build": "node scripts/assets/build-models.mjs",
-    "assets:report": "node scripts/assets/report.mjs"
+    "assets:report": "node scripts/assets/report.mjs",
+    "world:report": "FOREST_REPORT=1 vitest run src/lib/game/world/generators/v2/forest.report.test.ts --silent=false"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

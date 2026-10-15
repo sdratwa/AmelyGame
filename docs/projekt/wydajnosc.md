@@ -29,6 +29,10 @@ Stan po V1: profile zasobów (`src/lib/assets/profiles.ts`) obejmują wariant te
 - Pamięć tekstur <= 64 MB; transfer modeli sektora <= 4 MB (gzip); czas do pierwszej klatki lokalnie <= 3 s.
 - FPS (mierzy autor): HIGH średnio >= 60 (1% low >= 45) w 1920x1080 na sprzęcie docelowym; LOW >= 30 na najsłabszym wskazanym sprzęcie; stress na MEDIUM średnio >= 45. Sprzęt referencyjny do ustalenia.
 
+## Generator lasu W1a (pomiar logiki, Node, bez GPU)
+
+Cały świat 300 x 300 m: ok. 22 tys. obiektów (ok. 2 tys. z kolizją), wszystkie 100 sektorów w ok. 120-220 ms, pojedynczy sektor ok. 1 ms (mediana), pełny `buildForest` z walidacją ok. 0,5-0,7 s. Szacunek trójkątów LOD 0: ok. 16-17 mln w całym lesie, ok. 8,5 mln w najgęstszym oknie 7 x 7 - budżet z tego dokumentu wymaga w V2 LOD, ograniczenia odległości i profili jakości. Raport: `npm run world:report`.
+
 ## Pomiar
 
 Overlay (`?debug=1`): FPS średni i 1% low, czas klatki, draw calls, trójkąty, tekstury, geometrie (`renderer.info`), przełącznik profilu, suwak skali rozdzielczości, przycisk "Kopiuj raport" (JSON). Logika (generator) ma budżet czasu sprawdzany w testach Vitest. Agent nie uruchamia przeglądarki; wyniki FPS dostarcza autor.

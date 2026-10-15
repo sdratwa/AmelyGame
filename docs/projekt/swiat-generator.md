@@ -35,6 +35,8 @@ Każdy etap ma własny strumień RNG (`rng(seed, "river")`, `"paths"`, `"chests"
 
 Obiekty nie są rozmieszczane niezależnie: kotwice dostają polany i dojścia, ścieżki pozostają przechodnie, zasoby leżą przed mostem, rzeka nie ma obejścia.
 
+> Uwaga: opisany tu potok to generator v1 (zamrożony). Generator lasu v2 (W1a, wersja robocza, niezarejestrowana) działa inaczej: leniwe sektory i profile środowiskowe, patrz [swiat-w1a.md](swiat-w1a.md).
+
 ## Walidator
 
 Raport zawiera listę naruszeń: granice; brak nakładania (z promieniem gracza); skrzynie poza wodą, niezbyt blisko siebie i startu, osiągalne pieszo (BFS ~0,5 m z uwzględnieniem nachylenia) i niezależne od przedmiotów z innych skrzyń; ścieżki przechodnie; brak przecieku do `region.beyond_bridge` przed mostem i przejście po moście; zasoby przed mostem >= 3x (>= 15 drewna, >= 30 kamieni) plus część węzłów blisko głównego szlaku; spłaszczenia kotwic w limitach nachylenia (kotwice <= 8 stopni, drzewa <= 35, ścieżka <= 12).

@@ -41,6 +41,10 @@ Wynik zależy tylko od (przepis, seed, wersja, `variant`). Strumienie RNG są na
 
 `PointOfInterest` i `EnvironmentZone` to czyste dane (`kind`, `tags`, `props`, kształt, priorytet), obsługiwane przez `FeatureMap` (`zonesAt`, `zonesWithTag`, `poisNear`, `poi`). Generator ich nie zna z nazwy: lokacje takie jak Stary Dąb czy Polana Świetlików będą wpisami w planie, bez przebudowy kodu. Pozycje nie są jeszcze ustalone.
 
+## Rozszerzenia W1a
+
+Wstęga (`ribbon`), `SegmentIndex`, żądania terenu `river` i `trail`, `prepareWorld`, hook `validate`, `walkCell` i indeks chodzenia tylko z obiektami z kolizją - opis w [swiat-w1a.md](swiat-w1a.md).
+
 ## Ograniczenia znane na tym etapie
 
 - Ruch to model okręgu gracza; schodzenie ze zbocza „po osi” jest przybliżeniem (pełny ślizg po normalnej dojdzie razem z F1).

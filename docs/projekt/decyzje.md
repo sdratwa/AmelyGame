@@ -55,6 +55,16 @@
 - Kolizje w manifeście to rozmiary sugerowane (koło x-z); wiążące są dane obiektów świata z generatora.
 - Profile jakości (LOW/MEDIUM/HIGH) są punktem wyjścia; progi i zmierzone koszty w V2.
 
+## W1a (generator lasu v2)
+
+- Generator v2 jest wersją roboczą: nie rejestrujemy go w `registry.ts` i nie zapisujemy; zapisy zostają na v1 do osobnej decyzji (migracja z `pins`).
+- Rozszerzenia W0 są kompatybilne wstecz (wstęga, żądania `river`/`trail`, `prepareWorld`, `validate`, indeks chodzenia tylko z kolizjami).
+- Rzeka na wschodzie (x ok. 100-106, 10-14 m), przekracza mapę z zapasem; most to tylko dane (punkt, lądowiska, przejście z flagą `bridge.built`).
+- Profile środowiskowe to dane (`sunny_forest`, `dense_forest`, `clearing`, `riverside` + tło `mixed_forest`); renderer nie decyduje o rozmieszczeniu.
+- Sektor jest funkcją czystą (seed, wersja, wariant, sektor), liczoną leniwie; okno 7 x 7 z różnicami wejścia/wyjścia.
+- Kod v2 bez funkcji zależnych od silnika JS (sin, cos, tan itd.) i z zaokrągleniem pozycji; znane wyjątki z W0 (`Math.cos` w `bump`/`pad`) opisane w [swiat-w1a.md](swiat-w1a.md).
+- Wartości gęstości profili dobrane liczbowo; ocena wizualna i strojenie w V2.
+
 ## Otwarte
 
 - Sprzęt referencyjny dla progów FPS (HIGH, LOW).

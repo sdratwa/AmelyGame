@@ -8,6 +8,7 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 - [model-danych.md](model-danych.md) - stan gry, ekwipunek i kontenery, skrzynie, depozyt trolla, docelowy zapis.
 - [swiat-w0.md](swiat-w0.md) - rdzeń świata po W0: współrzędne i sektory, teren, indeks przestrzenny, walkable, punkty i strefy.
 - [zapis-gry.md](zapis-gry.md) - system zapisu po E1: SaveV1, SaveStore, migracje, kopie, autosave, generator v1.
+- [swiat-w1a.md](swiat-w1a.md) - generator lasu W1a (v2, wersja robocza): teren, rzeka, ścieżki, profile, roślinność, sektory, testy i ryzyka.
 - [swiat-generator.md](swiat-generator.md) - las 300x300 m, sektory, `terrainHeight`, walidator, zgodność wersji generatora.
 - [quest-bridge-01.md](quest-bridge-01.md) - quest "Most do nieznanego".
 - [plan-testow.md](plan-testow.md) - testy mechanik, generatora, zapisu.
@@ -27,6 +28,7 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 - E1 (zapis gry): zrobione; patrz [zapis-gry.md](zapis-gry.md). Następny krok po akceptacji: W0 (rdzeń świata i teren), potem V1; E2 w kolejności planu.
 - W0 (rdzeń świata): zrobione; patrz [swiat-w0.md](swiat-w0.md). Niepodłączone do gry ani zapisu; generator v1 i `CURRENT_GEN_VERSION` bez zmian. Następny krok po akceptacji: V1 (potok zasobów) i W1a.
 - V1 (zasoby 3D): zrobione; 31 modeli Quaternius (CC0) zoptymalizowanych do GLB + wspólne tekstury WebP, manifest, biblioteka ładowania i instancingu dla R3F, profile LOW/MEDIUM/HIGH, galeria `/dev/models`. Niepodłączone do `ForestScene`, świata ani zapisu. Następny krok po akceptacji: W1a i V2 (prototyp sektora 30x30 m).
+- W1a (generator lasu v2): zrobione; patrz [swiat-w1a.md](swiat-w1a.md). Wersja robocza, niezarejestrowana: zapisy, generator v1 i `CURRENT_GEN_VERSION` bez zmian. Brak renderowania. Następny krok po akceptacji: V2 (prototyp sektora 30x30 m).
 
 ## Kolejność etapów
 

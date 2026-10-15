@@ -66,6 +66,10 @@ Bot samymi komendami kończy quest na wielu ziarnach: ścieżka prosta oraz ści
 
 Automatyczne kryteria z [prototyp-lasu.md](prototyp-lasu.md): zgodność manifestu, determinizm sektora, brak instancji w kolizji i na zboczach, jednolitość `terrainHeight`.
 
+## Generator lasu W1a
+
+Szczegóły w [swiat-w1a.md](swiat-w1a.md): determinizm i niezależność strumieni, odcisk zamrożony dla 3 seedów, podział na sektory i odtwarzalność sektora, okno 7 x 7, y obiektów = teren, brak obiektów w wodzie, brak nakładania kolizji, korytarz ścieżek, rzeka jako bariera bez obejścia, profile i zależność od terenu, stabilność dla setek seedów (300 planów, 300 x 3 sektory, 60 pełnych światów, 14 pełnych walidacji), zgodność z manifestem V1 i adapter instancingu, budżety czasu.
+
 ## Rdzeń świata (W0)
 
 Zrealizowane w `src/lib/game/world/*.test.ts`: determinizm i zróżnicowanie terenu, zgodność wysokości/normalnych/nachylenia (także na płaszczyźnie analitycznej), modyfikacje terenu (porównanie z przejściem pełnym), granice sektorów i obiekty na granicach, indeks przestrzenny (porównanie z przeszukaniem pełnym, 20 000 obiektów), walkable (granice, zbocza, obiekty, rzeka, most, regiony odblokowywane flagą), BFS, potok budowy (determinizm, warianty, niezależność strumieni, walidacja), dane punktów i stref, brak importów React/Three i odwołań do GLB.
