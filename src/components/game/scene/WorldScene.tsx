@@ -23,6 +23,7 @@ import {
   Leaf,
   LanternPost,
   Mushroom,
+  NoticeBoard,
   Pumpkin,
   Rocks,
   Signpost,
@@ -42,6 +43,7 @@ type Layout = {
   forest: Spot;
   shop: Spot;
   houses: Spot[];
+  board: Spot;
   plazaLanterns: { x: number; y: number }[];
 };
 
@@ -58,6 +60,7 @@ export const LAYOUTS: Record<SceneLayoutName, Layout> = {
       { x: 905, y: 285, s: 1 },
       { x: 935, y: 585, s: 1 },
     ],
+    board: { x: 690, y: 655, s: 1 },
     plazaLanterns: [
       { x: 500, y: 520 },
       { x: 722, y: 428 },
@@ -75,6 +78,7 @@ export const LAYOUTS: Record<SceneLayoutName, Layout> = {
       { x: 485, y: 245, s: 0.74 },
       { x: 515, y: 770, s: 0.74 },
     ],
+    board: { x: 405, y: 672, s: 0.8 },
     plazaLanterns: [
       { x: 258, y: 590 },
       { x: 444, y: 505 },
@@ -263,16 +267,20 @@ export const WorldScene = memo(function WorldScene({
   isDay,
   houses,
   tutorialDone,
+  boardUnread,
   onEnter,
   onOpenHouse,
+  onOpenBoard,
 }: {
   layoutName: SceneLayoutName;
   season: Season;
   isDay: boolean;
   houses: House[];
   tutorialDone: boolean;
+  boardUnread: boolean;
   onEnter: (view: View) => void;
   onOpenHouse: (house: House) => void;
+  onOpenBoard: () => void;
 }) {
   const layout = LAYOUTS[layoutName];
   const palette = PALETTES[season];
@@ -305,6 +313,7 @@ export const WorldScene = memo(function WorldScene({
       y0: spot.y + metrics.minY * spot.s - 40,
       y1: spot.y + 100,
     })),
+    { x0: layout.board.x - 90 * layout.board.s, x1: layout.board.x + 90 * layout.board.s, y0: layout.board.y - 200 * layout.board.s, y1: layout.board.y + 50 },
     { x0: plaza.x - plaza.rx - 20, x1: plaza.x + plaza.rx + 20, y0: plaza.y - plaza.ry - 90, y1: plaza.y + plaza.ry + 30 },
   ];
 
@@ -410,6 +419,21 @@ export const WorldScene = memo(function WorldScene({
       });
     });
 
+    const b = layout.board;
+    out.push({
+      key: "board",
+      y: b.y,
+      dim: locked,
+      node: (
+        <SpotShell testId="tile-board" label="Tablica ogłoszeń" locked={locked} onActivate={onOpenBoard}>
+          <rect x={b.x - 70 * b.s} y={b.y - 170 * b.s} width={140 * b.s} height={180 * b.s} fill="transparent" />
+          <g className="lift">
+            <NoticeBoard x={b.x} y={b.y} s={b.s} snow={palette.snow} />
+          </g>
+        </SpotShell>
+      ),
+    });
+
     const f = layout.forest;
     out.push({
       key: "forest",
@@ -438,7 +462,7 @@ export const WorldScene = memo(function WorldScene({
 
     return out.sort((a, b) => a.y - b.y);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutName, season, locked, houses, onEnter, onOpenHouse]);
+  }, [layoutName, season, locked, houses, onEnter, onOpenHouse, onOpenBoard]);
 
   const glows = [
     ...layout.plazaLanterns.map((l) => ({ x: l.x, y: l.y - 60 })),
@@ -530,6 +554,21 @@ export const WorldScene = memo(function WorldScene({
             ]}
           />
         </g>
+        <g
+          className={locked ? "tut-dim" : ""}
+          onClick={locked ? undefined : onOpenBoard}
+          style={{ cursor: locked ? "default" : "pointer", pointerEvents: locked ? "none" : "auto" }}
+        >
+          <Label
+            x={layout.board.x}
+            y={layout.board.y + 14 * layout.board.s}
+            fs={fs}
+            lines={[
+              { text: "Tablica ogłoszeń", bold: true },
+              { text: boardUnread ? "nowe zadanie!" : "zadania i prośby", color: boardUnread ? "#ffd98a" : "#b9d9b3" },
+            ]}
+          />
+        </g>
         {houseMeta.map(({ house, spot, metrics }) => (
           <g
             key={house.id}
@@ -549,6 +588,23 @@ export const WorldScene = memo(function WorldScene({
             />
           </g>
         ))}
+
+        {!locked && boardUnread && (
+          <g className="bob" pointerEvents="none" data-testid="board-exclamation">
+            <circle cx={layout.board.x} cy={layout.board.y - 190 * layout.board.s} r={26} fill="#ffc933" stroke="#fff" strokeWidth="4" />
+            <text
+              x={layout.board.x}
+              y={layout.board.y - 190 * layout.board.s + 13}
+              textAnchor="middle"
+              fontSize="40"
+              fontWeight="900"
+              fill="#5a3b00"
+              fontFamily="system-ui, sans-serif"
+            >
+              !
+            </text>
+          </g>
+        )}
 
         {locked && (
           <g className="bob" pointerEvents="none" data-testid="tutorial-exclamation">

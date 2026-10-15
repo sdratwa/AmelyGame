@@ -141,6 +141,41 @@ export class Autosaver {
       });
   }
 
+  /**
+   * Zapis na żądanie gracza. Zwraca wynik zapisu (bez zmian od ostatniego zapisu = sukces).
+   * Czeka na zapis w toku, żeby wynik dotyczył aktualnego stanu.
+   */
+  async saveNow(): Promise<SaveOutcome> {
+    while (this.writing) await Promise.resolve();
+    const latest = this.latest;
+    if (!latest || this.disposed || latest.phase !== "playing") {
+      return { ok: false, error: "Brak aktywnej gry do zapisania." };
+    }
+    this.clearTimers();
+    const content = contentKey(latest);
+    if (content === null) return { ok: false, error: "Stan gry jest nieprawidłowy." };
+    if (content === this.lastSavedContent) return { ok: true };
+    const save = serializeState(latest, this.now());
+    if (!save) return { ok: false, error: "Stan gry jest nieprawidłowy." };
+    this.writing = true;
+    try {
+      const outcome = await this.store.save(save);
+      if (outcome.ok) this.lastSavedContent = content;
+      this.onResult?.(outcome);
+      return outcome;
+    } catch (e) {
+      const outcome: SaveOutcome = { ok: false, error: e instanceof Error ? e.message : String(e) };
+      this.onResult?.(outcome);
+      return outcome;
+    } finally {
+      this.writing = false;
+      if (this.rerun) {
+        this.rerun = false;
+        this.flush();
+      }
+    }
+  }
+
   dispose(): void {
     this.disposed = true;
     this.clearTimers();

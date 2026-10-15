@@ -14,7 +14,8 @@ export type ObjectiveDef =
 
 export type QuestFlag = "bridge.built" | "beyond.discovered" | "troll.deposit_empty";
 
-export type StageDef = { id: string; title: string; objectives: readonly ObjectiveDef[] };
+/** `hint`: krótka podpowiedź kontekstowa pokazywana w trackerze i dzienniku, dopóki etap trwa. */
+export type StageDef = { id: string; title: string; hint: string; objectives: readonly ObjectiveDef[] };
 
 export type QuestDef = {
   id: QuestId;
@@ -45,6 +46,7 @@ export const QUESTS: readonly QuestDef[] = [
       {
         id: "tools",
         title: "Narzędzia",
+        hint: "Skrzynie z narzędziami czekają na polanach w lesie. Wejdź do lasu przez znak „Las” na mapie.",
         objectives: [
           { id: "pickaxe", title: "Znajdź kilof", kind: "obtained", item: "item.pickaxe", count: 1 },
           { id: "saw", title: "Znajdź piłę", kind: "obtained", item: "item.saw", count: 1 },
@@ -53,6 +55,7 @@ export const QUESTS: readonly QuestDef[] = [
       {
         id: "blueprint",
         title: "Schemat",
+        hint: "Skrzynię ze schematem pilnuje troll. Spróbuj z nim porozmawiać i rozwiązać jego zagadkę.",
         objectives: [
           { id: "blueprint", title: "Zdobądź schemat mostu", kind: "obtained", item: "item.bridge_blueprint", count: 1 },
           {
@@ -67,6 +70,7 @@ export const QUESTS: readonly QuestDef[] = [
       {
         id: "materials",
         title: "Materiały",
+        hint: "Piłą zetniesz drzewa, kilofem rozbijesz skały. Większe drzewa i skały dają więcej.",
         objectives: [
           { id: "wood", title: "Drewno", kind: "holding", item: "resource.wood", count: 5 },
           { id: "stone", title: "Kamienie", kind: "holding", item: "resource.stone", count: 10 },
@@ -75,11 +79,13 @@ export const QUESTS: readonly QuestDef[] = [
       {
         id: "build",
         title: "Budowa",
+        hint: "Zanieś schemat i materiały nad rzekę, na zachodni brzeg, w miejsce dawnego mostu.",
         objectives: [{ id: "bridge", title: "Zbuduj most przy rzece", kind: "flag", flag: "bridge.built" }],
       },
       {
         id: "cross",
         title: "Przeprawa",
+        hint: "Most stoi. Przejdź na drugą stronę rzeki.",
         objectives: [{ id: "cross", title: "Przejdź przez most na drugi brzeg", kind: "flag", flag: "beyond.discovered" }],
       },
     ],

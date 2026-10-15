@@ -25,9 +25,11 @@ const SEASON_EMOJI: Record<Season, string> = {
 export function TopBar({
   state,
   sheltered,
+  onOpenJournal,
 }: {
   state: GameState;
   sheltered: boolean;
+  onOpenJournal: () => void;
 }) {
   const clock = getClock(state.elapsed);
   const pct = Math.round((state.health / MAX_HEALTH) * 100);
@@ -94,6 +96,16 @@ export function TopBar({
           <span data-testid="year" className="rounded-full bg-white/10 px-2.5 py-1 font-semibold tabular-nums">
             {clock.year}
           </span>
+          <button
+            type="button"
+            data-testid="open-journal"
+            onClick={onOpenJournal}
+            aria-label="Dziennik (J)"
+            className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-1 font-semibold text-amber-100 transition hover:bg-amber-400/30"
+          >
+            <span aria-hidden>📖</span>
+            Dziennik <kbd className="hidden rounded bg-black/30 px-1 text-[10px] sm:inline">J</kbd>
+          </button>
         </div>
       </div>
     </header>

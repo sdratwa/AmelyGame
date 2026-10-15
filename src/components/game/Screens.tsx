@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { formatMoney, getClock } from "@/lib/game/engine";
+import { formatMoney, getClock, trackedQuest } from "@/lib/game/engine";
+import { hydrateState } from "@/lib/game/save/hydrate";
 import type { SaveV2 } from "@/lib/game/save/schema";
 import { FrogLogo } from "./art";
 
@@ -108,6 +109,7 @@ export function ContinueScreen({
   onNewGame: () => void;
 }) {
   const clock = getClock(save.time.elapsed);
+  const quest = useMemo(() => trackedQuest(hydrateState(save)), [save]);
   return (
     <ScreenShell>
       <div className="mb-5 text-center">
@@ -133,6 +135,15 @@ export function ContinueScreen({
         <dd className="text-right tabular-nums">{formatMoney(save.player.wallet)}</dd>
         <dt className="text-slate-400">Domy</dt>
         <dd className="text-right">{save.houses.filter((h) => h.owned).length}</dd>
+        {quest && (
+          <>
+            <dt className="text-slate-400">Zadanie</dt>
+            <dd data-testid="save-quest" className="text-right">
+              {quest.def.title}
+              {quest.stage && <span className="block text-xs text-slate-400">{quest.stage.title}</span>}
+            </dd>
+          </>
+        )}
       </dl>
       <Button
         autoFocus

@@ -158,6 +158,8 @@ export function WorldMap({
   houses,
   wallet,
   tutorialDone,
+  boardUnread,
+  onOpenBoard,
   onEnter,
   onBuyHouse,
   onUpgradeHouse,
@@ -166,6 +168,8 @@ export function WorldMap({
   houses: House[];
   wallet: number;
   tutorialDone: boolean;
+  boardUnread: boolean;
+  onOpenBoard: () => void;
   onEnter: (view: View) => void;
   onBuyHouse: (id: string) => void;
   onUpgradeHouse: (id: string) => void;
@@ -187,8 +191,10 @@ export function WorldMap({
         isDay={clock.isDay}
         houses={houses}
         tutorialDone={tutorialDone}
+        boardUnread={boardUnread}
         onEnter={onEnter}
         onOpenHouse={open}
+        onOpenBoard={onOpenBoard}
       />
 
       {!tutorialDone && (

@@ -2,11 +2,16 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
+  boardEntries,
+  boardHasUnread,
   getClock,
   initialState,
+  journalEntries,
   isSheltered,
   reducer,
+  trackedQuest,
   type ForestPose,
+  type QuestId,
   type View,
 } from "@/lib/game/engine";
 import { Autosaver } from "@/lib/game/save/autosave";
@@ -25,6 +30,10 @@ import {
   SaveProblemScreen,
   type SaveProblem,
 } from "./Screens";
+import { JournalPanel, type SaveStatus } from "./quest/JournalPanel";
+import { QuestBoardDialog } from "./quest/QuestBoardDialog";
+import { QuestTracker } from "./quest/QuestTracker";
+import { useGamePause } from "./quest/useGamePause";
 import { ShopInterior } from "./ShopInterior";
 import { WorldMap } from "./WorldMap";
 
@@ -76,6 +85,9 @@ export function GameApp() {
   const [bootNonce, setBootNonce] = useState(0);
   const [wantsNewGame, setWantsNewGame] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [panel, setPanel] = useState<"board" | "journal" | null>(null);
 
   const getStore = useCallback((): SaveStore => {
     storeRef.current ??= new LocalStorageSaveStore();
@@ -117,7 +129,10 @@ export function GameApp() {
       store: getStore(),
       now: () => Date.now(),
       initial,
-      onResult: (outcome) => setSaveError(outcome.ok ? null : outcome.error),
+      onResult: (outcome) => {
+        setSaveError(outcome.ok ? null : outcome.error);
+        if (outcome.ok) setLastSavedAt(Date.now());
+      },
     });
     autosaverRef.current = autosaver;
     const flush = () => autosaver.flush();
@@ -140,6 +155,16 @@ export function GameApp() {
   useEffect(() => {
     autosaverRef.current?.update(state);
   }, [state, enabledAutosave]);
+
+  const saveNow = useCallback(async () => {
+    const autosaver = autosaverRef.current;
+    if (!autosaver) return;
+    setSaving(true);
+    const outcome = await autosaver.saveNow();
+    setSaving(false);
+    setSaveError(outcome.ok ? null : outcome.error);
+    if (outcome.ok) setLastSavedAt(Date.now());
+  }, []);
 
   const resetSave = useCallback(async () => {
     autosaverRef.current?.dispose();
@@ -169,6 +194,40 @@ export function GameApp() {
     const t = setTimeout(() => dispatch({ type: "clearToast", id }), 2800);
     return () => clearTimeout(t);
   }, [state.toast]);
+
+  const playing = state.phase === "playing" && !state.dead;
+  const canOpenPanel = playing && !state.dialog && state.view !== "forest";
+  const boardOpen = panel === "board" && canOpenPanel;
+  const journalOpen = panel === "journal" && playing && !state.dialog;
+  useGamePause(dispatch, "ui.panel", "ui.board", boardOpen);
+  useGamePause(dispatch, "ui.panel", "ui.journal", journalOpen);
+
+  useEffect(() => {
+    if (!playing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key !== "j" && e.key !== "J") return;
+      setPanel((cur) => {
+        if (cur === "journal") return null;
+        if (cur !== null) return cur;
+        if (document.querySelector('[data-slot="dialog-content"]')) return cur;
+        document.exitPointerLock?.();
+        return "journal";
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [playing]);
+
+  const closePanel = useCallback(() => setPanel(null), []);
+  const openBoard = useCallback(() => setPanel("board"), []);
+  const openJournal = useCallback(() => {
+    document.exitPointerLock?.();
+    setPanel("journal");
+  }, []);
+  const readBoard = useCallback((id: QuestId) => dispatch({ type: "board.read", id }), []);
+  const acceptQuest = useCallback((id: QuestId) => dispatch({ type: "quest.accept", id }), []);
 
   const onWorldReady = useCallback(() => dispatch({ type: "worldReady" }), []);
   const onPose = useCallback((pose: ForestPose) => dispatch({ type: "forest.pose", pose }), []);
@@ -235,13 +294,18 @@ export function GameApp() {
     return <LoadingScreen name={state.name} onDone={onWorldReady} />;
   }
 
+  const saveStatus: SaveStatus = saving
+    ? { kind: "saving" }
+    : saveError
+      ? { kind: "error", error: saveError }
+      : { kind: "idle", lastAt: lastSavedAt };
   const clock = getClock(state.elapsed);
   const sheltered = isSheltered(state);
   const heldId = state.slots[state.selected]?.id ?? null;
 
   return (
     <div className="relative flex h-full flex-col">
-      <TopBar state={state} sheltered={sheltered} />
+      <TopBar state={state} sheltered={sheltered} onOpenJournal={openJournal} />
       <main className="relative min-h-0 flex-1">
         {state.view === "world" && (
           <WorldMap
@@ -249,6 +313,8 @@ export function GameApp() {
             houses={state.houses}
             wallet={state.wallet}
             tutorialDone={state.tutorialDone}
+            boardUnread={boardHasUnread(state)}
+            onOpenBoard={openBoard}
             onEnter={enter}
             onBuyHouse={(id) => dispatch({ type: "buyHouse", id })}
             onUpgradeHouse={(id) => dispatch({ type: "upgradeHouse", id })}
@@ -272,6 +338,8 @@ export function GameApp() {
           />
         )}
 
+        {state.view !== "shop" && <QuestTracker quest={trackedQuest(state)} />}
+
         {state.toast && (
           <div
             key={state.toast.id}
@@ -288,6 +356,21 @@ export function GameApp() {
           </div>
         )}
       </main>
+      <QuestBoardDialog
+        open={boardOpen}
+        quests={boardEntries(state)}
+        onClose={closePanel}
+        onRead={readBoard}
+        onAccept={acceptQuest}
+      />
+      <JournalPanel
+        open={journalOpen}
+        {...journalEntries(state)}
+        badges={state.badges}
+        saveStatus={saveStatus}
+        onSave={saveNow}
+        onClose={closePanel}
+      />
       <InventoryBar state={state} onSelect={select} onEat={eat} />
       {state.dead && <DeathOverlay onRespawn={() => dispatch({ type: "respawn" })} />}
       {saveError && (

@@ -181,6 +181,42 @@ export function Signpost({ x, y, s = 1, text }: At & { text: string }) {
   );
 }
 
+export function NoticeBoard({ x, y, s = 1, snow }: At & { snow?: boolean }) {
+  return (
+    <g transform={place({ x, y, s })}>
+      <Shadow cx={8} cy={3} rx={64} ry={10} o={0.4} />
+      <rect x="-50" y="-96" width="9" height="98" fill="#5a381a" />
+      <rect x="41" y="-96" width="9" height="98" fill="#5a381a" />
+      <rect x="-56" y="-132" width="112" height="14" rx="3" fill="#7a4d27" stroke="#3a2410" strokeWidth="2" />
+      <path d="M-62 -132 L0 -158 L62 -132 Z" fill="#8c5a2b" stroke="#3a2410" strokeWidth="2" />
+      {snow && <path d="M-60 -133 L0 -156 L60 -133 L50 -134 L0 -149 L-50 -134 Z" fill="#f7fbff" />}
+      <rect x="-46" y="-118" width="92" height="66" rx="3" fill="#a9723a" stroke="#4a2f16" strokeWidth="3" />
+      <rect x="-40" y="-112" width="80" height="54" fill="#c79a62" opacity="0.55" />
+      <g stroke="#6b4a22" strokeWidth="0.6">
+        <rect x="-36" y="-108" width="24" height="30" fill="#f4ead2" transform="rotate(-4 -24 -93)" />
+        <rect x="-6" y="-110" width="26" height="22" fill="#fff6dc" transform="rotate(3 7 -99)" />
+        <rect x="14" y="-86" width="22" height="24" fill="#efe2c2" transform="rotate(-2 25 -74)" />
+        <rect x="-30" y="-74" width="22" height="14" fill="#f9f0d8" transform="rotate(4 -19 -67)" />
+      </g>
+      <g fill="#7a5a30" opacity="0.7">
+        <rect x="-32" y="-102" width="16" height="2" />
+        <rect x="-32" y="-97" width="14" height="2" />
+        <rect x="-32" y="-92" width="16" height="2" />
+        <rect x="-2" y="-104" width="18" height="2" />
+        <rect x="-2" y="-99" width="14" height="2" />
+        <rect x="18" y="-80" width="14" height="2" />
+      </g>
+      <circle cx="-24" cy="-107" r="2.6" fill="#c0392b" />
+      <circle cx="7" cy="-108" r="2.6" fill="#2e86c1" />
+      <circle cx="25" cy="-84" r="2.6" fill="#c0392b" />
+      <rect x="-22" y="-44" width="44" height="14" rx="2" fill="#7a4d27" stroke="#3a2410" strokeWidth="1.5" />
+      <text x="0" y="-33.5" textAnchor="middle" fontSize="10" fontWeight="800" fill="#f4ead2" fontFamily="system-ui, sans-serif">
+        OGŁOSZENIA
+      </text>
+    </g>
+  );
+}
+
 export function Rocks({ x, y, s = 1, snow }: At & { snow?: boolean }) {
   return (
     <g transform={place({ x, y, s })}>
