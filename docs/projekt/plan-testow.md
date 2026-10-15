@@ -47,6 +47,8 @@ Min. 10 zagadek; walidacja w silniku; liczba jako odpowiedź (normalizacja); sta
 
 Round-trip w trakcie questa; uszkodzony zapis i kopia `.bak`; migracje `vN -> vN+1`; jawne pauzy niezapisywane; pozycja w lesie walidowana; reset zapisu; domy z seeda identyczne po wczytaniu.
 
+Zrealizowane w E1 (`src/lib/game/save/save.test.ts`, `world/world.test.ts`): własny seed nowej gry, round-trip, symulowane odświeżenie, ten sam seed = ten sam świat, uszkodzony zapis i kopia, niezgodny odcisk bez nadpisania, migracja (sukces, wyjątek, zły wynik, brak miejsca na kopię), brak stanu tymczasowego i obiektów Three w zapisie, walidator, `Autosaver`, zamrożenie generatora v1, brak `Math.random`/zegara w logice gry.
+
 ## Przejście headless (Q)
 
 Bot samymi komendami kończy quest na wielu ziarnach: ścieżka prosta oraz ścieżka z porażką u trolla (konfrontacja, czekanie do następnego dnia, zagadka, zwrot depozytu, budowa). Fuzz niezmienników: krytyczne przedmioty nie znikają, brak softlocka po śmierci.

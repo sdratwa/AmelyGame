@@ -33,10 +33,10 @@ describe("applyCommand", () => {
 
   it("start gry i świat emitują zdarzenia", () => {
     let s: GameState = { ...initialState, name: "  Ala " };
-    const started = applyCommand(s, { type: "startLoading" });
+    const started = applyCommand(s, { type: "startLoading", seed: 4242, saveId: "save_test" });
     expect(started.events).toEqual([{ type: "game.started", name: "Ala" }]);
     s = started.state;
-    const ready = applyCommand(s, { type: "worldReady", houses: [] });
+    const ready = applyCommand(s, { type: "worldReady" });
     const types = ready.events.map((e) => e.type);
     expect(types).toContain("world.ready");
     expect(types).toContain("time.pause_changed");

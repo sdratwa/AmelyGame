@@ -5,7 +5,8 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 ## Spis
 
 - [architektura.md](architektura.md) - moduły, komendy i zdarzenia, pauza czasu, dane vs kod.
-- [model-danych.md](model-danych.md) - stan gry, ekwipunek i kontenery, skrzynie, depozyt trolla, zapis.
+- [model-danych.md](model-danych.md) - stan gry, ekwipunek i kontenery, skrzynie, depozyt trolla, docelowy zapis.
+- [zapis-gry.md](zapis-gry.md) - system zapisu po E1: SaveV1, SaveStore, migracje, kopie, autosave, generator v1.
 - [swiat-generator.md](swiat-generator.md) - las 300x300 m, sektory, `terrainHeight`, walidator, zgodność wersji generatora.
 - [quest-bridge-01.md](quest-bridge-01.md) - quest "Most do nieznanego".
 - [plan-testow.md](plan-testow.md) - testy mechanik, generatora, zapisu.
@@ -22,6 +23,7 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 
 - Faza A (dokumentacja i reguły): zrobione.
 - E0 (refaktor silnika): zrobione; nowe: powody pauzy zegara, `nextDayStart`, strumienie rng, zdarzenia. ID przedmiotów (`item.*`) i stosy przechodzą w E2 razem z modelem kontenerów (zmiana ID wymaga zmiany literałów w istniejących testach).
+- E1 (zapis gry): zrobione; patrz [zapis-gry.md](zapis-gry.md). Następny krok po akceptacji: W0 (rdzeń świata i teren), potem V1; E2 w kolejności planu.
 
 ## Kolejność etapów
 

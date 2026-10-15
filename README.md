@@ -36,7 +36,13 @@ Logika (zegar, spadek życia, sklep, ekwipunek, śmierć) jest w `src/lib/game/`
 
 Pełny opis stanu gry, zasad i tego, czego jeszcze nie ma — do wklejenia innemu modelowi — jest w [`docs/opis-gry.md`](docs/opis-gry.md).
 
+### Zapis gry
+
+Postęp zapisuje się automatycznie w `localStorage` przeglądarki (imię, czas, życie, portfel, ekwipunek, domy, pozycja w lesie, seed świata). Po odświeżeniu pojawia się ekran „Kontynuuj / Nowa gra”. Zapis jest wersjonowany, z kopią zapasową i migracjami – szczegóły w [`docs/projekt/zapis-gry.md`](docs/projekt/zapis-gry.md).
+
 ### Debug
+
+`?reset=1` w adresie czyści zapis (także przycisk „dev: reset zapisu” w trybie deweloperskim).
 
 `?speed=20` w adresie przyspiesza czas gry (np. `http://localhost:43217/?speed=30`).
 
@@ -46,7 +52,7 @@ Plan i projekt etapu 1 („Most do nieznanego”): [`docs/projekt/README.md`](do
 
 ## Struktura
 
-- `src/lib/game/` – czysta logika gry bez Reacta i Three: `core/` (stan, zegar, `applyCommand`, zdarzenia, pauza czasu, rng), `content/` (przedmioty, domy), `systems/` (sesja, życie, ekwipunek, domy, śmierć); `engine.ts` to fasada publicznego API
+- `src/lib/game/` – czysta logika gry bez Reacta i Three: `core/` (stan, zegar, `applyCommand`, zdarzenia, pauza czasu, rng), `content/` (przedmioty, domy), `systems/` (sesja, życie, ekwipunek, domy, śmierć), `world/` (wersjonowany generator świata z seeda, odcisk), `save/` (zapis, walidacja, migracje, magazyn, autosave); `engine.ts` to fasada publicznego API
 - `src/components/game/scene/` – ilustrowana scena świata (SVG): teren, ścieżki, drzewa, sklep, domy w 4 poziomach
 - `src/components/game/` – ekrany: `NameScreen`/`LoadingScreen`, `WorldMap`, `ShopInterior`, `ForestView` + `ForestScene` (r3f), `Hud`
 - `src/components/ui/` – komponenty shadcn/ui

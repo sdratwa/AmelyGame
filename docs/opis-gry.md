@@ -6,7 +6,7 @@ Język interfejsu i fabuły: **polski**. Waluta: **złoty (zł)**.
 
 ## Czym jest gra
 
-Przygodowa gra przeglądarkowa dla jednej osoby, bez konta i bez zapisu. Gracz podaje imię, dostaje milion złotych i telefon, a potem musi przeżyć w mieście, w którym czas i pogoda zabierają życie. Start: **zima roku 2030**.
+Przygodowa gra przeglądarkowa dla jednej osoby, bez konta, z automatycznym zapisem w przeglądarce. Gracz podaje imię, dostaje milion złotych i telefon, a potem musi przeżyć w mieście, w którym czas i pogoda zabierają życie. Start: **zima roku 2030**.
 
 Docelowo świat ma się **odkrywać przez eksplorację** (mgła wojny / nieodkryte fragmenty mapy). Tego jeszcze nie ma. Teraz mapa startowa jest od razu w pełni widoczna i ma cztery miejsca: las, sklep i dwa domy na sprzedaż.
 
@@ -17,7 +17,7 @@ Zakres pierwszego wycinka był świadomie wąski („zacznijmy od tego”): jede
 - **Next.js 16** (App Router, TypeScript, React 19), **Tailwind CSS 4**, prymitywy **shadcn/ui** (przycisk, dialog).
 - Mapa świata: **ilustrowane SVG** (nie kafelki, nie silnik 2D). Las z pierwszej osoby: **three.js + react-three-fiber**.
 - Cała logika reguł jest czysta i testowalna w `src/lib/game/engine.ts` (reducer + zegar). Testy: Vitest, `src/lib/game/engine.test.ts`.
-- **Brak backendu, bazy, kont i zapisu.** Stan żyje w pamięci przeglądarki i znika po odświeżeniu.
+- **Brak backendu, bazy i kont.** Stan zapisuje się automatycznie w `localStorage` (wersjonowany zapis z kopią zapasową); po odświeżeniu można kontynuować grę. Szczegóły: `docs/projekt/zapis-gry.md`.
 - Dev server: `npm run dev` → port **43217**. Inne: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
 - Debug czasu: w adresie `?speed=20` mnoży upływ czasu (1–200). Przydatne do testowania zimy i śmierci.
 
@@ -34,7 +34,7 @@ Zakres pierwszego wycinka był świadomie wąski („zacznijmy od tego”): jede
 ## Przebieg, który już działa
 
 1. **Imię.** Puste imię jest odrzucane. Maks. 20 znaków.
-2. **Ładowanie** (~2,6 s, pasek postępu). W tym momencie losowane są dwa domy.
+2. **Ładowanie** (~2,6 s, pasek postępu). W tym momencie powstaje świat z losowego seeda nowej gry (dwa domy).
 3. **Mapa świata.** Tutorial: las jest podświetlony z wykrzyknikiem, sklep i domy są wyszarzone i nieklikalne. Trzeba kliknąć las.
 4. Do kliknięcia lasu **czas stoi** (życie nie spada, zegar się nie rusza).
 5. Po wejściu do lasu tutorial się kończy, czas rusza, a sklep i domy stają się dostępne.
@@ -120,7 +120,7 @@ Zakup wchodzi do pierwszego wolnego slotu i odejmuje cenę. Brak pieniędzy albo
 
 ## Domy
 
-Na starcie losowane są **dwa** domy. Każdy ma: nazwę ulicy (jedna z sześciu + numer), cenę, 6-cyfrowy telefon, kolory ścian/dachu/drzwi i losowe odbicie lustrzane.
+Na starcie powstają **dwa** domy, deterministycznie z seeda świata (ten sam seed = te same domy). Każdy ma: nazwę ulicy (jedna z sześciu + numer), cenę, 6-cyfrowy telefon, kolory ścian/dachu/drzwi i losowe odbicie lustrzane.
 
 Cena: losowa z przedziału **200 000–500 000 zł**, zaokrąglona do tysiąca. **Poziom wynika z ceny**, nie odwrotnie:
 
@@ -153,7 +153,7 @@ Osobna scena 3D, nie kontynuacja mapy SVG.
 
 ## Czego świadomie nie ma
 
-- Zapisu gry, konta, wielu graczy.
+- Konta i wielu graczy (zapis lokalny jest, serwerowego nie ma).
 - Odkrywania mapy / mgły wojny (jest w zamyśle, nie w kodzie).
 - Siatki pól w lesie ani na mapie świata.
 - NPC, dialogów, zadań, fabuły, dziennika.

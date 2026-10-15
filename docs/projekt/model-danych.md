@@ -67,6 +67,8 @@ Wszystkie blokady to bezwzględny czas gry (`lockedUntil`, `retryAt`). Pozostał
 
 ## Zapis (`SaveV1`)
 
+> Stan implementacji po E1 (to, co jest dziś zapisywane, i szczegóły magazynu): [zapis-gry.md](zapis-gry.md). Poniżej docelowy kształt; pola dla questów, skrzyń, trolla itd. dochodzą w kolejnych wersjach formatu z migracjami. Nazwy pól w kodzie: `world { seed, genVersion, fingerprint, genHistory }`, `player.forestPose`, `genHistory[].atElapsed` (czas gry zamiast czasu ściennego).
+
 Zapis lokalny (`localStorage`, klucz `miasto.save` i kopia `miasto.save.bak`) za interfejsem `SaveStore { load, save, reset }`. Tylko dane serializowalne.
 
 ```ts

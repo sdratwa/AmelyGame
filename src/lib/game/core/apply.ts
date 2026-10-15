@@ -1,4 +1,3 @@
-import type { House } from "../content/houses";
 import type { ItemId } from "../content/items";
 import { respawn } from "../systems/death";
 import { buyHouse, upgradeHouse } from "../systems/houses";
@@ -7,6 +6,7 @@ import {
   clearToast,
   enterView,
   leaveView,
+  setForestPose,
   setName,
   startLoading,
   worldReady,
@@ -14,8 +14,10 @@ import {
 import { tick } from "../systems/vitals";
 import type { GameEvent } from "./events";
 import { addPause, clearPauseOwner, pauseReasons, removePause } from "./pause";
-import { unchanged, type CommandResult } from "./result";
-import type { GameState, View } from "./state";
+import { result, unchanged, type CommandResult } from "./result";
+import { hydrateState } from "../save/hydrate";
+import type { SaveV1 } from "../save/schema";
+import type { ForestPose, GameState, View } from "./state";
 
 /**
  * Wszystkie zmiany stanu gry. Komendy są serializowalne, więc te same obiekty
@@ -23,8 +25,10 @@ import type { GameState, View } from "./state";
  */
 export type Command =
   | { type: "setName"; name: string }
-  | { type: "startLoading" }
-  | { type: "worldReady"; houses: House[] }
+  | { type: "startLoading"; seed: number; saveId: string }
+  | { type: "worldReady" }
+  | { type: "game.load"; save: SaveV1 }
+  | { type: "forest.pose"; pose: ForestPose }
   | { type: "tick"; dt: number }
   | { type: "enter"; view: View }
   | { type: "leave" }
@@ -47,9 +51,13 @@ function execute(state: GameState, command: Command): CommandResult {
     case "setName":
       return setName(state, command.name);
     case "startLoading":
-      return startLoading(state);
+      return startLoading(state, command.seed, command.saveId);
     case "worldReady":
-      return worldReady(state, command.houses);
+      return worldReady(state);
+    case "game.load":
+      return result(hydrateState(command.save), { type: "game.loaded", saveId: command.save.saveId });
+    case "forest.pose":
+      return setForestPose(state, command.pose);
     case "tick":
       return tick(state, command.dt);
     case "enter":

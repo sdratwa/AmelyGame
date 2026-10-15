@@ -26,6 +26,16 @@
 - Biblioteki pomocnicze (np. `@react-three/drei`) po uzasadnieniu; modele CC0 preferowane, CC-BY po sprawdzeniu atrybucji.
 - Zapisujemy pozycję gracza w lesie.
 
+## E1 (zapis gry)
+
+- `SaveV1` zawiera tylko to, co dziś istnieje; questy, skrzynie i reszta dochodzą w SaveV2+ z migracjami (zamiast pustych pól).
+- Generator świata v1 = 2 domy z `rngStream(seed, "houses")`; zamrożony i pilnowany sumami SHA-256. Las z seeda wchodzi z generatorem v2 (W1a).
+- Koperta z sumą kontrolną nad payloadem; wiele warstw kopii (`.bak`, `.corrupt`, `archive`, `premigration`) zamiast jednej.
+- Nowa gra nigdy nie kasuje poprzedniego zapisu: trafia on do archiwum (5 slotów, obieg).
+- Zapis z nowszej wersji gry i niezgodny odcisk świata nie są nadpisywane ani zastępowane starszą kopią.
+- Seed i `saveId` pochodzą z `crypto.getRandomValues` w warstwie UI i wchodzą do silnika jako dane komendy; silnik nie używa `Math.random` ani zegara (pilnuje test).
+- Pozycja w lesie: zapisywana co 2 s i przy wyjściu; po wczytaniu gracz startuje na mapie, a wejście do lasu przywraca pozycję.
+
 ## Otwarte
 
 - Sprzęt referencyjny dla progów FPS (HIGH, LOW).

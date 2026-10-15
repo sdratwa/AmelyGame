@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { rngStream } from "./core/rng";
 import {
   Action,
   GameState,
@@ -128,8 +129,9 @@ describe("tutorial", () => {
 
 describe("domy", () => {
   it("cena 200-500k, telefon 6 cyfr, poziom zgodny z ceną", () => {
+    const rnd = rngStream(11, "house-test");
     for (let i = 0; i < 200; i++) {
-      const h = generateHouse("h");
+      const h = generateHouse("h", rnd);
       expect(h.price).toBeGreaterThanOrEqual(200_000);
       expect(h.price).toBeLessThanOrEqual(500_000);
       expect(h.phone).toMatch(/^\d{6}$/);

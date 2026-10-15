@@ -8,3 +8,6 @@ export const MAX_HEALTH = 100;
 export const INVENTORY_SLOTS = 8;
 export const DAY_START_HOUR = 6;
 export const NIGHT_START_HOUR = 18;
+
+/** Promień obszaru lasu w prototypie (metry); pozycja zapisana poza nim jest odrzucana. */
+export const FOREST_RADIUS = 52;

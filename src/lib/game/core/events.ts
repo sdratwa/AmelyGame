@@ -8,6 +8,7 @@ import type { View } from "./state";
 export type GameEvent =
   | { type: "game.started"; name: string }
   | { type: "world.ready" }
+  | { type: "game.loaded"; saveId: string }
   | { type: "view.entered"; view: View }
   | { type: "view.left"; from: View }
   | { type: "tutorial.completed" }

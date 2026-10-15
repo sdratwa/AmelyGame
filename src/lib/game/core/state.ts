@@ -8,6 +8,18 @@ export type Phase = "name" | "loading" | "playing";
 /** Jawny powód zatrzymania zegara: para (powód, właściciel). */
 export type PauseEntry = { reason: string; owner: string };
 
+/** Tożsamość świata wygenerowanego dla tej gry (trwała, zapisywana). */
+export type WorldInfo = {
+  saveId: string;
+  seed: number;
+  genVersion: number;
+  fingerprint: string;
+  genHistory: { version: number; atElapsed: number }[];
+};
+
+/** Ostatnia pozycja i kierunek gracza w lesie (trwałe). yaw w radianach. */
+export type ForestPose = { x: number; z: number; yaw: number };
+
 export type Toast = { id: number; text: string; tone: "ok" | "error" };
 
 export type GameState = {
@@ -24,6 +36,8 @@ export type GameState = {
   dead: boolean;
   deaths: number;
   houses: House[];
+  world: WorldInfo | null;
+  forestPose: ForestPose | null;
   toast: Toast | null;
   toastSeq: number;
   pauses: PauseEntry[];
@@ -49,6 +63,8 @@ export const initialState: GameState = {
   dead: false,
   deaths: 0,
   houses: [],
+  world: null,
+  forestPose: null,
   toast: null,
   toastSeq: 0,
   pauses: [],

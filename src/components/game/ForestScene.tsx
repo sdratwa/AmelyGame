@@ -1,9 +1,11 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import type { Season } from "@/lib/game/engine";
+import type { ForestPose, Season } from "@/lib/game/engine";
+import { FOREST_RADIUS } from "@/lib/game/core/constants";
+import { wrapYaw } from "@/lib/game/core/pose";
 import { mulberry32 } from "@/lib/game/core/rng";
 
 export type MoveInput = {
@@ -23,8 +25,6 @@ export const emptyInput = (): MoveInput => ({
   strafeLeft: false,
   strafeRight: false,
 });
-
-const FOREST_RADIUS = 52;
 
 const PALETTE: Record<
   Season,
@@ -162,13 +162,26 @@ function Snowfall({ active }: { active: boolean }) {
   );
 }
 
-function Player({ input, trees }: { input: React.RefObject<MoveInput>; trees: Tree[] }) {
+function Player({
+  input,
+  trees,
+  startPose,
+  poseRef,
+}: {
+  input: React.RefObject<MoveInput>;
+  trees: Tree[];
+  startPose: ForestPose;
+  poseRef: React.RefObject<ForestPose>;
+}) {
   const { camera } = useThree();
-  const yaw = useRef(0);
+  const yaw = useRef(startPose.yaw);
   const bob = useRef(0);
 
-  useEffect(() => {
-    camera.position.set(0, 1.7, 0);
+  useLayoutEffect(() => {
+    camera.position.set(startPose.x, 1.7, startPose.z);
+    camera.rotation.set(0, startPose.yaw, 0, "YXZ");
+    // pozycja startowa jest odczytywana tylko przy wejściu do lasu
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera]);
 
   useFrame((_, rawDt) => {
@@ -209,6 +222,8 @@ function Player({ input, trees }: { input: React.RefObject<MoveInput>; trees: Tr
     if (moving) bob.current += dt * 9;
     camera.position.set(x, 1.7 + (moving ? Math.sin(bob.current) * 0.05 : 0), z);
     camera.rotation.set(0, yaw.current, 0, "YXZ");
+    yaw.current = wrapYaw(yaw.current);
+    poseRef.current = { x, z, yaw: yaw.current };
   });
 
   return null;
@@ -235,16 +250,20 @@ export default function ForestScene({
   season,
   isDay,
   input,
+  startPose,
+  poseRef,
 }: {
   season: Season;
   isDay: boolean;
   input: React.RefObject<MoveInput>;
+  startPose: ForestPose;
+  poseRef: React.RefObject<ForestPose>;
 }) {
   const trees = useMemo(() => makeTrees(), []);
   return (
     <Canvas
       dpr={[1, 1.5]}
-      camera={{ fov: 72, near: 0.1, far: 120, position: [0, 1.7, 0] }}
+      camera={{ fov: 72, near: 0.1, far: 120, position: [startPose.x, 1.7, startPose.z] }}
       gl={{ antialias: true }}
       style={{ touchAction: "none" }}
     >
@@ -255,7 +274,7 @@ export default function ForestScene({
       </mesh>
       <Forest season={season} trees={trees} />
       <Snowfall active={season === "winter"} />
-      <Player input={input} trees={trees} />
+      <Player input={input} trees={trees} startPose={startPose} poseRef={poseRef} />
     </Canvas>
   );
 }

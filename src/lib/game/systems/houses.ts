@@ -14,10 +14,7 @@ import {
   type HouseLevel,
 } from "../content/houses";
 
-export function generateHouse(
-  id: string,
-  rnd: () => number = Math.random,
-): House {
+export function generateHouse(id: string, rnd: () => number): House {
   const pick = <T,>(arr: readonly T[]) => arr[Math.floor(rnd() * arr.length)];
   const raw = MIN_HOUSE_PRICE + rnd() * (MAX_HOUSE_PRICE - MIN_HOUSE_PRICE);
   const price = Math.min(

@@ -1,9 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ITEMS, type ItemId, type Season } from "@/lib/game/engine";
+import { ITEMS, type ForestPose, type ItemId, type Season } from "@/lib/game/engine";
 import { PhoneIcon } from "./art";
 import { emptyInput, type MoveInput } from "./ForestScene";
 
@@ -15,6 +15,9 @@ const ForestScene = dynamic(() => import("./ForestScene"), {
     </div>
   ),
 });
+
+const DEFAULT_POSE: ForestPose = { x: 0, z: 0, yaw: 0 };
+const POSE_REPORT_MS = 2000;
 
 const KEYMAP: Record<string, keyof MoveInput> = {
   ArrowUp: "forward",
@@ -98,14 +101,34 @@ export function ForestView({
   season,
   isDay,
   held,
+  startPose,
+  onPose,
   onLeave,
 }: {
   season: Season;
   isDay: boolean;
   held: ItemId | null;
+  startPose: ForestPose | null;
+  onPose: (pose: ForestPose) => void;
   onLeave: () => void;
 }) {
   const input = useRef<MoveInput>(emptyInput());
+  const [start] = useState<ForestPose>(() => startPose ?? DEFAULT_POSE);
+  const poseRef = useRef<ForestPose>(start);
+  const onPoseRef = useRef(onPose);
+
+  useEffect(() => {
+    onPoseRef.current = onPose;
+  }, [onPose]);
+
+  useEffect(() => {
+    const report = () => onPoseRef.current(poseRef.current);
+    const id = setInterval(report, POSE_REPORT_MS);
+    return () => {
+      clearInterval(id);
+      report();
+    };
+  }, []);
 
   useEffect(() => {
     const cur = input.current;
@@ -134,7 +157,13 @@ export function ForestView({
 
   return (
     <section data-testid="forest-view" className="relative h-full w-full overflow-hidden bg-slate-900">
-      <ForestScene season={season} isDay={isDay} input={input} />
+      <ForestScene
+        season={season}
+        isDay={isDay}
+        input={input}
+        startPose={start}
+        poseRef={poseRef}
+      />
 
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70" aria-hidden />
 
