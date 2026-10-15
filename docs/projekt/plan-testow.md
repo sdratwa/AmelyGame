@@ -53,6 +53,15 @@ Zrealizowane w E1 (`src/lib/game/save/save.test.ts`, `world/world.test.ts`): wł
 
 Bot samymi komendami kończy quest na wielu ziarnach: ścieżka prosta oraz ścieżka z porażką u trolla (konfrontacja, czekanie do następnego dnia, zagadka, zwrot depozytu, budowa). Fuzz niezmienników: krytyczne przedmioty nie znikają, brak softlocka po śmierci.
 
+## Zasoby 3D (V1)
+
+- `src/lib/assets/assets.test.ts`, w tym: manifest zgodny ze schematem i z konfiguracją potoku (każdy używany model ma wpis); pliki GLB/LOD/tekstury/licencja istnieją, rozmiary zgodne z manifestem, brak osieroconych plików i brak oryginałów (`.gltf`, `.png`, `.fbx`) w `public/models`; licencje CC0, autor, źródło, atrybucja, brak placeholderów; komplet kategorii (>= 3 drzewa, runo, paproć, krzewy, trawy, >= 3 skały); budżety (materiały, tekstury <= 1024 px, rozmiar, trójkąty, wywołania rysowania); kolizje.
+- Walidator manifestu odrzuca błędy (brak licencji, duplikaty, złe referencje, LOD cięższy od LOD0).
+- Ładowanie prawdziwych plików GLB przez `GLTFLoader` + meshopt w Node: trójkąty i rozmiary zgodne z manifestem, współdzielone materiały i geometrie, cache, profile (LOW: LOD1, tekstury 512, bez normalnych), błędy (brak modelu, uszkodzony GLB, brak tekstury, brak manifestu), ponawianie, zastępnik, `dispose`.
+- Instancing: 1000 drzew = tyle `InstancedMesh` co części, współdzielone geometrie i materiały; przydział LOD wg odległości.
+- Skały S/M/L: rosnące rozmiary, ograniczona zmienność proporcji, powtarzalność dla ziarna, podpowiedź 1/2/5.
+- Poza zakresem automatów: ocena wyglądu i wydajność na GPU (galeria `/dev/models`, wykonuje autor).
+
 ## Prototyp lasu (V2)
 
 Automatyczne kryteria z [prototyp-lasu.md](prototyp-lasu.md): zgodność manifestu, determinizm sektora, brak instancji w kolizji i na zboczach, jednolitość `terrainHeight`.

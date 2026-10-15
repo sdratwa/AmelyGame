@@ -20,6 +20,8 @@ Projektujemy najpierw dla desktopowej przeglądarki; w przyszłości iOS i Andro
 - HIGH: dpr <= 2, cienie 2048 px, pełna gęstość, tanie promienie słońca.
 Wartości w jednym obiekcie konfiguracji; zmiana profilu na żywo.
 
+Stan po V1: profile zasobów (`src/lib/assets/profiles.ts`) obejmują wariant tekstur (1024/512 px), mapy normalnych, materiał (Lambert w LOW), alpha-to-coverage, minimalny LOD, mnożnik odległości LOD, gęstość roślinności, cienie i limit pixel ratio. Wartości nie są jeszcze mierzone na sprzęcie. Koszt zestawu: 10 materiałów, 12 tekstur (ok. 5 MB GPU każda przy 1024 px po rozpakowaniu), 1-2 wywołania rysowania na typ modelu i poziom LOD, ok. 2,6 MB transferu (HIGH/MEDIUM) lub 2,1 MB (LOW). Galeria `/dev/models` pokazuje FPS, wywołania rysowania i trójkąty dla N instancji drzewa.
+
 ## Budżety (kryteria prototypu)
 
 - Pojedynczy sektor (HIGH): <= 80 draw calls, <= 300 tys. trójkątów.

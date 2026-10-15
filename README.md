@@ -14,6 +14,8 @@ npm run dev        # http://localhost:43217
 
 Inne komendy: `npm run build`, `npm start` (port 43217), `npm run lint`, `npm run typecheck`, `npm test`.
 
+Zasoby 3D (modele lasu, CC0 Quaternius): `npm run assets:report` (raport z manifestu), `npm run assets:build` (odtworzenie `public/models/` z oryginałów, patrz [`docs/projekt/zasoby-3d.md`](docs/projekt/zasoby-3d.md)). Galeria modeli w trybie deweloperskim: `/dev/models`.
+
 ## Co jest w grze
 
 1. **Imię** → ekran ładowania świata → mapa świata z góry.

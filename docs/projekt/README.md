@@ -11,7 +11,7 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 - [swiat-generator.md](swiat-generator.md) - las 300x300 m, sektory, `terrainHeight`, walidator, zgodność wersji generatora.
 - [quest-bridge-01.md](quest-bridge-01.md) - quest "Most do nieznanego".
 - [plan-testow.md](plan-testow.md) - testy mechanik, generatora, zapisu.
-- [zasoby-3d.md](zasoby-3d.md) - strategia modeli 3D, sprawdzone pakiety, licencje, braki.
+- [zasoby-3d.md](zasoby-3d.md) - modele 3D po V1: pakiet i licencja, wybrane modele, potok optymalizacji, manifest, ładowanie w R3F, ograniczenia.
 - [wydajnosc.md](wydajnosc.md) - budżety, profile jakości, pomiary.
 - [prototyp-lasu.md](prototyp-lasu.md) - wizualny prototyp sektora 30x30 m i jego kryteria.
 - [decyzje.md](decyzje.md) - decyzje zatwierdzone i robocze, sprawy otwarte.
@@ -26,6 +26,7 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 - E0 (refaktor silnika): zrobione; nowe: powody pauzy zegara, `nextDayStart`, strumienie rng, zdarzenia. ID przedmiotów (`item.*`) i stosy przechodzą w E2 razem z modelem kontenerów (zmiana ID wymaga zmiany literałów w istniejących testach).
 - E1 (zapis gry): zrobione; patrz [zapis-gry.md](zapis-gry.md). Następny krok po akceptacji: W0 (rdzeń świata i teren), potem V1; E2 w kolejności planu.
 - W0 (rdzeń świata): zrobione; patrz [swiat-w0.md](swiat-w0.md). Niepodłączone do gry ani zapisu; generator v1 i `CURRENT_GEN_VERSION` bez zmian. Następny krok po akceptacji: V1 (potok zasobów) i W1a.
+- V1 (zasoby 3D): zrobione; 31 modeli Quaternius (CC0) zoptymalizowanych do GLB + wspólne tekstury WebP, manifest, biblioteka ładowania i instancingu dla R3F, profile LOW/MEDIUM/HIGH, galeria `/dev/models`. Niepodłączone do `ForestScene`, świata ani zapisu. Następny krok po akceptacji: W1a i V2 (prototyp sektora 30x30 m).
 
 ## Kolejność etapów
 

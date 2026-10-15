@@ -1,0 +1,2619 @@
+{
+  "schemaVersion": 1,
+  "pipeline": {
+    "version": 1,
+    "tools": {
+      "@gltf-transform/core": "4.5.1",
+      "@gltf-transform/functions": "4.5.1",
+      "meshoptimizer": "1.3.0",
+      "sharp": "0.35.5"
+    },
+    "mesh": {
+      "quantizePosition": 14,
+      "quantizeNormal": 10,
+      "quantizeTexcoord": 12,
+      "quantizeColor": 8
+    },
+    "textures": {
+      "fullMax": 1024,
+      "lowMax": 512,
+      "format": "webp"
+    },
+    "sourceHashesFile": "scripts/assets/source-hashes.json"
+  },
+  "packs": [
+    {
+      "id": "quaternius-stylized-nature-megakit-standard",
+      "name": "Stylized Nature MegaKit [Standard]",
+      "version": "Standard (free), wydanie 2024",
+      "author": "Quaternius",
+      "license": {
+        "id": "CC0-1.0",
+        "name": "Creative Commons Zero v1.0 Universal (Public Domain Dedication)",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "textFile": "licenses/quaternius-stylized-nature-megakit-standard.txt"
+      },
+      "sourceUrl": "https://quaternius.itch.io/stylized-nature-megakit",
+      "homepage": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "downloadedAt": "2026-10-15",
+      "archive": {
+        "name": "Stylized Nature MegaKit[Standard].zip",
+        "bytes": 104088529,
+        "sha256": "298f6732b872e4cf7b30e6e7abf9641c7f6dc6b326df37ac089533ed7e3d58c9"
+      },
+      "attribution": {
+        "required": false,
+        "suggested": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0)."
+      },
+      "approval": "Pakiet i wersja Standard zatwierdzone przez autora projektu 15.10.2026 (etap V1).",
+      "textFileSha256": "120710e542c3ebaf83856c4eb55b4a1e680593b39302eba7fdc5d942dfe78c58"
+    }
+  ],
+  "scaleClasses": {
+    "rock": {
+      "note": "Prototypowa decyzja (wariant A): klasy S/M/L z Rock_Medium_1..3 przez skalowanie. Nie jest to styl docelowy.",
+      "appliesTo": [
+        "rock.medium.1",
+        "rock.medium.2",
+        "rock.medium.3"
+      ],
+      "classes": {
+        "s": {
+          "scale": [
+            0.28,
+            0.4
+          ],
+          "harvestHint": 1
+        },
+        "m": {
+          "scale": [
+            0.55,
+            0.75
+          ],
+          "harvestHint": 2
+        },
+        "l": {
+          "scale": [
+            0.95,
+            1.3
+          ],
+          "harvestHint": 5
+        }
+      },
+      "proportionJitter": {
+        "x": 0.12,
+        "y": 0.15,
+        "z": 0.12
+      },
+      "maxTiltRad": 0.08,
+      "yawRange": [
+        0,
+        6.283185307179586
+      ]
+    }
+  },
+  "textures": [
+    {
+      "id": "bark_normaltree",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": true,
+      "sourceFile": "Bark_NormalTree.png",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "sourceBytes": 3894788,
+      "full": {
+        "file": "textures/bark_normaltree.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 38420
+      },
+      "low": {
+        "file": "textures/bark_normaltree.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 9500
+      }
+    },
+    {
+      "id": "bark_normaltree_normal",
+      "kind": "normal",
+      "colorSpace": "linear",
+      "hasAlpha": true,
+      "sourceFile": "Bark_NormalTree_Normal.png",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "sourceBytes": 4384496,
+      "full": {
+        "file": "textures/bark_normaltree_normal.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 75138
+      },
+      "low": {
+        "file": "textures/bark_normaltree_normal.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 21028
+      }
+    },
+    {
+      "id": "bark_twistedtree",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": true,
+      "sourceFile": "Bark_TwistedTree.png",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "sourceBytes": 4630805,
+      "full": {
+        "file": "textures/bark_twistedtree.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 59920
+      },
+      "low": {
+        "file": "textures/bark_twistedtree.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 12244
+      }
+    },
+    {
+      "id": "bark_twistedtree_normal",
+      "kind": "normal",
+      "colorSpace": "linear",
+      "hasAlpha": true,
+      "sourceFile": "Bark_TwistedTree_Normal.png",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "sourceBytes": 5728199,
+      "full": {
+        "file": "textures/bark_twistedtree_normal.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 124778
+      },
+      "low": {
+        "file": "textures/bark_twistedtree_normal.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 31252
+      }
+    },
+    {
+      "id": "flowers",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": true,
+      "sourceFile": "Flowers.png",
+      "sourceSize": [
+        1008,
+        981
+      ],
+      "sourceBytes": 444609,
+      "full": {
+        "file": "textures/flowers.webp",
+        "width": 1008,
+        "height": 981,
+        "bytes": 54314
+      },
+      "low": {
+        "file": "textures/flowers.512.webp",
+        "width": 512,
+        "height": 498,
+        "bytes": 41212
+      }
+    },
+    {
+      "id": "grass",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": true,
+      "sourceFile": "Grass.png",
+      "sourceSize": [
+        512,
+        512
+      ],
+      "sourceBytes": 33605,
+      "full": {
+        "file": "textures/grass.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 1332
+      },
+      "low": {
+        "file": "textures/grass.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 1332
+      }
+    },
+    {
+      "id": "leaf_pine_c",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": true,
+      "sourceFile": "Leaf_Pine_C.png",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "sourceBytes": 70055,
+      "full": {
+        "file": "textures/leaf_pine_c.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 26056
+      },
+      "low": {
+        "file": "textures/leaf_pine_c.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 12252
+      }
+    },
+    {
+      "id": "leaves",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": true,
+      "sourceFile": "Leaves.png",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "sourceBytes": 2586432,
+      "full": {
+        "file": "textures/leaves.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 113210
+      },
+      "low": {
+        "file": "textures/leaves.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 49654
+      }
+    },
+    {
+      "id": "leaves_normaltree_c",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": true,
+      "sourceFile": "Leaves_NormalTree_C.png",
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "sourceBytes": 158796,
+      "full": {
+        "file": "textures/leaves_normaltree_c.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 81350
+      },
+      "low": {
+        "file": "textures/leaves_normaltree_c.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 35362
+      }
+    },
+    {
+      "id": "leaves_twistedtree_c",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": true,
+      "sourceFile": "Leaves_TwistedTree_C.png",
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "sourceBytes": 70353,
+      "full": {
+        "file": "textures/leaves_twistedtree_c.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 33184
+      },
+      "low": {
+        "file": "textures/leaves_twistedtree_c.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 32684
+      }
+    },
+    {
+      "id": "mushrooms",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "sourceFile": "Mushrooms.png",
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "sourceBytes": 1208660,
+      "full": {
+        "file": "textures/mushrooms.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 90536
+      },
+      "low": {
+        "file": "textures/mushrooms.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 27000
+      }
+    },
+    {
+      "id": "rocks_diffuse",
+      "kind": "albedo",
+      "colorSpace": "srgb",
+      "hasAlpha": false,
+      "sourceFile": "Rocks_Diffuse.png",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "sourceBytes": 2517398,
+      "full": {
+        "file": "textures/rocks_diffuse.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 55172
+      },
+      "low": {
+        "file": "textures/rocks_diffuse.512.webp",
+        "width": 512,
+        "height": 512,
+        "bytes": 22008
+      }
+    }
+  ],
+  "materials": [
+    {
+      "id": "bark_normaltree",
+      "sourceName": "Bark_NormalTree",
+      "albedo": "bark_normaltree",
+      "normal": "bark_normaltree_normal",
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.2,
+      "doubleSided": true,
+      "vertexColors": true,
+      "metalness": 0,
+      "roughness": 1
+    },
+    {
+      "id": "bark_twistedtree",
+      "sourceName": "Bark_TwistedTree",
+      "albedo": "bark_twistedtree",
+      "normal": "bark_twistedtree_normal",
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "OPAQUE",
+      "alphaCutoff": null,
+      "doubleSided": true,
+      "vertexColors": true,
+      "metalness": 0,
+      "roughness": 1
+    },
+    {
+      "id": "flowers",
+      "sourceName": "Flowers",
+      "albedo": "flowers",
+      "normal": null,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.2,
+      "doubleSided": true,
+      "vertexColors": false,
+      "metalness": 0,
+      "roughness": 1
+    },
+    {
+      "id": "grass",
+      "sourceName": "Grass",
+      "albedo": "grass",
+      "normal": null,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "OPAQUE",
+      "alphaCutoff": null,
+      "doubleSided": true,
+      "vertexColors": false,
+      "metalness": 0,
+      "roughness": 1
+    },
+    {
+      "id": "leaves",
+      "sourceName": "Leaves",
+      "albedo": "leaves",
+      "normal": null,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.2,
+      "doubleSided": true,
+      "vertexColors": false,
+      "metalness": 0,
+      "roughness": 1
+    },
+    {
+      "id": "leaves_normaltree",
+      "sourceName": "Leaves_NormalTree",
+      "albedo": "leaves_normaltree_c",
+      "normal": null,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.2,
+      "doubleSided": true,
+      "vertexColors": false,
+      "metalness": 0,
+      "roughness": 1
+    },
+    {
+      "id": "leaves_pine",
+      "sourceName": "Leaves_Pine",
+      "albedo": "leaf_pine_c",
+      "normal": null,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.2,
+      "doubleSided": true,
+      "vertexColors": false,
+      "metalness": 0,
+      "roughness": 1
+    },
+    {
+      "id": "leaves_twistedtree",
+      "sourceName": "Leaves_TwistedTree",
+      "albedo": "leaves_twistedtree_c",
+      "normal": null,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.2,
+      "doubleSided": true,
+      "vertexColors": false,
+      "metalness": 0,
+      "roughness": 1
+    },
+    {
+      "id": "mushrooms",
+      "sourceName": "Mushrooms",
+      "albedo": "mushrooms",
+      "normal": null,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "OPAQUE",
+      "alphaCutoff": null,
+      "doubleSided": true,
+      "vertexColors": false,
+      "metalness": 0,
+      "roughness": 1
+    },
+    {
+      "id": "rocks",
+      "sourceName": "Rocks",
+      "albedo": "rocks_diffuse",
+      "normal": null,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alphaMode": "OPAQUE",
+      "alphaCutoff": null,
+      "doubleSided": true,
+      "vertexColors": false,
+      "metalness": 0,
+      "roughness": 1
+    }
+  ],
+  "models": [
+    {
+      "id": "tree.common.1",
+      "name": "CommonTree 1",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "CommonTree_1",
+      "sourceFile": "glTF/CommonTree_1.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "broadleaf",
+      "tags": [
+        "las",
+        "drzewo-liściaste",
+        "baśniowe"
+      ],
+      "file": "glb/tree.common.1.glb",
+      "bytes": 127416,
+      "triangles": 6265,
+      "vertices": 9458,
+      "drawCalls": 2,
+      "sourceTriangles": 6265,
+      "materials": [
+        "bark_normaltree",
+        "leaves_normaltree"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -2.194,
+          -0.243,
+          -2.225
+        ],
+        "max": [
+          2.117,
+          7.022,
+          2.353
+        ],
+        "size": [
+          4.311,
+          7.265,
+          4.578
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.516,
+        "height": 7.265,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.common.1.glb",
+          "triangles": 6265,
+          "vertices": 9458,
+          "drawCalls": 2,
+          "bytes": 127416,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.common.1.lod1.glb",
+          "triangles": 3967,
+          "vertices": 6488,
+          "drawCalls": 2,
+          "bytes": 87516,
+          "minDistance": 35,
+          "simplify": {
+            "ratio": 0.3,
+            "error": 0.08
+          },
+          "boundsDrift": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "tree.common.2",
+      "name": "CommonTree 2",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "CommonTree_2",
+      "sourceFile": "glTF/CommonTree_2.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "broadleaf",
+      "tags": [
+        "las",
+        "drzewo-liściaste",
+        "baśniowe"
+      ],
+      "file": "glb/tree.common.2.glb",
+      "bytes": 112080,
+      "triangles": 5648,
+      "vertices": 8107,
+      "drawCalls": 2,
+      "sourceTriangles": 5648,
+      "materials": [
+        "bark_normaltree",
+        "leaves_normaltree"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -2.223,
+          -0.243,
+          -1.851
+        ],
+        "max": [
+          2.241,
+          7.4,
+          2.424
+        ],
+        "size": [
+          4.464,
+          7.643,
+          4.276
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.503,
+        "height": 7.643,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.common.2.glb",
+          "triangles": 5648,
+          "vertices": 8107,
+          "drawCalls": 2,
+          "bytes": 112080,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.common.2.lod1.glb",
+          "triangles": 3679,
+          "vertices": 5664,
+          "drawCalls": 2,
+          "bytes": 78512,
+          "minDistance": 35,
+          "simplify": {
+            "ratio": 0.3,
+            "error": 0.08
+          },
+          "boundsDrift": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "tree.common.3",
+      "name": "CommonTree 3",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "CommonTree_3",
+      "sourceFile": "glTF/CommonTree_3.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "broadleaf",
+      "tags": [
+        "las",
+        "drzewo-liściaste",
+        "baśniowe"
+      ],
+      "file": "glb/tree.common.3.glb",
+      "bytes": 77728,
+      "triangles": 3505,
+      "vertices": 5749,
+      "drawCalls": 2,
+      "sourceTriangles": 3505,
+      "materials": [
+        "bark_normaltree",
+        "leaves_normaltree"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -1.986,
+          -0.243,
+          -2.061
+        ],
+        "max": [
+          2.076,
+          9.182,
+          2.18
+        ],
+        "size": [
+          4.063,
+          9.425,
+          4.241
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.514,
+        "height": 9.425,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.common.3.glb",
+          "triangles": 3505,
+          "vertices": 5749,
+          "drawCalls": 2,
+          "bytes": 77728,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.common.3.lod1.glb",
+          "triangles": 3082,
+          "vertices": 5135,
+          "drawCalls": 2,
+          "bytes": 70104,
+          "minDistance": 35,
+          "simplify": {
+            "ratio": 0.3,
+            "error": 0.08
+          },
+          "boundsDrift": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "tree.common.4",
+      "name": "CommonTree 4",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "CommonTree_4",
+      "sourceFile": "glTF/CommonTree_4.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "broadleaf",
+      "tags": [
+        "las",
+        "drzewo-liściaste",
+        "baśniowe"
+      ],
+      "file": "glb/tree.common.4.glb",
+      "bytes": 82112,
+      "triangles": 4066,
+      "vertices": 5900,
+      "drawCalls": 2,
+      "sourceTriangles": 4066,
+      "materials": [
+        "bark_normaltree",
+        "leaves_normaltree"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -1.797,
+          -0.243,
+          -2.08
+        ],
+        "max": [
+          2.028,
+          9.196,
+          1.676
+        ],
+        "size": [
+          3.826,
+          9.438,
+          3.755
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.535,
+        "height": 9.438,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.common.4.glb",
+          "triangles": 4066,
+          "vertices": 5900,
+          "drawCalls": 2,
+          "bytes": 82112,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.common.4.lod1.glb",
+          "triangles": 2297,
+          "vertices": 3558,
+          "drawCalls": 2,
+          "bytes": 51328,
+          "minDistance": 35,
+          "simplify": {
+            "ratio": 0.3,
+            "error": 0.08
+          },
+          "boundsDrift": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "tree.common.5",
+      "name": "CommonTree 5",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "CommonTree_5",
+      "sourceFile": "glTF/CommonTree_5.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "broadleaf",
+      "tags": [
+        "las",
+        "drzewo-liściaste",
+        "baśniowe"
+      ],
+      "file": "glb/tree.common.5.glb",
+      "bytes": 76560,
+      "triangles": 3182,
+      "vertices": 4873,
+      "drawCalls": 2,
+      "sourceTriangles": 3182,
+      "materials": [
+        "bark_normaltree",
+        "leaves_normaltree"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -1.912,
+          -0.243,
+          -2.162
+        ],
+        "max": [
+          1.759,
+          6.763,
+          2.057
+        ],
+        "size": [
+          3.671,
+          7.006,
+          4.22
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.476,
+        "height": 7.006,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.common.5.glb",
+          "triangles": 3182,
+          "vertices": 4873,
+          "drawCalls": 2,
+          "bytes": 76560,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.common.5.lod1.glb",
+          "triangles": 2926,
+          "vertices": 4629,
+          "drawCalls": 2,
+          "bytes": 73208,
+          "minDistance": 35,
+          "simplify": {
+            "ratio": 0.3,
+            "error": 0.08
+          },
+          "boundsDrift": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "tree.pine.1",
+      "name": "Pine 1",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Pine_1",
+      "sourceFile": "glTF/Pine_1.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "conifer",
+      "tags": [
+        "las",
+        "sosna"
+      ],
+      "file": "glb/tree.pine.1.glb",
+      "bytes": 76044,
+      "triangles": 3947,
+      "vertices": 5246,
+      "drawCalls": 2,
+      "sourceTriangles": 3947,
+      "materials": [
+        "bark_normaltree",
+        "leaves_pine"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -2.449,
+          -0.235,
+          -2.477
+        ],
+        "max": [
+          2.496,
+          7.082,
+          2.061
+        ],
+        "size": [
+          4.945,
+          7.317,
+          4.538
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.199,
+        "height": 7.317,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.pine.1.glb",
+          "triangles": 3947,
+          "vertices": 5246,
+          "drawCalls": 2,
+          "bytes": 76044,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.pine.1.lod1.glb",
+          "triangles": 1951,
+          "vertices": 2741,
+          "drawCalls": 2,
+          "bytes": 42140,
+          "minDistance": 35,
+          "simplify": {
+            "ratio": 0.3,
+            "error": 0.08
+          },
+          "boundsDrift": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "tree.pine.3",
+      "name": "Pine 3",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Pine_3",
+      "sourceFile": "glTF/Pine_3.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "conifer",
+      "tags": [
+        "las",
+        "sosna"
+      ],
+      "file": "glb/tree.pine.3.glb",
+      "bytes": 94456,
+      "triangles": 4964,
+      "vertices": 6573,
+      "drawCalls": 2,
+      "sourceTriangles": 4964,
+      "materials": [
+        "bark_normaltree",
+        "leaves_pine"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -2.114,
+          -0.235,
+          -2.292
+        ],
+        "max": [
+          1.498,
+          7.157,
+          1.703
+        ],
+        "size": [
+          3.611,
+          7.392,
+          3.996
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.2,
+        "height": 7.392,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.pine.3.glb",
+          "triangles": 4964,
+          "vertices": 6573,
+          "drawCalls": 2,
+          "bytes": 94456,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.pine.3.lod1.glb",
+          "triangles": 1951,
+          "vertices": 2697,
+          "drawCalls": 2,
+          "bytes": 41560,
+          "minDistance": 35,
+          "simplify": {
+            "ratio": 0.3,
+            "error": 0.08
+          },
+          "boundsDrift": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "tree.pine.5",
+      "name": "Pine 5",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Pine_5",
+      "sourceFile": "glTF/Pine_5.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "conifer",
+      "tags": [
+        "las",
+        "sosna"
+      ],
+      "file": "glb/tree.pine.5.glb",
+      "bytes": 35276,
+      "triangles": 1646,
+      "vertices": 2315,
+      "drawCalls": 2,
+      "sourceTriangles": 1646,
+      "materials": [
+        "bark_normaltree",
+        "leaves_pine"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -2.988,
+          -0.235,
+          -3.778
+        ],
+        "max": [
+          3.432,
+          8.489,
+          2.444
+        ],
+        "size": [
+          6.42,
+          8.724,
+          6.222
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.366,
+        "height": 8.724,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.pine.5.glb",
+          "triangles": 1646,
+          "vertices": 2315,
+          "drawCalls": 2,
+          "bytes": 35276,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.pine.5.lod1.glb",
+          "triangles": 1212,
+          "vertices": 1893,
+          "drawCalls": 2,
+          "bytes": 29632,
+          "minDistance": 35,
+          "simplify": {
+            "ratio": 0.3,
+            "error": 0.08
+          },
+          "boundsDrift": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "tree.twisted.1",
+      "name": "TwistedTree 1",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "TwistedTree_1",
+      "sourceFile": "glTF/TwistedTree_1.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "ancient",
+      "tags": [
+        "las",
+        "stare-drzewo",
+        "baśniowe",
+        "punkt-orientacyjny"
+      ],
+      "file": "glb/tree.twisted.1.glb",
+      "bytes": 190924,
+      "triangles": 9564,
+      "vertices": 14064,
+      "drawCalls": 2,
+      "sourceTriangles": 9564,
+      "materials": [
+        "bark_twistedtree",
+        "leaves_twistedtree"
+      ],
+      "baseScale": 0.7,
+      "bounds": {
+        "min": [
+          -1.522,
+          -0.141,
+          -4.709
+        ],
+        "max": [
+          7.939,
+          11.567,
+          3.376
+        ],
+        "size": [
+          9.461,
+          11.708,
+          8.085
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.847,
+        "height": 11.708,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.twisted.1.glb",
+          "triangles": 9564,
+          "vertices": 14064,
+          "drawCalls": 2,
+          "bytes": 190924,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.twisted.1.lod1.glb",
+          "triangles": 5144,
+          "vertices": 7156,
+          "drawCalls": 2,
+          "bytes": 103428,
+          "minDistance": 50,
+          "simplify": {
+            "ratio": 0.2,
+            "error": 0.1
+          },
+          "boundsDrift": 0.114
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "tree.twisted.3",
+      "name": "TwistedTree 3",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "TwistedTree_3",
+      "sourceFile": "glTF/TwistedTree_3.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "tree",
+      "subcategory": "ancient",
+      "tags": [
+        "las",
+        "stare-drzewo",
+        "baśniowe",
+        "punkt-orientacyjny"
+      ],
+      "file": "glb/tree.twisted.3.glb",
+      "bytes": 198896,
+      "triangles": 10089,
+      "vertices": 14805,
+      "drawCalls": 2,
+      "sourceTriangles": 10089,
+      "materials": [
+        "bark_twistedtree",
+        "leaves_twistedtree"
+      ],
+      "baseScale": 0.7,
+      "bounds": {
+        "min": [
+          -3.143,
+          -0.141,
+          -4.564
+        ],
+        "max": [
+          4.807,
+          11.11,
+          3.49
+        ],
+        "size": [
+          7.95,
+          11.251,
+          8.054
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 0.763,
+        "height": 11.251,
+        "source": "measured-trunk"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/tree.twisted.3.glb",
+          "triangles": 10089,
+          "vertices": 14805,
+          "drawCalls": 2,
+          "bytes": 198896,
+          "minDistance": 0
+        },
+        {
+          "level": 1,
+          "file": "glb/tree.twisted.3.lod1.glb",
+          "triangles": 4030,
+          "vertices": 5687,
+          "drawCalls": 2,
+          "bytes": 81628,
+          "minDistance": 50,
+          "simplify": {
+            "ratio": 0.2,
+            "error": 0.1
+          },
+          "boundsDrift": 0.065
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "bush.common",
+      "name": "Bush Common",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Bush_Common",
+      "sourceFile": "glTF/Bush_Common.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "bush",
+      "subcategory": "leafy",
+      "tags": [
+        "las",
+        "krzew"
+      ],
+      "file": "glb/bush.common.glb",
+      "bytes": 23480,
+      "triangles": 900,
+      "vertices": 1800,
+      "drawCalls": 1,
+      "sourceTriangles": 900,
+      "materials": [
+        "leaves_twistedtree"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -0.923,
+          -0.235,
+          -0.974
+        ],
+        "max": [
+          0.991,
+          1.347,
+          0.991
+        ],
+        "size": [
+          1.915,
+          1.582,
+          1.965
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/bush.common.glb",
+          "triangles": 900,
+          "vertices": 1800,
+          "drawCalls": 1,
+          "bytes": 23480,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "bush.common_flowers",
+      "name": "Bush Common Flowers",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Bush_Common_Flowers",
+      "sourceFile": "glTF/Bush_Common_Flowers.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "bush",
+      "subcategory": "flowering",
+      "tags": [
+        "las",
+        "krzew",
+        "kwiaty",
+        "baśniowe"
+      ],
+      "file": "glb/bush.common_flowers.glb",
+      "bytes": 33892,
+      "triangles": 1368,
+      "vertices": 2515,
+      "drawCalls": 2,
+      "sourceTriangles": 1368,
+      "materials": [
+        "leaves_normaltree",
+        "flowers"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -0.923,
+          -0.235,
+          -0.974
+        ],
+        "max": [
+          0.991,
+          1.347,
+          0.991
+        ],
+        "size": [
+          1.915,
+          1.582,
+          1.965
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/bush.common_flowers.glb",
+          "triangles": 1368,
+          "vertices": 2515,
+          "drawCalls": 2,
+          "bytes": 33892,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "fern.1",
+      "name": "Fern 1",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Fern_1",
+      "sourceFile": "glTF/Fern_1.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "undergrowth",
+      "subcategory": "fern",
+      "tags": [
+        "las",
+        "runo",
+        "paproć"
+      ],
+      "file": "glb/fern.1.glb",
+      "bytes": 6588,
+      "triangles": 288,
+      "vertices": 243,
+      "drawCalls": 1,
+      "sourceTriangles": 288,
+      "materials": [
+        "leaves"
+      ],
+      "baseScale": 0.6,
+      "bounds": {
+        "min": [
+          -0.829,
+          -0.046,
+          -0.767
+        ],
+        "max": [
+          0.867,
+          0.458,
+          0.824
+        ],
+        "size": [
+          1.696,
+          0.504,
+          1.591
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/fern.1.glb",
+          "triangles": 288,
+          "vertices": 243,
+          "drawCalls": 1,
+          "bytes": 6588,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "plant.1",
+      "name": "Plant 1",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Plant_1",
+      "sourceFile": "glTF/Plant_1.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "undergrowth",
+      "subcategory": "leafy",
+      "tags": [
+        "las",
+        "runo"
+      ],
+      "file": "glb/plant.1.glb",
+      "bytes": 4496,
+      "triangles": 120,
+      "vertices": 120,
+      "drawCalls": 1,
+      "sourceTriangles": 120,
+      "materials": [
+        "leaves"
+      ],
+      "baseScale": 0.8,
+      "bounds": {
+        "min": [
+          -0.569,
+          -0.028,
+          -0.611
+        ],
+        "max": [
+          0.45,
+          0.783,
+          0.498
+        ],
+        "size": [
+          1.019,
+          0.811,
+          1.109
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/plant.1.glb",
+          "triangles": 120,
+          "vertices": 120,
+          "drawCalls": 1,
+          "bytes": 4496,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "plant.1_big",
+      "name": "Plant 1 Big",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Plant_1_Big",
+      "sourceFile": "glTF/Plant_1_Big.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "undergrowth",
+      "subcategory": "leafy",
+      "tags": [
+        "las",
+        "runo"
+      ],
+      "file": "glb/plant.1_big.glb",
+      "bytes": 8296,
+      "triangles": 360,
+      "vertices": 360,
+      "drawCalls": 1,
+      "sourceTriangles": 360,
+      "materials": [
+        "leaves"
+      ],
+      "baseScale": 0.7,
+      "bounds": {
+        "min": [
+          -0.61,
+          -0.025,
+          -0.726
+        ],
+        "max": [
+          0.655,
+          1.619,
+          0.642
+        ],
+        "size": [
+          1.265,
+          1.643,
+          1.368
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/plant.1_big.glb",
+          "triangles": 360,
+          "vertices": 360,
+          "drawCalls": 1,
+          "bytes": 8296,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "plant.7",
+      "name": "Plant 7",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Plant_7",
+      "sourceFile": "glTF/Plant_7.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "undergrowth",
+      "subcategory": "groundcover",
+      "tags": [
+        "las",
+        "runo",
+        "przy-ziemi"
+      ],
+      "file": "glb/plant.7.glb",
+      "bytes": 3056,
+      "triangles": 48,
+      "vertices": 54,
+      "drawCalls": 1,
+      "sourceTriangles": 48,
+      "materials": [
+        "leaves"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -0.448,
+          0.079,
+          -0.464
+        ],
+        "max": [
+          0.6,
+          0.329,
+          0.498
+        ],
+        "size": [
+          1.048,
+          0.25,
+          0.962
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/plant.7.glb",
+          "triangles": 48,
+          "vertices": 54,
+          "drawCalls": 1,
+          "bytes": 3056,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "plant.7_big",
+      "name": "Plant 7 Big",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Plant_7_Big",
+      "sourceFile": "glTF/Plant_7_Big.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "undergrowth",
+      "subcategory": "groundcover",
+      "tags": [
+        "las",
+        "runo",
+        "przy-ziemi"
+      ],
+      "file": "glb/plant.7_big.glb",
+      "bytes": 3984,
+      "triangles": 112,
+      "vertices": 126,
+      "drawCalls": 1,
+      "sourceTriangles": 112,
+      "materials": [
+        "leaves"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -0.701,
+          0.05,
+          -0.851
+        ],
+        "max": [
+          0.61,
+          0.304,
+          0.512
+        ],
+        "size": [
+          1.311,
+          0.253,
+          1.362
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/plant.7_big.glb",
+          "triangles": 112,
+          "vertices": 126,
+          "drawCalls": 1,
+          "bytes": 3984,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "clover.1",
+      "name": "Clover 1",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Clover_1",
+      "sourceFile": "glTF/Clover_1.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "undergrowth",
+      "subcategory": "clover",
+      "tags": [
+        "las",
+        "runo",
+        "koniczyna"
+      ],
+      "file": "glb/clover.1.glb",
+      "bytes": 6004,
+      "triangles": 379,
+      "vertices": 267,
+      "drawCalls": 1,
+      "sourceTriangles": 379,
+      "materials": [
+        "leaves"
+      ],
+      "baseScale": 0.7,
+      "bounds": {
+        "min": [
+          -0.352,
+          -0.009,
+          -0.28
+        ],
+        "max": [
+          0.206,
+          0.792,
+          0.255
+        ],
+        "size": [
+          0.557,
+          0.801,
+          0.535
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/clover.1.glb",
+          "triangles": 379,
+          "vertices": 267,
+          "drawCalls": 1,
+          "bytes": 6004,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "clover.2",
+      "name": "Clover 2",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Clover_2",
+      "sourceFile": "glTF/Clover_2.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "undergrowth",
+      "subcategory": "clover",
+      "tags": [
+        "las",
+        "runo",
+        "koniczyna"
+      ],
+      "file": "glb/clover.2.glb",
+      "bytes": 8160,
+      "triangles": 615,
+      "vertices": 433,
+      "drawCalls": 1,
+      "sourceTriangles": 615,
+      "materials": [
+        "leaves"
+      ],
+      "baseScale": 0.7,
+      "bounds": {
+        "min": [
+          -0.352,
+          -0.002,
+          -0.331
+        ],
+        "max": [
+          0.244,
+          0.883,
+          0.255
+        ],
+        "size": [
+          0.596,
+          0.885,
+          0.586
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/clover.2.glb",
+          "triangles": 615,
+          "vertices": 433,
+          "drawCalls": 1,
+          "bytes": 8160,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "grass.common_short",
+      "name": "Grass Common Short",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Grass_Common_Short",
+      "sourceFile": "glTF/Grass_Common_Short.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "grass",
+      "subcategory": "common",
+      "tags": [
+        "las",
+        "trawa"
+      ],
+      "file": "glb/grass.common_short.glb",
+      "bytes": 4632,
+      "triangles": 155,
+      "vertices": 153,
+      "drawCalls": 1,
+      "sourceTriangles": 155,
+      "materials": [
+        "grass"
+      ],
+      "baseScale": 0.5,
+      "bounds": {
+        "min": [
+          -0.178,
+          -0.011,
+          -0.24
+        ],
+        "max": [
+          0.142,
+          0.656,
+          0.129
+        ],
+        "size": [
+          0.319,
+          0.667,
+          0.369
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/grass.common_short.glb",
+          "triangles": 155,
+          "vertices": 153,
+          "drawCalls": 1,
+          "bytes": 4632,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "grass.common_tall",
+      "name": "Grass Common Tall",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Grass_Common_Tall",
+      "sourceFile": "glTF/Grass_Common_Tall.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "grass",
+      "subcategory": "common",
+      "tags": [
+        "las",
+        "trawa"
+      ],
+      "file": "glb/grass.common_tall.glb",
+      "bytes": 6436,
+      "triangles": 326,
+      "vertices": 303,
+      "drawCalls": 1,
+      "sourceTriangles": 326,
+      "materials": [
+        "grass"
+      ],
+      "baseScale": 0.45,
+      "bounds": {
+        "min": [
+          -0.182,
+          -0.014,
+          -0.216
+        ],
+        "max": [
+          0.221,
+          0.829,
+          0.231
+        ],
+        "size": [
+          0.403,
+          0.843,
+          0.447
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/grass.common_tall.glb",
+          "triangles": 326,
+          "vertices": 303,
+          "drawCalls": 1,
+          "bytes": 6436,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "grass.wispy_short",
+      "name": "Grass Wispy Short",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Grass_Wispy_Short",
+      "sourceFile": "glTF/Grass_Wispy_Short.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "grass",
+      "subcategory": "wispy",
+      "tags": [
+        "las",
+        "trawa"
+      ],
+      "file": "glb/grass.wispy_short.glb",
+      "bytes": 10044,
+      "triangles": 494,
+      "vertices": 559,
+      "drawCalls": 1,
+      "sourceTriangles": 494,
+      "materials": [
+        "grass"
+      ],
+      "baseScale": 0.5,
+      "bounds": {
+        "min": [
+          -0.364,
+          -0.043,
+          -0.291
+        ],
+        "max": [
+          0.297,
+          0.493,
+          0.313
+        ],
+        "size": [
+          0.661,
+          0.536,
+          0.605
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/grass.wispy_short.glb",
+          "triangles": 494,
+          "vertices": 559,
+          "drawCalls": 1,
+          "bytes": 10044,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "grass.wispy_tall",
+      "name": "Grass Wispy Tall",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Grass_Wispy_Tall",
+      "sourceFile": "glTF/Grass_Wispy_Tall.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "grass",
+      "subcategory": "wispy",
+      "tags": [
+        "las",
+        "trawa"
+      ],
+      "file": "glb/grass.wispy_tall.glb",
+      "bytes": 10688,
+      "triangles": 622,
+      "vertices": 644,
+      "drawCalls": 1,
+      "sourceTriangles": 622,
+      "materials": [
+        "grass"
+      ],
+      "baseScale": 0.45,
+      "bounds": {
+        "min": [
+          -0.333,
+          -0.016,
+          -0.368
+        ],
+        "max": [
+          0.36,
+          0.736,
+          0.349
+        ],
+        "size": [
+          0.693,
+          0.752,
+          0.717
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/grass.wispy_tall.glb",
+          "triangles": 622,
+          "vertices": 644,
+          "drawCalls": 1,
+          "bytes": 10688,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "flower.3_single",
+      "name": "Flower 3 Single",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Flower_3_Single",
+      "sourceFile": "glTF/Flower_3_Single.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "flower",
+      "subcategory": "single",
+      "tags": [
+        "las",
+        "kwiat",
+        "baśniowe"
+      ],
+      "file": "glb/flower.3_single.glb",
+      "bytes": 7324,
+      "triangles": 285,
+      "vertices": 227,
+      "drawCalls": 2,
+      "sourceTriangles": 285,
+      "materials": [
+        "leaves",
+        "flowers"
+      ],
+      "baseScale": 0.35,
+      "bounds": {
+        "min": [
+          -0.168,
+          -0.006,
+          -0.182
+        ],
+        "max": [
+          0.149,
+          0.717,
+          0.125
+        ],
+        "size": [
+          0.317,
+          0.724,
+          0.307
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/flower.3_single.glb",
+          "triangles": 285,
+          "vertices": 227,
+          "drawCalls": 2,
+          "bytes": 7324,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "flower.3_group",
+      "name": "Flower 3 Group",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Flower_3_Group",
+      "sourceFile": "glTF/Flower_3_Group.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "flower",
+      "subcategory": "group",
+      "tags": [
+        "las",
+        "kwiat",
+        "baśniowe"
+      ],
+      "file": "glb/flower.3_group.glb",
+      "bytes": 12236,
+      "triangles": 755,
+      "vertices": 581,
+      "drawCalls": 2,
+      "sourceTriangles": 755,
+      "materials": [
+        "leaves",
+        "flowers"
+      ],
+      "baseScale": 0.4,
+      "bounds": {
+        "min": [
+          -0.245,
+          -0.014,
+          -0.321
+        ],
+        "max": [
+          0.35,
+          0.808,
+          0.316
+        ],
+        "size": [
+          0.595,
+          0.822,
+          0.636
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/flower.3_group.glb",
+          "triangles": 755,
+          "vertices": 581,
+          "drawCalls": 2,
+          "bytes": 12236,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "flower.4_single",
+      "name": "Flower 4 Single",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Flower_4_Single",
+      "sourceFile": "glTF/Flower_4_Single.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "flower",
+      "subcategory": "single",
+      "tags": [
+        "las",
+        "kwiat",
+        "baśniowe"
+      ],
+      "file": "glb/flower.4_single.glb",
+      "bytes": 12124,
+      "triangles": 642,
+      "vertices": 499,
+      "drawCalls": 2,
+      "sourceTriangles": 642,
+      "materials": [
+        "leaves",
+        "flowers"
+      ],
+      "baseScale": 0.35,
+      "bounds": {
+        "min": [
+          -0.177,
+          -0.011,
+          -0.141
+        ],
+        "max": [
+          0.199,
+          0.836,
+          0.13
+        ],
+        "size": [
+          0.375,
+          0.847,
+          0.271
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/flower.4_single.glb",
+          "triangles": 642,
+          "vertices": 499,
+          "drawCalls": 2,
+          "bytes": 12124,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "flower.4_group",
+      "name": "Flower 4 Group",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Flower_4_Group",
+      "sourceFile": "glTF/Flower_4_Group.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "flower",
+      "subcategory": "group",
+      "tags": [
+        "las",
+        "kwiat",
+        "baśniowe"
+      ],
+      "file": "glb/flower.4_group.glb",
+      "bytes": 23036,
+      "triangles": 1690,
+      "vertices": 1302,
+      "drawCalls": 2,
+      "sourceTriangles": 1690,
+      "materials": [
+        "leaves",
+        "flowers"
+      ],
+      "baseScale": 0.4,
+      "bounds": {
+        "min": [
+          -0.373,
+          -0.023,
+          -0.254
+        ],
+        "max": [
+          0.34,
+          0.972,
+          0.293
+        ],
+        "size": [
+          0.712,
+          0.995,
+          0.547
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/flower.4_group.glb",
+          "triangles": 1690,
+          "vertices": 1302,
+          "drawCalls": 2,
+          "bytes": 23036,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "mushroom.common",
+      "name": "Mushroom Common",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Mushroom_Common",
+      "sourceFile": "glTF/Mushroom_Common.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "mushroom",
+      "subcategory": "cap",
+      "tags": [
+        "las",
+        "grzyb",
+        "baśniowe"
+      ],
+      "file": "glb/mushroom.common.glb",
+      "bytes": 9632,
+      "triangles": 880,
+      "vertices": 555,
+      "drawCalls": 1,
+      "sourceTriangles": 880,
+      "materials": [
+        "mushrooms"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -0.333,
+          -0.017,
+          -0.445
+        ],
+        "max": [
+          0.23,
+          0.446,
+          0.334
+        ],
+        "size": [
+          0.564,
+          0.463,
+          0.779
+        ]
+      },
+      "collision": null,
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/mushroom.common.glb",
+          "triangles": 880,
+          "vertices": 555,
+          "drawCalls": 1,
+          "bytes": 9632,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "rock.medium.1",
+      "name": "Rock Medium 1",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Rock_Medium_1",
+      "sourceFile": "glTF/Rock_Medium_1.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "rock",
+      "subcategory": "boulder",
+      "tags": [
+        "las",
+        "skała"
+      ],
+      "file": "glb/rock.medium.1.glb",
+      "bytes": 6544,
+      "triangles": 342,
+      "vertices": 351,
+      "drawCalls": 1,
+      "sourceTriangles": 342,
+      "materials": [
+        "rocks"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -1.727,
+          -0.271,
+          -1.15
+        ],
+        "max": [
+          1.498,
+          1.989,
+          1.839
+        ],
+        "size": [
+          3.225,
+          2.26,
+          2.989
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 1.32,
+        "height": 2.26,
+        "source": "estimated-footprint"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/rock.medium.1.glb",
+          "triangles": 342,
+          "vertices": 351,
+          "drawCalls": 1,
+          "bytes": 6544,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "rock.medium.2",
+      "name": "Rock Medium 2",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Rock_Medium_2",
+      "sourceFile": "glTF/Rock_Medium_2.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "rock",
+      "subcategory": "boulder",
+      "tags": [
+        "las",
+        "skała"
+      ],
+      "file": "glb/rock.medium.2.glb",
+      "bytes": 5356,
+      "triangles": 244,
+      "vertices": 249,
+      "drawCalls": 1,
+      "sourceTriangles": 244,
+      "materials": [
+        "rocks"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -1.714,
+          -0.051,
+          -1.159
+        ],
+        "max": [
+          1.335,
+          1.848,
+          1.32
+        ],
+        "size": [
+          3.049,
+          1.899,
+          2.479
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 1.175,
+        "height": 1.899,
+        "source": "estimated-footprint"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/rock.medium.2.glb",
+          "triangles": 244,
+          "vertices": 249,
+          "drawCalls": 1,
+          "bytes": 5356,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    },
+    {
+      "id": "rock.medium.3",
+      "name": "Rock Medium 3",
+      "pack": "quaternius-stylized-nature-megakit-standard",
+      "sourceName": "Rock_Medium_3",
+      "sourceFile": "glTF/Rock_Medium_3.gltf",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "attribution": "Modele roślin i skał: Quaternius, Stylized Nature MegaKit (CC0).",
+      "category": "rock",
+      "subcategory": "boulder",
+      "tags": [
+        "las",
+        "skała"
+      ],
+      "file": "glb/rock.medium.3.glb",
+      "bytes": 8784,
+      "triangles": 522,
+      "vertices": 531,
+      "drawCalls": 1,
+      "sourceTriangles": 522,
+      "materials": [
+        "rocks"
+      ],
+      "baseScale": 1,
+      "bounds": {
+        "min": [
+          -1.824,
+          -0.316,
+          -0.89
+        ],
+        "max": [
+          1.596,
+          2.001,
+          2.586
+        ],
+        "size": [
+          3.42,
+          2.316,
+          3.476
+        ]
+      },
+      "collision": {
+        "shape": "circle",
+        "r": 1.465,
+        "height": 2.316,
+        "source": "estimated-footprint"
+      },
+      "lod": [
+        {
+          "level": 0,
+          "file": "glb/rock.medium.3.glb",
+          "triangles": 522,
+          "vertices": 531,
+          "drawCalls": 1,
+          "bytes": 8784,
+          "minDistance": 0
+        }
+      ],
+      "placeholder": false,
+      "approvedAt": "2026-10-15",
+      "visualReview": "pending-v2"
+    }
+  ],
+  "totals": {
+    "models": 31,
+    "glbFiles": 41,
+    "glbBytes": 1945340,
+    "textureCount": 12,
+    "textureBytesFull": 753410,
+    "textureBytesLow": 295528,
+    "materialCount": 10,
+    "totalBytesFull": 2698750,
+    "totalBytesLow": 2240868
+  }
+}

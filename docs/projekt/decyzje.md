@@ -44,11 +44,23 @@
 - Kolizje należą do `WorldObject` (dane generatora), nie do modeli. Ruch dzielony na kroki <= promień gracza.
 - Punkty charakterystyczne i strefy środowiskowe to dane (`FeatureMap`); żadne konkretne lokacje ani pozycje nie zostały ustalone.
 
+## V1 (zasoby 3D)
+
+- Pakiet: Quaternius Stylized Nature MegaKit **Standard** (CC0, 0 USD), zatwierdzony przez autora; wersji płatnych nie pobieramy. Weryfikacja źródła, licencji i SHA-256 archiwum w [zasoby-3d.md](zasoby-3d.md).
+- Skały S/M/L: wariant A (skalowanie `Rock_Medium_1..3`, kontrolowana zmienność proporcji); decyzja prototypowa.
+- 31 modeli w grze; martwe drzewa pominięte (ponury ton); stare drzewa skalowane do 0,7.
+- GLB zawierają tylko geometrię; tekstury i materiały są wspólne (manifest) - jeden materiał i jedna tekstura na wszystkie instancje i modele.
+- Oryginały poza repozytorium (SHA-256 w `scripts/assets/source-hashes.json`); potok deterministyczny, narzędzia w `devDependencies`.
+- Ładowanie: własny `AssetLibrary` na `GLTFLoader` + meshopt, bez `@react-three/drei` (kompatybilny, ale niepotrzebny; własny cache daje współdzielone zasoby i testy w Node).
+- Kolizje w manifeście to rozmiary sugerowane (koło x-z); wiążące są dane obiektów świata z generatora.
+- Profile jakości (LOW/MEDIUM/HIGH) są punktem wyjścia; progi i zmierzone koszty w V2.
+
 ## Otwarte
 
 - Sprzęt referencyjny dla progów FPS (HIGH, LOW).
 - Treść dwóch zapowiedzi na tablicy.
 - Wygląd trolla (pod kątem dzieci od 8 lat).
-- Skały S/M/L i paprocie: wariant A (skalowanie z Standard), B (inny darmowy pakiet CC0) czy C (płatna wersja Pro, wymaga zgody autora) - patrz [zasoby-3d.md](zasoby-3d.md).
+- Skały S/M/L i paprocie: wybrano wariant A (V1); decyzja o B (inny pakiet CC0) lub C (płatna wersja Pro, wymaga zgody autora) po ocenie wizualnej w V2 - patrz [zasoby-3d.md](zasoby-3d.md).
+- Ocena wizualna modeli (które kolory liści zostają, jakość LOD1, potrzeba billboardów) i progi profili jakości - V2.
 - Piła: brak zweryfikowanego kandydata CC0.
 - Przegląd drenażu życia pod kątem dzieci (zima: -1% co 5 s w nocy) - osobna propozycja; wartości na razie bez zmian.
