@@ -42,6 +42,14 @@ function importantKey(state: GameState): string {
     state.deaths,
     state.dead,
     state.tutorialDone,
+    state.ledger,
+    state.quests,
+    state.chests,
+    state.troll,
+    state.harvested,
+    state.bridge,
+    state.discovered,
+    state.badges,
   ]);
 }
 

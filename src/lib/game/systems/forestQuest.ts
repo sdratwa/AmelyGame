@@ -100,6 +100,15 @@ export function harvest(state: GameState, cmd: HarvestCommand): CommandResult {
     });
   }
   const amount = HARVEST_AMOUNT[cmd.size];
+  // Limit jednego stosu: surowce zajmują najwyżej jedno miejsce, więc nie da się zapchać ekwipunku przedmiotami
+  // niewyrzucalnymi (to gwarantuje, że depozyt trolla zawsze da się odzyskać).
+  if (countOf(state.slots, resource) + amount > ITEMS[resource].maxStack) {
+    return fail(state, `Nie uniesiesz więcej (limit ${ITEMS[resource].maxStack}).`, {
+      type: "harvest.failed",
+      objectId: cmd.objectId,
+      reason: "carry_limit",
+    });
+  }
   if (!canAdd(state.slots, resource, amount)) {
     return fail(state, "Ekwipunek pełny. Zrób miejsce na surowce.", {
       type: "harvest.failed",

@@ -482,6 +482,21 @@ export function planForest(ctx: PlanContext): WorldPlan {
     props: { regionId: "region.beyond_bridge" },
   });
 
+  // Oś przejścia mostu: pas wolny od drzew i skał (inaczej pojedyncza skała mogłaby zablokować gotowy most).
+  const axisLen = dist(west, east);
+  const axisSteps = Math.max(1, Math.ceil(axisLen / 3));
+  for (let k = 0; k <= axisSteps; k++) {
+    const t = k / axisSteps;
+    pois.push({
+      id: `poi.bridge_axis_${k}`,
+      kind: "bridge_axis",
+      x: q(west.x + (east.x - west.x) * t),
+      z: q(west.z + (east.z - west.z) * t),
+      radius: P.bridge.passageHalfWidth + 0.8,
+      tags: ["bridge", "keep_clear"],
+    });
+  }
+
   const barriers: Barrier[] = [{ id: RIVER_BARRIER_ID, kind: "river", shape: { type: "ribbon", points: riverPts } }];
   const passages: Passage[] = [
     {

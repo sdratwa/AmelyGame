@@ -29,7 +29,7 @@ export type GameEvent =
   | { type: "chest.taken"; id: ChestId; item: ItemId }
   | { type: "chest.take_failed"; id: ChestId; reason: "inventory_full" }
   | { type: "resource.harvested"; objectId: string; item: ItemId; amount: number }
-  | { type: "harvest.failed"; objectId: string; reason: "no_tool" | "inventory_full" }
+  | { type: "harvest.failed"; objectId: string; reason: "no_tool" | "inventory_full" | "carry_limit" }
   | { type: "troll.dialog_opened"; stage: "intro" | "riddle" }
   | { type: "troll.dialog_closed" }
   | { type: "troll.locked"; until: number }

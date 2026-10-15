@@ -52,9 +52,9 @@ describe("W1a: determinizm i nazwane strumienie", () => {
   });
 
   it("odcisk świata jest zamrożony dla znanych seedów (zmiana = nowa wersja generatora; W1b dołożyło kotwice questa do planu)", () => {
-    expect(full(1).world.fingerprint).toBe("fp1:108efaeeb3db98");
-    expect(full(2030).world.fingerprint).toBe("fp1:094328db4880ff");
-    expect(full(4000000000).world.fingerprint).toBe("fp1:16091ad778cba2");
+    expect(full(1).world.fingerprint).toBe("fp1:12ad25dddae36f");
+    expect(full(2030).world.fingerprint).toBe("fp1:04a4d162135474");
+    expect(full(4000000000).world.fingerprint).toBe("fp1:00ff46cf3225dd");
   });
 
   it("zmiana liczby jednej warstwy nie przesuwa drzew, skał ani pozostałych warstw", () => {

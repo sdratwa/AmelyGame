@@ -1,4 +1,3 @@
-import { slotsFrom } from "../testkit";
 import { describe, expect, it } from "vitest";
 import { applyCommand, reducer, type Command } from "../core/apply";
 import { initialState, type GameState } from "../core/state";
@@ -626,6 +625,28 @@ describe("Autosaver", () => {
     await tick();
     expect(saved).toHaveLength(3);
     expect(saved[2].player.wallet).toBe(s.wallet);
+  });
+
+  it("postęp questa (przyjęcie zadania) jest istotną zmianą – uruchamia zapis z debounce", async () => {
+    const { store, saved } = recordingStore();
+    const timers = fakeTimers();
+    const saver = new Autosaver({ store, now: () => 1, timers });
+    let s = started();
+    saver.update(s);
+    timers.runAll();
+    await tick();
+    expect(saved).toHaveLength(1);
+
+    s = run(s, { type: "tick", dt: 1 });
+    saver.update(s);
+    expect(timers.count()).toBe(1);
+
+    s = run(s, { type: "quest.accept", id: "quest.bridge_01" });
+    saver.update(s);
+    expect(timers.count()).toBe(2);
+    timers.runAll();
+    await tick();
+    expect(Object.keys(saved.at(-1)?.quests.accepted ?? {})).toContain("quest.bridge_01");
   });
 
   it("flush bez zmian nie zapisuje drugi raz, a zapis startowy (initial) jest pomijany", async () => {

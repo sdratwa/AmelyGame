@@ -6,13 +6,12 @@ import type { ChestState, ForestPose, Ledger, TrollPhase } from "../core/state";
 /** Bieżąca wersja formatu zapisu (SaveVN). Zmiana struktury = nowa wersja + migracja. */
 export const CURRENT_SAVE_VERSION = 2;
 
-/** SaveV1 (zamrożony): dawny format sprzed questa; czytany wyłącznie przez migrację v1 -> v2. */
 type LegacySlot = string | null;
 
 /**
- * Trwały zapis gry. Tylko dane JSON – bez obiektów Three.js, bez stanu okien,
+ * SaveV1 (zamrożony): dawny format sprzed questa; czytany wyłącznie przez migrację v1 -> v2.
+ * Trwały zapis gry to tylko dane JSON – bez obiektów Three.js, bez stanu okien,
  * komunikatów, widoku, stosu pauz ani innych danych sesji.
- *
  */
 export type SaveV1 = {
   version: 1;

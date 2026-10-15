@@ -110,7 +110,9 @@ export function recover(
   let cur: Slots = slots.map((s) => (s ? { ...s } : null));
   const rest: ItemStack[] = [];
   const moved: ItemStack[] = [];
-  for (const entry of pile) {
+  // Najpierw rzeczy, których nie da się wyrzucić (narzędzia, schemat, surowce): jedzenie nie może ich wyprzeć.
+  const ordered = [...pile].sort((a, b) => Number(ITEMS[a.id].discardable) - Number(ITEMS[b.id].discardable));
+  for (const entry of ordered) {
     const res = addToSlots(cur, entry.id, entry.count);
     cur = res.slots;
     if (res.added > 0) moved.push({ id: entry.id, count: res.added });
