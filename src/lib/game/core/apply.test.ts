@@ -1,3 +1,4 @@
+import { slotsFrom } from "../testkit";
 import { describe, expect, it } from "vitest";
 import { applyCommand, reducer } from "./apply";
 import { initialState, type GameState } from "./state";
@@ -13,7 +14,7 @@ const playing = (over: Partial<GameState> = {}): GameState => ({
 describe("applyCommand", () => {
   it("reducer zwraca ten sam stan co applyCommand", () => {
     const s = playing();
-    const cmd = { type: "buy", item: "hotdog" } as const;
+    const cmd = { type: "buy", item: "item.hotdog" } as const;
     expect(reducer(s, cmd)).toEqual(applyCommand(s, cmd).state);
   });
 
@@ -43,8 +44,8 @@ describe("applyCommand", () => {
   });
 
   it("zakup emituje zdarzenie i deterministyczny komunikat", () => {
-    const out = applyCommand(playing(), { type: "buy", item: "hotdog" });
-    expect(out.events).toEqual([{ type: "item.purchased", item: "hotdog", price: 12 }]);
+    const out = applyCommand(playing(), { type: "buy", item: "item.hotdog" });
+    expect(out.events).toEqual([{ type: "item.purchased", item: "item.hotdog", price: 12 }]);
     expect(out.state.toast).toEqual({
       id: 1,
       text: "Kupiono: Hot-dog (−12 zł)",
@@ -55,32 +56,32 @@ describe("applyCommand", () => {
 
   it("nieudany zakup informuje o powodzie", () => {
     const full = playing({
-      slots: ["phone", "water", "water", "water", "water", "water", "water", "water"],
+      slots: slotsFrom(["item.phone", "item.water", "item.water", "item.water", "item.water", "item.water", "item.water", "item.water"]),
     });
-    expect(applyCommand(full, { type: "buy", item: "water" }).events).toEqual([
-      { type: "item.purchase_failed", item: "water", reason: "inventory_full" },
+    expect(applyCommand(full, { type: "buy", item: "item.water" }).events).toEqual([
+      { type: "item.purchase_failed", item: "item.water", reason: "inventory_full" },
     ]);
     const poor = playing({ wallet: 1 });
-    expect(applyCommand(poor, { type: "buy", item: "water" }).events).toEqual([
-      { type: "item.purchase_failed", item: "water", reason: "no_money" },
+    expect(applyCommand(poor, { type: "buy", item: "item.water" }).events).toEqual([
+      { type: "item.purchase_failed", item: "item.water", reason: "no_money" },
     ]);
   });
 
   it("identyfikatory komunikatów rosną w ramach stanu, bez zmiennych modułu", () => {
-    const a = applyCommand(playing(), { type: "buy", item: "water" }).state;
-    const b = applyCommand(a, { type: "buy", item: "water" }).state;
+    const a = applyCommand(playing(), { type: "buy", item: "item.water" }).state;
+    const b = applyCommand(a, { type: "buy", item: "item.water" }).state;
     expect(a.toast?.id).toBe(1);
     expect(b.toast?.id).toBe(2);
-    const other = applyCommand(playing(), { type: "buy", item: "water" }).state;
+    const other = applyCommand(playing(), { type: "buy", item: "item.water" }).state;
     expect(other.toast?.id).toBe(1);
   });
 
   it("jedzenie, śmierć i odrodzenie emitują zdarzenia", () => {
     const eat = applyCommand(
-      playing({ health: 50, slots: ["phone", "hotdog", null, null, null, null, null, null], selected: 1 }),
+      playing({ health: 50, slots: slotsFrom(["item.phone", "item.hotdog", null, null, null, null, null, null]), selected: 1 }),
       { type: "eat" },
     );
-    expect(eat.events).toEqual([{ type: "item.eaten", item: "hotdog", healed: 25 }]);
+    expect(eat.events).toEqual([{ type: "item.eaten", item: "item.hotdog", healed: 25 }]);
 
     const died = applyCommand(playing({ health: 1 }), { type: "tick", dt: 10 });
     expect(died.events.map((e) => e.type)).toEqual(["player.died", "time.pause_changed"]);
@@ -112,11 +113,11 @@ describe("applyCommand", () => {
   });
 
   it("silnik nie mutuje poprzedniego stanu", () => {
-    const s = playing({ health: 50, slots: ["phone", "hotdog", null, null, null, null, null, null], selected: 1 });
+    const s = playing({ health: 50, slots: slotsFrom(["item.phone", "item.hotdog", null, null, null, null, null, null]), selected: 1 });
     const snapshot = JSON.parse(JSON.stringify(s));
     applyCommand(s, { type: "eat" });
     applyCommand(s, { type: "tick", dt: 5 });
-    applyCommand(s, { type: "buy", item: "water" });
+    applyCommand(s, { type: "buy", item: "item.water" });
     expect(JSON.parse(JSON.stringify(s))).toEqual(snapshot);
   });
 });

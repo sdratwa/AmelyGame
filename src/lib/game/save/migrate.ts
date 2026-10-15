@@ -1,5 +1,6 @@
-import { CURRENT_SAVE_VERSION, type SaveV1 } from "./schema";
-import { validateSaveV1, type ValidationResult } from "./validate";
+import { migrateV1ToV2 } from "./migrations/v1ToV2";
+import { CURRENT_SAVE_VERSION, type SaveV2 } from "./schema";
+import { validateSaveV2, type ValidationResult } from "./validate";
 
 /** Krok migracji vN -> vN+1: czysta funkcja na kopii danych; ma zwrócić obiekt z version = N+1. */
 export type MigrationStep = (payload: Record<string, unknown>) => Record<string, unknown>;
@@ -8,20 +9,20 @@ export type MigrationStep = (payload: Record<string, unknown>) => Record<string,
 export type SchemaConfig = {
   current: number;
   steps: Readonly<Record<number, MigrationStep>>;
-  validate: (payload: unknown) => ValidationResult<SaveV1>;
+  validate: (payload: unknown) => ValidationResult<SaveV2>;
 };
 
-/** Migracje dla realnych zapisów. Pusta: SaveV1 jest pierwszą wersją formatu. */
-export const MIGRATIONS: Readonly<Record<number, MigrationStep>> = {};
+/** Migracje dla realnych zapisów: v1 -> v2 (quest "Most do nieznanego", nowy generator świata). */
+export const MIGRATIONS: Readonly<Record<number, MigrationStep>> = { 1: migrateV1ToV2 };
 
 export const DEFAULT_SCHEMA: SchemaConfig = {
   current: CURRENT_SAVE_VERSION,
   steps: MIGRATIONS,
-  validate: validateSaveV1,
+  validate: validateSaveV2,
 };
 
 export type MigrationResult =
-  | { ok: true; save: SaveV1 }
+  | { ok: true; save: SaveV2 }
   | { ok: false; error: string };
 
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;

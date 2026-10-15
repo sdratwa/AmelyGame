@@ -11,6 +11,16 @@ export const FOREST_START: Readonly<{ x: number; z: number }> = { x: -126, z: 0 
 /** Flaga świata otwierająca przejście przez rzekę (ustawiana po zbudowaniu mostu; mechanika poza zakresem W1a). */
 export const BRIDGE_FLAG = "bridge.built";
 
+/** Skrzynie questa `quest.bridge_01`: punkt charakterystyczny i identyfikator skrzyni (kolejność = kolejność losowania polan). */
+export const QUEST_CHEST_SLOTS = [
+  { poi: "poi.chest_pickaxe", chest: "chest.bridge.pickaxe" },
+  { poi: "poi.chest_saw", chest: "chest.bridge.saw" },
+  { poi: "poi.chest_blueprint", chest: "chest.bridge.blueprint" },
+] as const;
+
+/** Odległość (m) trolla od pilnowanej skrzyni. */
+export const TROLL_OFFSET = 3.4;
+
 export const RIVER_BARRIER_ID = "barrier.river";
 export const BRIDGE_PASSAGE_ID = "passage.bridge";
 
@@ -411,6 +421,65 @@ export function planForest(ctx: PlanContext): WorldPlan {
     z: east.z,
     radius: 3,
     tags: ["bridge", "keep_clear", "east"],
+  });
+
+  // Kotwice questa (W1b): trzy skrzynie na różnych polanach (kolejność losowana raz z seeda), troll przy skrzyni
+  // ze schematem i punkt odkrycia za rzeką. Osobny strumień RNG: pozostałe elementy planu się nie zmieniają.
+  const anchorRng = ctx.rng("forest.anchors");
+  const order = clearings.map((c) => c.id);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.min(i, Math.floor(anchorRng() * (i + 1)));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  const clearingById = new Map(clearings.map((c) => [c.id, c]));
+  QUEST_CHEST_SLOTS.forEach((slot, i) => {
+    const c = clearingById.get(order[i] ?? "");
+    if (!c) return;
+    pois.push({
+      id: slot.poi,
+      kind: "chest",
+      x: q(c.x),
+      z: q(c.z),
+      radius: 1.6,
+      mustReach: true,
+      tags: ["chest", "keep_clear"],
+      props: { chestId: slot.chest, clearing: c.id },
+    });
+  });
+  const trollClearing = clearingById.get(order[2] ?? "");
+  if (trollClearing) {
+    let ux = 1;
+    let uz = 0;
+    for (let k = 0; k < 24; k++) {
+      const a = anchorRng() * 2 - 1;
+      const b = anchorRng() * 2 - 1;
+      const l2 = a * a + b * b;
+      if (l2 > 0.2 && l2 <= 1) {
+        const l = Math.sqrt(l2);
+        ux = a / l;
+        uz = b / l;
+        break;
+      }
+    }
+    pois.push({
+      id: "poi.troll_bridge",
+      kind: "npc",
+      x: q(trollClearing.x + ux * TROLL_OFFSET),
+      z: q(trollClearing.z + uz * TROLL_OFFSET),
+      radius: 1.6,
+      mustReach: true,
+      tags: ["npc", "keep_clear"],
+      props: { npcId: "npc.troll.bridge", guards: "chest.bridge.blueprint" },
+    });
+  }
+  pois.push({
+    id: "poi.beyond_bridge",
+    kind: "region_entry",
+    x: q(east.x + nx * 5),
+    z: q(east.z + nz * 5),
+    radius: 4,
+    tags: ["region_entry"],
+    props: { regionId: "region.beyond_bridge" },
   });
 
   const barriers: Barrier[] = [{ id: RIVER_BARRIER_ID, kind: "river", shape: { type: "ribbon", points: riverPts } }];

@@ -109,7 +109,7 @@ export function InventoryBar({
   onSelect: (slot: number) => void;
   onEat: () => void;
 }) {
-  const selectedId = state.slots[state.selected];
+  const selectedId = state.slots[state.selected]?.id ?? null;
   const selectedItem = selectedId ? ITEMS[selectedId] : null;
   const canEat = !!selectedItem && selectedItem.heal > 0 && !state.dead;
 
@@ -151,7 +151,8 @@ export function InventoryBar({
       </div>
       <div className="mx-auto grid max-w-xl grid-cols-8 gap-1.5 sm:gap-2" role="list" aria-label="Ekwipunek">
         {Array.from({ length: INVENTORY_SLOTS }, (_, i) => {
-          const id = state.slots[i];
+          const stack = state.slots[i];
+          const id = stack?.id ?? null;
           const item = id ? ITEMS[id] : null;
           const active = i === state.selected;
           return (
@@ -172,11 +173,19 @@ export function InventoryBar({
               <span className="absolute left-1 top-0.5 text-[9px] font-medium text-slate-500 sm:text-[10px]">
                 {i + 1}
               </span>
-              {id === "phone" ? (
+              {id === "item.phone" ? (
                 <PhoneIcon className="h-3/5" />
               ) : item ? (
                 <span aria-hidden>{item.emoji}</span>
               ) : null}
+              {stack && stack.count > 1 && (
+                <span
+                  data-testid={`slot-${i}-count`}
+                  className="absolute bottom-0.5 right-1 text-[10px] font-bold text-white sm:text-xs"
+                >
+                  {stack.count}
+                </span>
+              )}
             </button>
           );
         })}

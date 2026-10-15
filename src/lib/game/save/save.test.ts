@@ -1,3 +1,4 @@
+import { slotsFrom } from "../testkit";
 import { describe, expect, it } from "vitest";
 import { applyCommand, reducer, type Command } from "../core/apply";
 import { initialState, type GameState } from "../core/state";
@@ -8,10 +9,10 @@ import { loadGame, verifyWorld } from "./loader";
 import { migratePayload, type SchemaConfig } from "./migrate";
 import { MemoryStorage } from "./memoryStorage";
 import { createNewGameParams } from "./newGame";
-import { SAVE_TOP_LEVEL_KEYS, type SaveV1 } from "./schema";
+import { SAVE_TOP_LEVEL_KEYS, type SaveV2 } from "./schema";
 import { serializeState } from "./serialize";
 import { LocalStorageSaveStore, type KeyValueStorage, type SaveOutcome, type SaveStore } from "./store";
-import { validateSaveV1 } from "./validate";
+import { validateSaveV2 } from "./validate";
 import { canonicalize, fingerprintOf, hashHex } from "../world/fingerprint";
 
 function run(state: GameState, ...commands: Command[]): GameState {
@@ -39,7 +40,7 @@ function progressed(seed = 777, saveId = "save_test0001"): GameState {
     { type: "enter", view: "forest" },
     { type: "forest.pose", pose: { x: 12.5, z: -7.25, yaw: 1.2 } },
     { type: "leave" },
-    { type: "buy", item: "hotdog" },
+    { type: "buy", item: "item.hotdog" },
     { type: "select", slot: 1 },
     { type: "tick", dt: 37.5 },
   );
@@ -47,7 +48,7 @@ function progressed(seed = 777, saveId = "save_test0001"): GameState {
   return run(s, { type: "buyHouse", id: cheapest.id }, { type: "upgradeHouse", id: cheapest.id });
 }
 
-const save = (s: GameState, savedAt = 1_000): SaveV1 => {
+const save = (s: GameState, savedAt = 1_000): SaveV2 => {
   const out = serializeState(s, savedAt);
   if (!out) throw new Error("stan nie nadaje się do zapisu");
   return out;
@@ -164,7 +165,7 @@ describe("E1.3 odświeżenie strony nie resetuje postępu", () => {
     saver.update(s);
     timers.runAll();
     await tick();
-    s = run(s, { type: "buy", item: "hotdog" });
+    s = run(s, { type: "buy", item: "item.hotdog" });
     saver.update(s);
     s = run(s, { type: "tick", dt: 3 });
     saver.update(s);
@@ -196,7 +197,7 @@ describe("E1.5 uszkodzony zapis nie niszczy poprawnej kopii", () => {
   async function twoSaves() {
     const { store, storage } = makeStore();
     const s1 = progressed();
-    const s2 = run(s1, { type: "buy", item: "water" });
+    const s2 = run(s1, { type: "buy", item: "item.water" });
     await store.save(save(s1, 1));
     await store.save(save(s2, 2));
     return { store, storage, s1, s2 };
@@ -272,7 +273,7 @@ describe("E1.5 uszkodzony zapis nie niszczy poprawnej kopii", () => {
         storage.setItem(k, v);
       },
     };
-    const outcome = await new LocalStorageSaveStore({ storage: failing }).save(save(run(s2, { type: "buy", item: "hotdog" }), 3));
+    const outcome = await new LocalStorageSaveStore({ storage: failing }).save(save(run(s2, { type: "buy", item: "item.hotdog" }), 3));
     expect(outcome.ok).toBe(false);
     expect(storage.getItem("miasto.save")).toBe(before);
     const loaded = await new LocalStorageSaveStore({ storage }).load();
@@ -281,7 +282,7 @@ describe("E1.5 uszkodzony zapis nie niszczy poprawnej kopii", () => {
 
   it("nie zapisuje niepoprawnych danych", async () => {
     const { store, storage } = makeStore();
-    const bad = { ...save(progressed()), player: { ...save(progressed()).player, health: 1000 } } as SaveV1;
+    const bad = { ...save(progressed()), player: { ...save(progressed()).player, health: 1000 } } as SaveV2;
     const outcome = await store.save(bad);
     expect(outcome.ok).toBe(false);
     expect(storage.getItem("miasto.save")).toBeNull();
@@ -319,7 +320,7 @@ describe("E1.5 uszkodzony zapis nie niszczy poprawnej kopii", () => {
 });
 
 describe("E1.6 niezgodny worldFingerprint nie powoduje nadpisania", () => {
-  function tamperedRaw(mutate: (s: SaveV1) => SaveV1): string {
+  function tamperedRaw(mutate: (s: SaveV2) => SaveV2): string {
     return encodeSave(mutate(save(progressed())));
   }
 
@@ -364,15 +365,15 @@ describe("E1.6 niezgodny worldFingerprint nie powoduje nadpisania", () => {
   });
 });
 
-describe("E1.7 migracja jest bezpieczna", () => {
-  const v2: SchemaConfig = {
-    current: 2,
-    steps: { 1: (p) => ({ ...p, version: 2, schemaNote: "v2" }) },
+describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 3)", () => {
+  const v3: SchemaConfig = {
+    current: 3,
+    steps: { 2: (p) => ({ ...p, version: 3, schemaNote: "v3" }) },
     validate: (p) => {
       const { version, schemaNote, ...rest } = p as Record<string, unknown>;
-      if (version !== 2 || schemaNote !== "v2") return { ok: false, problems: ["v2: brak pól"] };
-      const base = validateSaveV1({ ...rest, version: 1 });
-      return base.ok ? { ok: true, value: { ...base.value, version: 2, schemaNote } as unknown as SaveV1 } : base;
+      if (version !== 3 || schemaNote !== "v3") return { ok: false, problems: ["v3: brak pól"] };
+      const base = validateSaveV2({ ...rest, version: 2 });
+      return base.ok ? { ok: true, value: { ...base.value, version: 3, schemaNote } as unknown as SaveV2 } : base;
     },
   };
 
@@ -382,26 +383,26 @@ describe("E1.7 migracja jest bezpieczna", () => {
     const storage = new MemoryStorage();
     const raw = oldRaw();
     storage.setItem("miasto.save", raw);
-    const loaded = await new LocalStorageSaveStore({ storage, schema: v2 }).load();
+    const loaded = await new LocalStorageSaveStore({ storage, schema: v3 }).load();
     expect(loaded.kind).toBe("ok");
     if (loaded.kind !== "ok") return;
-    expect(loaded.migratedFrom).toBe(1);
-    expect(storage.getItem("miasto.save.premigration.v1.0")).toBe(raw);
+    expect(loaded.migratedFrom).toBe(2);
+    expect(storage.getItem("miasto.save.premigration.v2.0")).toBe(raw);
     expect(storage.getItem("miasto.save.bak")).toBe(raw);
-    const migrated = decodeSave(storage.getItem("miasto.save") ?? "", v2);
+    const migrated = decodeSave(storage.getItem("miasto.save") ?? "", v3);
     expect(migrated.kind).toBe("ok");
-    expect((migrated as { save: { version: number } }).save.version).toBe(2);
+    expect((migrated as { save: { version: number } }).save.version).toBe(3);
   });
 
   it("błąd migracji (wyjątek): oryginał nietknięty, kopia przed migracją istnieje", async () => {
     const storage = new MemoryStorage();
     const raw = oldRaw();
     storage.setItem("miasto.save", raw);
-    const broken: SchemaConfig = { ...v2, steps: { 1: () => { throw new Error("bum"); } } };
+    const broken: SchemaConfig = { ...v3, steps: { 2: () => { throw new Error("bum"); } } };
     const loaded = await new LocalStorageSaveStore({ storage, schema: broken }).load();
     expect(loaded.kind).toBe("migration_failed");
     expect(storage.getItem("miasto.save")).toBe(raw);
-    expect(storage.getItem("miasto.save.premigration.v1.0")).toBe(raw);
+    expect(storage.getItem("miasto.save.premigration.v2.0")).toBe(raw);
     expect(storage.getItem("miasto.save.bak")).toBeNull();
   });
 
@@ -409,7 +410,7 @@ describe("E1.7 migracja jest bezpieczna", () => {
     const storage = new MemoryStorage();
     const raw = oldRaw();
     storage.setItem("miasto.save", raw);
-    const bad: SchemaConfig = { ...v2, steps: { 1: (p) => ({ ...p, version: 2 }) } };
+    const bad: SchemaConfig = { ...v3, steps: { 2: (p) => ({ ...p, version: 3 }) } };
     const loaded = await new LocalStorageSaveStore({ storage, schema: bad }).load();
     expect(loaded.kind).toBe("migration_failed");
     expect(storage.getItem("miasto.save")).toBe(raw);
@@ -417,14 +418,14 @@ describe("E1.7 migracja jest bezpieczna", () => {
 
   it("brak kroku migracji i zła wersja kroku są błędami, a nie cichym pominięciem", () => {
     const payload = JSON.parse(JSON.stringify(save(progressed())));
-    expect(migratePayload(payload, 1, { ...v2, steps: {} }).ok).toBe(false);
-    expect(migratePayload(payload, 1, { ...v2, steps: { 1: (p) => ({ ...p, version: 5 }) } }).ok).toBe(false);
+    expect(migratePayload(payload, 2, { ...v3, steps: {} }).ok).toBe(false);
+    expect(migratePayload(payload, 2, { ...v3, steps: { 2: (p) => ({ ...p, version: 5 }) } }).ok).toBe(false);
   });
 
   it("migracja nie modyfikuje danych wejściowych", () => {
     const payload = JSON.parse(JSON.stringify(save(progressed()))) as Record<string, unknown>;
     const snapshot = JSON.stringify(payload);
-    const out = migratePayload(payload, 1, v2);
+    const out = migratePayload(payload, 2, v3);
     expect(out.ok).toBe(true);
     expect(JSON.stringify(payload)).toBe(snapshot);
   });
@@ -443,7 +444,7 @@ describe("E1.7 migracja jest bezpieczna", () => {
         mem.setItem(k, v);
       },
     };
-    const loaded = await new LocalStorageSaveStore({ storage: noRoom, schema: v2 }).load();
+    const loaded = await new LocalStorageSaveStore({ storage: noRoom, schema: v3 }).load();
     expect(loaded.kind).toBe("migration_failed");
     expect(mem.getItem("miasto.save")).toBe(raw);
   });
@@ -461,7 +462,7 @@ describe("E1.8 w zapisie nie ma Three.js ani stanu tymczasowego", () => {
   };
 
   it("zapis ma tylko dozwolone klucze i same dane proste", () => {
-    const s = run(progressed(), { type: "enter", view: "forest" }, { type: "pause.add", reason: "modal.a", owner: "ui" }, { type: "buy", item: "water" });
+    const s = run(progressed(), { type: "enter", view: "forest" }, { type: "pause.add", reason: "modal.a", owner: "ui" }, { type: "buy", item: "item.water" });
     expect(s.toast).not.toBeNull();
     const out = save(s);
     expect(Object.keys(out).sort()).toEqual([...SAVE_TOP_LEVEL_KEYS].sort());
@@ -506,7 +507,7 @@ describe("walidacja zapisu", () => {
   const valid = () => JSON.parse(JSON.stringify(save(progressed()))) as Record<string, any>;
 
   it("akceptuje poprawny zapis", () => {
-    expect(validateSaveV1(valid()).ok).toBe(true);
+    expect(validateSaveV2(valid()).ok).toBe(true);
   });
 
   it.each([
@@ -531,11 +532,11 @@ describe("walidacja zapisu", () => {
   ])("odrzuca: %s", (_name, mutate) => {
     const s = valid();
     mutate(s);
-    expect(validateSaveV1(s).ok).toBe(false);
+    expect(validateSaveV2(s).ok).toBe(false);
   });
 
   it("odrzuca nie-obiekty", () => {
-    for (const bad of [null, 5, "x", [], undefined]) expect(validateSaveV1(bad).ok).toBe(false);
+    for (const bad of [null, 5, "x", [], undefined]) expect(validateSaveV2(bad).ok).toBe(false);
   });
 });
 
@@ -546,7 +547,7 @@ describe("komenda forest.pose", () => {
     const moved = applyCommand(s, { type: "forest.pose", pose: { x: 3, z: 4, yaw: 0.5 } });
     expect(moved.state.forestPose).toEqual({ x: 3, z: 4, yaw: 0.5 });
     expect(applyCommand(moved.state, { type: "forest.pose", pose: { x: 3, z: 4, yaw: 0.5 } }).state).toBe(moved.state);
-    for (const pose of [{ x: 60, z: 0, yaw: 0 }, { x: NaN, z: 0, yaw: 0 }, { x: 0, z: 0, yaw: Infinity }]) {
+    for (const pose of [{ x: 150, z: 0, yaw: 0 }, { x: NaN, z: 0, yaw: 0 }, { x: 0, z: 0, yaw: Infinity }]) {
       expect(applyCommand(s, { type: "forest.pose", pose }).state).toBe(s);
     }
   });
@@ -574,7 +575,7 @@ function fakeTimers() {
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
 function recordingStore() {
-  const saved: SaveV1[] = [];
+  const saved: SaveV2[] = [];
   const store: SaveStore = {
     load: async () => ({ kind: "none" }),
     save: async (s): Promise<SaveOutcome> => {
@@ -619,7 +620,7 @@ describe("Autosaver", () => {
     expect(saved).toHaveLength(2);
     expect(saved[1].time.elapsed).toBe(2);
 
-    s = run(s, { type: "buy", item: "hotdog" });
+    s = run(s, { type: "buy", item: "item.hotdog" });
     saver.update(s);
     timers.runAll();
     await tick();
@@ -636,7 +637,7 @@ describe("Autosaver", () => {
     saver.flush();
     await tick();
     expect(saved).toHaveLength(0);
-    const changed = run(s, { type: "buy", item: "water" });
+    const changed = run(s, { type: "buy", item: "item.water" });
     saver.update(changed);
     saver.flush();
     await tick();

@@ -55,7 +55,7 @@ function Hand({ item }: { item: ItemId | null }) {
         <rect x="28" y="56" width="18" height="12" rx="6" fill="#f1c9a5" stroke="#d7a67f" strokeWidth="1.5" transform="rotate(-25 37 62)" />
       </svg>
       <div className="absolute left-1/2 top-[-18%] flex -translate-x-1/2 items-center justify-center">
-        {item === "phone" ? (
+        {item === "item.phone" ? (
           <PhoneIcon className="h-16 -rotate-6 drop-shadow-lg sm:h-24" />
         ) : item ? (
           <span className="text-5xl drop-shadow-lg sm:text-6xl" aria-hidden>

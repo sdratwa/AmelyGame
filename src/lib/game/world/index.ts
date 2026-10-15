@@ -11,3 +11,5 @@ export * from "./objects";
 export * from "./walk";
 export * from "./features";
 export * from "./pipeline";
+export * from "./anchors";
+export * from "./harvest";

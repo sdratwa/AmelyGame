@@ -18,3 +18,5 @@ export {
 } from "./forest";
 export { pickShowcaseSectors, showcaseMetrics, type ShowcaseMetrics, type ShowcaseSector } from "./showcase";
 export { summarizeForest, type ForestSummary, type KindStats } from "./summary";
+export { generateWorldV2, WORLD_GEN_V2 } from "./world";
+export { forestEntryPose, isValidForestPosition, safeForestPose } from "./pose";

@@ -1,5 +1,13 @@
 import { result, unchanged, type CommandResult } from "../core/result";
-import type { ForestPose, GameState, View } from "../core/state";
+import {
+  initialLedger,
+  initialQuests,
+  initialSlots,
+  initialTroll,
+  type ForestPose,
+  type GameState,
+  type View,
+} from "../core/state";
 import type { GameEvent } from "../core/events";
 import { CURRENT_GEN_VERSION, fingerprintWorld, generateWorld } from "../world";
 import { isForestPose } from "../core/pose";
@@ -22,12 +30,24 @@ export function startLoading(state: GameState, seed: number, saveId: string): Co
       phase: "loading",
       houses: base.houses,
       forestPose: null,
+      slots: initialSlots(),
+      ledger: initialLedger(),
+      selected: 0,
+      quests: initialQuests(),
+      chests: {},
+      troll: initialTroll(),
+      harvested: [],
+      bridge: { built: false, builtAt: null },
+      discovered: [],
+      badges: [],
+      dialog: null,
       world: {
         saveId,
         seed,
         genVersion: base.genVersion,
         fingerprint: fingerprintWorld(base),
         genHistory: [],
+        anchors: base.forest?.anchors ?? null,
       },
     },
     { type: "game.started", name },

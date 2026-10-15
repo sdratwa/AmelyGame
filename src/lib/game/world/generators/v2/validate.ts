@@ -1,5 +1,7 @@
 import { parseObjectId, sectorOf } from "../../bounds";
 import type { ValidateContext, Violation } from "../../pipeline";
+import { anchorsFromFeatures, distance2 } from "../../anchors";
+import { harvestOf } from "../../harvest";
 import { computeReachability, reachesNear } from "../../walk";
 import { ForestGeometry } from "./geometry";
 import { BRIDGE_FLAG } from "./plan";
@@ -109,8 +111,69 @@ export function validateForest(ctx: ValidateContext, profiles: ProfileTable): Vi
     }
   }
 
+  validateAnchors(ctx, geo, reach, add);
+
   for (const [code, n] of counts) {
     if (n > PER_CODE_LIMIT) out.push({ code, id: "summary", message: `łącznie ${n} naruszeń tego rodzaju` });
   }
   return out;
+}
+
+/** Zapas surowców na zachodnim brzegu względem potrzeb mostu (spec: co najmniej 3x). */
+export const SUPPLY_FACTOR = 3;
+export const BRIDGE_NEED = { wood: 5, stone: 10 } as const;
+export const MIN_CHEST_SPACING = 30;
+export const MIN_ANCHOR_FROM_START = 25;
+
+type Adder = (code: string, id: string, message: string) => void;
+
+/** Reguły W1b: kotwice questa (skrzynie, troll, odkrycie) i zapas surowców. */
+function validateAnchors(ctx: ValidateContext, geo: ForestGeometry, reach: ReturnType<typeof computeReachability>, add: Adder) {
+  let anchors;
+  try {
+    anchors = anchorsFromFeatures(ctx.features, ctx.start);
+  } catch (e) {
+    add("anchors_missing", "anchors", String(e instanceof Error ? e.message : e));
+    return;
+  }
+  const chestIds = Object.keys(anchors.chests);
+  if (chestIds.length !== 3 || new Set(chestIds).size !== 3) add("chest_count", "anchors", "oczekiwano trzech różnych skrzyń");
+  const points = [
+    ...Object.entries(anchors.chests).map(([id, p]) => ({ id, ...p })),
+    { id: anchors.troll.npc, x: anchors.troll.x, z: anchors.troll.z },
+  ];
+  for (const p of points) {
+    if (geo.waterGap(p.x, p.z) < 3) add("anchor_in_water", p.id, "kotwica w wodzie lub przy brzegu rzeki");
+    if (distance2(p, anchors.start) < MIN_ANCHOR_FROM_START) add("anchor_near_start", p.id, "kotwica zbyt blisko startu");
+    if (ctx.walk.checkPoint(p.x, p.z)) add("anchor_blocked", p.id, "kotwica zablokowana przez teren lub obiekt");
+    if (!reachesNear(reach, p.x, p.z, 2.5)) add("anchor_unreachable", p.id, "kotwica nieosiągalna pieszo od startu (bez przedmiotów)");
+    if (distance2(p, anchors.bridge) < 20) add("anchor_near_bridge", p.id, "kotwica zbyt blisko miejsca mostu");
+  }
+  const chests = Object.entries(anchors.chests);
+  for (let i = 0; i < chests.length; i++) {
+    for (let j = i + 1; j < chests.length; j++) {
+      if (distance2(chests[i][1], chests[j][1]) < MIN_CHEST_SPACING) {
+        add("chest_spacing", chests[i][0], `skrzynie ${chests[i][0]} i ${chests[j][0]} zbyt blisko siebie`);
+      }
+    }
+  }
+  const guarded = anchors.chests[anchors.troll.guards];
+  if (!guarded) add("troll_guard", anchors.troll.npc, "troll nie pilnuje żadnej istniejącej skrzyni");
+  else if (distance2(guarded, anchors.troll) > 6) add("troll_guard", anchors.troll.npc, "troll za daleko od pilnowanej skrzyni");
+
+  if (anchors.beyond.x <= anchors.bridge.east.x - 0.5) add("beyond_side", "poi.beyond_bridge", "punkt odkrycia nie leży za rzeką");
+  if (reachesNear(reach, anchors.beyond.x, anchors.beyond.z, anchors.beyond.radius)) {
+    add("beyond_reachable", "poi.beyond_bridge", "obszar za rzeką osiągalny bez mostu");
+  }
+
+  let wood = 0;
+  let stone = 0;
+  for (const o of ctx.objects) {
+    const h = harvestOf(o);
+    if (!h || !reachesNear(reach, o.x, o.z, 2.5)) continue;
+    if (h.kind === "tree") wood += h.amount;
+    else stone += h.amount;
+  }
+  if (wood < SUPPLY_FACTOR * BRIDGE_NEED.wood) add("wood_supply", "resources", `za mało drewna na zachodnim brzegu: ${wood}`);
+  if (stone < SUPPLY_FACTOR * BRIDGE_NEED.stone) add("stone_supply", "resources", `za mało kamienia na zachodnim brzegu: ${stone}`);
 }

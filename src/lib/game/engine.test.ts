@@ -1,3 +1,4 @@
+import { slotsFrom } from "./testkit";
 import { describe, expect, it } from "vitest";
 import { rngStream } from "./core/rng";
 import {
@@ -78,26 +79,26 @@ describe("spadek życia", () => {
 
 describe("śmierć i odrodzenie", () => {
   it("po utracie życia gracz ginie i odradza się z telefonem", () => {
-    let s = playing({ health: 1, slots: ["phone", "hotdog", null, null, null, null, null, null] });
+    let s = playing({ health: 1, slots: slotsFrom(["item.phone", "item.hotdog", null, null, null, null, null, null]) });
     s = reducer(s, { type: "tick", dt: 10 });
     expect(s.dead).toBe(true);
     expect(s.health).toBe(0);
     s = reducer(s, { type: "respawn" });
     expect(s.dead).toBe(false);
     expect(s.health).toBe(100);
-    expect(s.slots).toEqual(["phone", null, null, null, null, null, null, null]);
+    expect(s.slots).toEqual(slotsFrom(["item.phone", null, null, null, null, null, null, null]));
   });
 });
 
 describe("sklep i ekwipunek", () => {
   it("zakup dodaje przedmiot i odejmuje pieniądze", () => {
-    const s = reducer(playing(), { type: "buy", item: "hotdog" });
-    expect(s.slots[1]).toBe("hotdog");
+    const s = reducer(playing(), { type: "buy", item: "item.hotdog" });
+    expect(s.slots[1]).toEqual({ id: "item.hotdog", count: 1 });
     expect(s.wallet).toBe(1_000_000 - 12);
   });
   it("max 8 slotów", () => {
     let s = playing();
-    for (let i = 0; i < 10; i++) s = reducer(s, { type: "buy", item: "water" });
+    for (let i = 0; i < 10; i++) s = reducer(s, { type: "buy", item: "item.water" });
     expect(s.slots.filter(Boolean)).toHaveLength(8);
     expect(s.wallet).toBe(1_000_000 - 7 * 3);
     expect(s.toast?.tone).toBe("error");
@@ -105,14 +106,14 @@ describe("sklep i ekwipunek", () => {
   it("jedzenie leczy i znika, telefon zostaje", () => {
     let s = playing({ health: 50 });
     s = run(s, [
-      { type: "buy", item: "hotdog" },
+      { type: "buy", item: "item.hotdog" },
       { type: "select", slot: 1 },
       { type: "eat" },
     ]);
     expect(s.health).toBe(75);
     expect(s.slots[1]).toBeNull();
     s = run(s, [{ type: "select", slot: 0 }, { type: "eat" }]);
-    expect(s.slots[0]).toBe("phone");
+    expect(s.slots[0]).toEqual({ id: "item.phone", count: 1 });
   });
 });
 

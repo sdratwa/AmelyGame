@@ -9,12 +9,13 @@ export const SYSTEM_PAUSE_PREFIX = "system.";
  * z komend (`pause.add`). Zegar idzie tylko wtedy, gdy lista jest pusta.
  */
 export function pauseReasons(
-  state: Pick<GameState, "phase" | "dead" | "tutorialDone" | "pauses">,
+  state: Pick<GameState, "phase" | "dead" | "tutorialDone" | "pauses" | "dialog">,
 ): string[] {
   const reasons: string[] = [];
   if (state.phase !== "playing") reasons.push("system.not_playing");
   if (state.dead) reasons.push("system.dead");
   if (!state.tutorialDone) reasons.push("system.tutorial");
+  if (state.dialog) reasons.push("system.dialog");
   for (const entry of state.pauses) {
     if (!reasons.includes(entry.reason)) reasons.push(entry.reason);
   }
@@ -22,7 +23,7 @@ export function pauseReasons(
 }
 
 export function isTimePaused(
-  state: Pick<GameState, "phase" | "dead" | "tutorialDone" | "pauses">,
+  state: Pick<GameState, "phase" | "dead" | "tutorialDone" | "pauses" | "dialog">,
 ): boolean {
   return pauseReasons(state).length > 0;
 }

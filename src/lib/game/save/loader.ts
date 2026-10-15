@@ -1,7 +1,7 @@
 import type { House } from "../content/houses";
 import { fingerprintWorld, generateWorld, hasGenerator } from "../world";
 import type { LoadResult, SaveStore } from "./store";
-import type { SaveV1 } from "./schema";
+import type { SaveV2 } from "./schema";
 
 export type WorldCheck = { ok: true } | { ok: false; reason: string };
 
@@ -20,7 +20,7 @@ const IMMUTABLE_HOUSE_FIELDS = [
  * Sprawdza, czy zapisany świat zgadza się z tym, który generator odtwarza z (seed, wersja):
  * odcisk bazy oraz niezmienne pola domów. Dane gracza (owned, level) mogą się różnić.
  */
-export function verifyWorld(save: SaveV1): WorldCheck {
+export function verifyWorld(save: SaveV2): WorldCheck {
   const { seed, genVersion, fingerprint } = save.world;
   if (!hasGenerator(genVersion)) {
     return { ok: false, reason: `nieznana wersja generatora świata (${genVersion})` };
@@ -48,7 +48,7 @@ export type BootResult =
   | Exclude<LoadResult, { kind: "ok" }>
   | Extract<LoadResult, { kind: "ok" }>
   /** Zapis jest poprawny, ale nie pasuje do generatora – pozostaje nietknięty w magazynie. */
-  | { kind: "world_mismatch"; save: SaveV1; reason: string };
+  | { kind: "world_mismatch"; save: SaveV2; reason: string };
 
 /** Wczytanie gry przy starcie: magazyn (walidacja, kopie, migracje) + zgodność świata. */
 export async function loadGame(store: SaveStore): Promise<BootResult> {

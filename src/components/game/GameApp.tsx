@@ -237,7 +237,7 @@ export function GameApp() {
 
   const clock = getClock(state.elapsed);
   const sheltered = isSheltered(state);
-  const heldId = state.slots[state.selected];
+  const heldId = state.slots[state.selected]?.id ?? null;
 
   return (
     <div className="relative flex h-full flex-col">

@@ -1,7 +1,23 @@
 import type { ItemId } from "../content/items";
 import { respawn } from "../systems/death";
 import { buyHouse, upgradeHouse } from "../systems/houses";
-import { buyItem, eatSelected, selectSlot } from "../systems/inventory";
+import { buyItem, discardSlot, eatSelected, selectSlot } from "../systems/inventory";
+import {
+  answerRiddle,
+  buildBridge,
+  chooseTroll,
+  claimDeposit,
+  closeDialog,
+  discoverRegion,
+  harvest,
+  openChest,
+  takeChest,
+  talkToTroll,
+  type At,
+  type HarvestCommand,
+} from "../systems/forestQuest";
+import { acceptQuest, readBoard, settleQuests } from "../systems/quests";
+import type { ChestId, QuestId, RegionId } from "./ids";
 import {
   clearToast,
   enterView,
@@ -16,7 +32,7 @@ import type { GameEvent } from "./events";
 import { addPause, clearPauseOwner, pauseReasons, removePause } from "./pause";
 import { result, unchanged, type CommandResult } from "./result";
 import { hydrateState } from "../save/hydrate";
-import type { SaveV1 } from "../save/schema";
+import type { SaveV2 } from "../save/schema";
 import type { ForestPose, GameState, View } from "./state";
 
 /**
@@ -27,7 +43,7 @@ export type Command =
   | { type: "setName"; name: string }
   | { type: "startLoading"; seed: number; saveId: string }
   | { type: "worldReady" }
-  | { type: "game.load"; save: SaveV1 }
+  | { type: "game.load"; save: SaveV2 }
   | { type: "forest.pose"; pose: ForestPose }
   | { type: "tick"; dt: number }
   | { type: "enter"; view: View }
@@ -37,6 +53,19 @@ export type Command =
   | { type: "upgradeHouse"; id: string }
   | { type: "select"; slot: number }
   | { type: "eat" }
+  | { type: "discard"; slot: number }
+  | { type: "board.read"; id: QuestId }
+  | { type: "quest.accept"; id: QuestId }
+  | { type: "chest.open"; id: ChestId; at: At }
+  | { type: "chest.take"; id: ChestId; at: At }
+  | ({ type: "harvest" } & HarvestCommand)
+  | { type: "troll.talk"; at: At }
+  | { type: "troll.choose"; choice: "fight" | "talk" }
+  | { type: "troll.claim"; at: At }
+  | { type: "riddle.answer"; value: number }
+  | { type: "dialog.close" }
+  | { type: "bridge.build"; at: At }
+  | { type: "region.discover"; id: RegionId; at: At }
   | { type: "respawn" }
   | { type: "clearToast"; id: number }
   | { type: "pause.add"; reason: string; owner: string }
@@ -74,6 +103,32 @@ function execute(state: GameState, command: Command): CommandResult {
       return selectSlot(state, command.slot);
     case "eat":
       return eatSelected(state);
+    case "discard":
+      return discardSlot(state, command.slot);
+    case "board.read":
+      return readBoard(state, command.id);
+    case "quest.accept":
+      return acceptQuest(state, command.id);
+    case "chest.open":
+      return openChest(state, command.id, command.at);
+    case "chest.take":
+      return takeChest(state, command.id, command.at);
+    case "harvest":
+      return harvest(state, command);
+    case "troll.talk":
+      return talkToTroll(state, command.at);
+    case "troll.choose":
+      return chooseTroll(state, command.choice);
+    case "troll.claim":
+      return claimDeposit(state, command.at);
+    case "riddle.answer":
+      return answerRiddle(state, command.value);
+    case "dialog.close":
+      return closeDialog(state);
+    case "bridge.build":
+      return buildBridge(state, command.at);
+    case "region.discover":
+      return discoverRegion(state, command.id, command.at);
     case "respawn":
       return respawn(state);
     case "clearToast":
@@ -94,7 +149,11 @@ const sameList = (a: string[], b: string[]) =>
 
 /** Jedyne API zmian stanu gry: zwraca nowy stan i zdarzenia będące skutkiem komendy. */
 export function applyCommand(state: GameState, command: Command): CommandResult {
-  const outcome = execute(state, command);
+  let outcome = execute(state, command);
+  if (command.type !== "tick" && outcome.state !== state) {
+    const settled = settleQuests(outcome.state);
+    if (settled.events.length > 0) outcome = { state: settled.state, events: [...outcome.events, ...settled.events] };
+  }
   const before = pauseReasons(state);
   const after = pauseReasons(outcome.state);
   if (sameList(before, after)) return outcome;

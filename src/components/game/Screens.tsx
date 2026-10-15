@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, getClock } from "@/lib/game/engine";
-import type { SaveV1 } from "@/lib/game/save/schema";
+import type { SaveV2 } from "@/lib/game/save/schema";
 import { FrogLogo } from "./art";
 
 export function NameScreen({
@@ -102,7 +102,7 @@ export function ContinueScreen({
   onContinue,
   onNewGame,
 }: {
-  save: SaveV1;
+  save: SaveV2;
   notice?: string;
   onContinue: () => void;
   onNewGame: () => void;
