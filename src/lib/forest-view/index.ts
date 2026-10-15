@@ -12,3 +12,4 @@ export * from "./shading";
 export * from "./controller";
 export * from "./benchmark";
 export * from "./renderer";
+export * from "./grassLab";

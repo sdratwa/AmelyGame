@@ -128,9 +128,29 @@ export function gradeFragment(options: GradeShaderOptions): string {
   }`;
 }
 
-/** Fragment shadera: pochylenie normalnej ku górze (światło półsfery i słońca na kartach liści). */
+/**
+ * Fragment shadera: pochylenie normalnej ku górze (światło półsfery i słońca na kartach liści). Gdy mieszanie daje
+ * wektor (prawie) zerowy (normalna dokładnie przeciwna do "w górę", np. tylna strona poziomego źdźbła przy `uUp` = 0,5),
+ * zostaje czysty kierunek "w górę" zamiast `normalize(0)`, które jest niezdefiniowane i daje czarne piksele.
+ * `uFix` = 0 przywraca zachowanie sprzed poprawki (tylko do diagnostyki w `/dev/forest`).
+ */
 export const NORMAL_UP_FRAGMENT = /* glsl */ `
-  normal = normalize(mix(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), uUp));`;
+  {
+    vec3 grUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+    vec3 grMix = mix(normal, grUp, uUp);
+    normal = (uFix > 0.5 && dot(grMix, grMix) < 0.0004) ? grUp : normalize(grMix);
+  }`;
+
+/**
+ * Fragment shadera dla cienkich dwustronnych źdźbeł: jedna, stabilna normalna z wierzchołków niezależnie od tego,
+ * którą stroną trójkąta patrzy kamera. Three.js dla `DoubleSide` mnoży normalną przez `faceDirection`, a normalne
+ * wierzchołków trawy wskazują w górę, więc tylna strona dostawała -Y (brak słońca, najciemniejsza półkula).
+ * `uFix` = 0 przywraca odwracanie normalnej (tylko do diagnostyki).
+ */
+export const STABLE_NORMAL_FRAGMENT = /* glsl */ `
+  #if defined( DOUBLE_SIDED ) && !defined( FLAT_SHADED )
+    if ( uFix > 0.5 ) normal = normalize( vNormal );
+  #endif`;
 
 /** Zmiana koloru wierzchołka (faza wg pozycji instancji) wstrzykiwana do `begin_vertex`. */
 export const PHASE_VERTEX = /* glsl */ `

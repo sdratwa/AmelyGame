@@ -39,6 +39,12 @@ export const FOLIAGE: Readonly<Record<string, FoliageWind>> = {
   leaves_twistedtree: { height: 12, amplitude: 0.1, rootShade: 0 },
 };
 
+/**
+ * Materiały cienkich, dwustronnych źdźbeł, które mają być oświetlone tak samo z obu stron (normalna z wierzchołków bez
+ * odwracania na tylnej ściance). Liście i kwiaty mają spójne normalne z kierunkiem trójkątów, więc ich nie ruszamy.
+ */
+export const STABLE_NORMAL: ReadonlySet<string> = new Set(["grass"]);
+
 /** Rodzaj materiału dla korekty koloru: liście (pochylone normalne, zmienność wzoru) albo twarde powierzchnie. */
 export const MATERIAL_TYPES: Readonly<Record<string, "foliage" | "solid">> = {
   bark_normaltree: "solid",

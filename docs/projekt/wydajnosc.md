@@ -41,6 +41,10 @@ Seed 2030, sektor 5_5, okno 3 x 3: trójkąty modeli ok. 184-242 tys. (LOW), 329
 
 V2b nie zmienia liczby instancji, trójkątów, draw calls, zasięgów ani LOD. Dodaje pracę w shaderach liści (korekta koloru, pochylenie normalnych, szum zmienności) i gruntu (szum szczegółu z wygaszaniem po 14-46 m) oraz miększy filtr cieni (promień PCF 2,6 zamiast 1 w NATURAL i FAIRYTALE; rozdzielczość i zasięg mapy cieni bez zmian). Wpływ na FPS nie był mierzony; do zmierzenia przez autora testem `Uruchom test` w każdym presecie.
 
+### V2b: poprawka migotania trawy
+
+Bez zmian liczby instancji, trójkątów, draw calls, tekstur i pamięci. W fragment shaderze liści dochodzi zabezpieczenie przed wektorem zerowym (jedno `dot`, jedno porównanie z uniformem), w trawie jedno `normalize(vNormal)` zamiast odwracania normalnej. Wpływ na FPS nie był mierzony. Szczegóły: [prototyp-v2b.md](prototyp-v2b.md#migotanie-trawy-poprawka-po-testach-wizualnych).
+
 ## Pomiar
 
 Overlay (`?debug=1`): FPS średni i 1% low, czas klatki, draw calls, trójkąty, tekstury, geometrie (`renderer.info`), przełącznik profilu, suwak skali rozdzielczości, przycisk "Kopiuj raport" (JSON). Logika (generator) ma budżet czasu sprawdzany w testach Vitest. Agent nie uruchamia przeglądarki; wyniki FPS dostarcza autor.

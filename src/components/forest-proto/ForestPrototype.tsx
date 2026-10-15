@@ -3,10 +3,12 @@
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { QualityId } from "@/lib/assets";
+import { GrassLabPanel } from "./GrassLabPanel";
 import {
   BENCHMARK_SECONDS,
   DEFAULT_HOUR,
   DEFAULT_OVERRIDES,
+  DEFAULT_LAB,
   DEFAULT_PRESET,
   DEFAULT_SEED,
   ForestRenderer,
@@ -18,7 +20,9 @@ import {
   stressRadius,
   visualFromJson,
   visualToJson,
+  LAB_MODELS,
   type BenchmarkReport,
+  type LabOptions,
   type PanelStats,
   type PresetId,
   type ViewOverrides,
@@ -97,6 +101,11 @@ export function ForestPrototype() {
   const [visualNote, setVisualNote] = useState<string | null>(null);
   const [seedText, setSeedText] = useState(() => params.get("seed") ?? String(DEFAULT_SEED));
   const [bench, setBench] = useState<BenchmarkReport | null>(null);
+  const [lab, setLab] = useState<LabOptions | null>(() => {
+    if (params.get("lab") !== "grass") return null;
+    const model = params.get("labModel");
+    return { ...DEFAULT_LAB, model: (LAB_MODELS as readonly string[]).includes(model ?? "") ? (model as LabOptions["model"]) : DEFAULT_LAB.model };
+  });
   const [panelOpen, setPanelOpen] = useState(true);
   const [copied, setCopied] = useState(false);
   const stress = useMemo(() => {
@@ -104,7 +113,7 @@ export function ForestPrototype() {
     return params.get("stress") ? stressRadius(n) : null;
   }, [params]);
 
-  const initial = useRef({ quality, hour, overrides, params, stress, visual });
+  const initial = useRef({ quality, hour, overrides, params, stress, visual, lab });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -123,8 +132,10 @@ export function ForestPrototype() {
         radius: init.stress ?? 1,
       },
       onStats: setStats,
+      onLab: (o) => setLab(o),
     });
     rendererRef.current = renderer;
+    if (init.lab) renderer.setGrassLab(init.lab);
     return () => {
       renderer.dispose();
       rendererRef.current = null;
@@ -159,6 +170,23 @@ export function ForestPrototype() {
     setOverrides((o) => ({ ...o, ...patch }));
     rendererRef.current?.setOverrides(patch);
   }, []);
+
+  const changeLab = useCallback((patch: Partial<LabOptions>) => {
+    const current = rendererRef.current?.getGrassLab();
+    if (!current) return;
+    const next = { ...current, ...patch };
+    rendererRef.current?.setGrassLab(next);
+    setLab(rendererRef.current?.getGrassLab() ?? next);
+  }, []);
+  const toggleLab = useCallback(
+    (on: boolean) => {
+      const next = on ? (lab ?? DEFAULT_LAB) : null;
+      rendererRef.current?.setGrassLab(next);
+      setLab(next);
+      updateUrl({ lab: next ? "grass" : null, labModel: null });
+    },
+    [lab, updateUrl],
+  );
 
   const changePreset = useCallback(
     (id: PresetId) => {
@@ -269,7 +297,7 @@ export function ForestPrototype() {
     <div className="relative h-full w-full select-none overflow-hidden">
       <div ref={containerRef} className="absolute inset-0" />
 
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70 ring-1 ring-black/30" />
+      {!lab && <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70 ring-1 ring-black/30" />}
 
       {stats?.loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-slate-100">
@@ -286,7 +314,7 @@ export function ForestPrototype() {
         <div className="absolute inset-x-0 top-0 z-30 bg-red-900/90 px-4 py-2 text-sm text-red-50">Błąd: {stats.error}</div>
       )}
 
-      {stats && !stats.loading && !stats.locked && !stats.benchmark.running && (
+      {stats && !stats.loading && !stats.locked && !stats.benchmark.running && !lab && (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
           <div className="rounded-full bg-slate-900/80 px-4 py-2 text-xs text-slate-100 ring-1 ring-slate-600 backdrop-blur">
             Kliknij w scenę, aby chodzić: WASD, mysz, Shift (bieg), Esc (zwolnij mysz)
@@ -366,6 +394,19 @@ export function ForestPrototype() {
               ))}
             </div>
           </section>
+
+          {lab ? (
+            <GrassLabPanel lab={lab} overrides={overrides} onLab={changeLab} onOverrides={changeOverrides} onClose={() => toggleLab(false)} />
+          ) : (
+            <button
+              type="button"
+              onClick={() => toggleLab(true)}
+              className="w-full rounded bg-amber-500/20 px-2 py-1.5 text-[11px] font-medium text-amber-100 ring-1 ring-amber-400/50 hover:bg-amber-500/30"
+              title="Tymczasowy tryb diagnostyczny: kępa trawy z bliska, kamera orbitalna, przełączniki cieni, wiatru, shaderów i normalnych"
+            >
+              Laboratorium trawy (diagnostyka)
+            </button>
+          )}
 
           <section className="space-y-2 rounded-md bg-slate-900/60 p-2 ring-1 ring-slate-700">
             <div className="flex items-center justify-between">

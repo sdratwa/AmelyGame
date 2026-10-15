@@ -6,6 +6,7 @@ import { FirstPersonController, type MoveInput } from "./controller";
 import { FrameStats } from "./frameStats";
 import { buildGroundMesh, buildWaterMesh, createGroundBuilder, type GroundMeshData, type GroundStyle } from "./ground";
 import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PaletteStore, gradeFragment } from "./grading";
+import { GrassLab, sanitizeLab, type LabOptions } from "./grassLab";
 import { ForestInstancer, type InstancerStats } from "./instancer";
 import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOverrides } from "./profiles";
 import { buildForestWindow, type ForestWindow, type WindowOptions } from "./window";
@@ -40,6 +41,8 @@ export type PanelStats = {
   stress: boolean;
   preset: PresetId;
   presetModified: boolean;
+  /** Tymczasowy tryb diagnostyczny trawy jest włączony. */
+  lab: boolean;
 };
 
 export type BenchmarkReport = {
@@ -74,6 +77,8 @@ export type RendererOptions = {
   overrides?: Partial<ViewOverrides>;
   visual?: VisualConfig;
   onStats?: (stats: PanelStats) => void;
+  /** Zmiana ustawień laboratorium trawy wywołana z poziomu sceny (przeciąganie myszą, kółko, obrót automatyczny). */
+  onLab?: (options: LabOptions) => void;
 };
 
 const toLinear = (c: Rgb) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
@@ -179,6 +184,10 @@ export class ForestRenderer {
   private controller: FirstPersonController | null = null;
   private library: AssetLibrary | null = null;
   private instancer: ForestInstancer | null = null;
+  private lab: GrassLab | null = null;
+  private labOptions: LabOptions | null = null;
+  private labGen = 0;
+  private labDrag = false;
   private instancerStats: InstancerStats = { visible: 0, total: 0, activeModels: 0, triangles: 0, drawCalls: 0, perLevel: [0, 0], fallbackModels: 0 };
   private profile: ForestViewProfile;
   private quality: QualityId;
@@ -205,10 +214,12 @@ export class ForestRenderer {
   private lastEmit = 0;
   private cleanup: (() => void)[] = [];
   private readonly onStats?: (stats: PanelStats) => void;
+  private readonly onLab?: (options: LabOptions) => void;
 
   constructor(options: RendererOptions) {
     this.container = options.container;
     this.onStats = options.onStats;
+    this.onLab = options.onLab;
     this.windowOptions = options.window ?? {};
     this.quality = options.quality ?? DEFAULT_QUALITY;
     this.profile = VIEW_PROFILES[this.quality];
@@ -318,7 +329,24 @@ export class ForestRenderer {
     this.applyAtmosphere();
     this.applyProfileToRenderer();
     this.instancer?.setOverrides(this.overrides);
+    if (this.lab) this.lab.setOptions(this.lab.current, this.shadowsOn());
     this.dirtyInstances = true;
+  }
+
+  /** Włącza (opcje) albo wyłącza (`null`) tymczasowy tryb diagnostyczny trawy: kępa z bliska, kamera orbitalna, przełączniki. */
+  setGrassLab(options: LabOptions | null): void {
+    if (!options) {
+      this.labOptions = null;
+      this.unmountLab();
+      return;
+    }
+    this.labOptions = sanitizeLab(options);
+    if (this.lab) this.lab.setOptions(this.labOptions, this.shadowsOn());
+    else void this.mountLab();
+  }
+
+  getGrassLab(): LabOptions | null {
+    return this.labOptions;
   }
 
   getOverrides(): ViewOverrides {
@@ -353,6 +381,7 @@ export class ForestRenderer {
 
   dispose(): void {
     this.disposed = true;
+    this.unmountLab();
     cancelAnimationFrame(this.raf);
     for (const fn of this.cleanup) fn();
     this.cleanup = [];
@@ -524,6 +553,7 @@ export class ForestRenderer {
     if (oldInstancer) this.scene.remove(oldInstancer.group);
     this.instancer = instancer;
     this.library = library;
+    this.unmountLab();
     this.scene.add(instancer.group);
     instancer.setOverrides(this.overrides);
     this.dirtyInstances = true;
@@ -531,6 +561,63 @@ export class ForestRenderer {
     this.loading = null;
     oldInstancer?.dispose();
     void oldLibrary?.dispose();
+    if (this.labOptions) void this.mountLab();
+  }
+
+  private shadowsOn(): boolean {
+    return this.profile.shadows.enabled && this.overrides.shadows;
+  }
+
+  private async mountLab(): Promise<void> {
+    const built = this.built;
+    const instancer = this.instancer;
+    const library = this.library;
+    if (!this.labOptions || !built || !instancer || !library || this.lab) return;
+    const gen = ++this.labGen;
+    const start = built.window.start;
+    const center = new THREE.Vector3(start.x, built.window.forest.terrain.height(start.x, start.z), start.z);
+    const lab = new GrassLab(library, this.profile, instancer.uniforms, this.palette, center);
+    try {
+      await lab.init();
+    } catch (e) {
+      lab.dispose();
+      if (gen === this.labGen) this.fail(e);
+      return;
+    }
+    if (gen !== this.labGen || this.disposed || !this.labOptions || this.instancer !== instancer) {
+      lab.dispose();
+      return;
+    }
+    this.lab = lab;
+    this.scene.add(lab.group);
+    instancer.group.visible = false;
+    built.ground.visible = false;
+    if (built.water) built.water.visible = false;
+    lab.setOptions(this.labOptions, this.shadowsOn());
+    document.exitPointerLock?.();
+  }
+
+  private unmountLab(): void {
+    this.labGen++;
+    const lab = this.lab;
+    this.lab = null;
+    if (lab) {
+      this.scene.remove(lab.group);
+      lab.dispose();
+    }
+    if (this.instancer) this.instancer.group.visible = true;
+    if (this.built) {
+      this.built.ground.visible = true;
+      if (this.built.water) this.built.water.visible = true;
+    }
+    this.dirtyInstances = true;
+  }
+
+  private patchLab(patch: Partial<LabOptions>): void {
+    if (!this.lab || !this.labOptions) return;
+    this.labOptions = sanitizeLab({ ...this.lab.current, ...patch });
+    this.lab.setOptions(this.labOptions, this.shadowsOn());
+    this.onLab?.(this.labOptions);
   }
 
   private disposeView(): void {
@@ -646,7 +733,25 @@ export class ForestRenderer {
     const up = onKey(false);
     const blur = () => this.keys.clear();
     const click = () => {
-      if (!this.locked) canvas.requestPointerLock?.();
+      if (!this.locked && !this.lab) canvas.requestPointerLock?.();
+    };
+    const labDown = (e: PointerEvent) => {
+      if (!this.lab) return;
+      this.labDrag = true;
+      canvas.setPointerCapture?.(e.pointerId);
+    };
+    const labMove = (e: PointerEvent) => {
+      if (!this.lab || !this.labDrag) return;
+      const o = this.lab.current;
+      this.patchLab({ azimuth: o.azimuth - e.movementX * 0.35, elevation: o.elevation + e.movementY * 0.35 });
+    };
+    const labUp = () => {
+      this.labDrag = false;
+    };
+    const labWheel = (e: WheelEvent) => {
+      if (!this.lab) return;
+      e.preventDefault();
+      this.patchLab({ distance: this.lab.current.distance * Math.exp(e.deltaY * 0.0012) });
     };
     const lockChange = () => {
       this.locked = document.pointerLockElement === canvas;
@@ -659,6 +764,11 @@ export class ForestRenderer {
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
     canvas.addEventListener("click", click);
+    canvas.addEventListener("pointerdown", labDown);
+    canvas.addEventListener("pointermove", labMove);
+    canvas.addEventListener("pointerup", labUp);
+    canvas.addEventListener("pointercancel", labUp);
+    canvas.addEventListener("wheel", labWheel, { passive: false });
     document.addEventListener("pointerlockchange", lockChange);
     document.addEventListener("mousemove", move);
     this.cleanup.push(() => {
@@ -666,6 +776,11 @@ export class ForestRenderer {
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", blur);
       canvas.removeEventListener("click", click);
+      canvas.removeEventListener("pointerdown", labDown);
+      canvas.removeEventListener("pointermove", labMove);
+      canvas.removeEventListener("pointerup", labUp);
+      canvas.removeEventListener("pointercancel", labUp);
+      canvas.removeEventListener("wheel", labWheel);
       document.removeEventListener("pointerlockchange", lockChange);
       document.removeEventListener("mousemove", move);
     });
@@ -690,7 +805,15 @@ export class ForestRenderer {
     this.frameStats.push(dtMs);
 
     const ctl = this.controller;
-    if (ctl && this.built) {
+    const lab = this.lab;
+    if (lab && this.built) {
+      this.labOptions = lab.advance(dt);
+      const pose = lab.pose();
+      this.camera.position.copy(pose.position);
+      this.camera.lookAt(pose.target);
+      if (lab.current.occluder) lab.placeOccluder(new THREE.Vector3(...this.atmosphere.sunDir).normalize());
+      this.updateSun();
+    } else if (ctl && this.built) {
       if (this.bench) {
         const b = this.bench;
         b.t += dt;
@@ -729,6 +852,7 @@ export class ForestRenderer {
     }
     if (time - this.lastEmit > 250) {
       this.lastEmit = time;
+      if (lab && lab.current.motion === "orbit") this.onLab?.(lab.current);
       this.emit();
     }
   };
@@ -846,6 +970,7 @@ export class ForestRenderer {
       stress: (this.windowOptions.radius ?? 1) > 1,
       preset: this.visual.preset,
       presetModified: isModified(this.visual),
+      lab: this.lab !== null,
     });
   }
 }

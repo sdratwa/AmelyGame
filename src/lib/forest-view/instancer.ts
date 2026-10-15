@@ -6,22 +6,23 @@ import {
   type InstancedModel,
   type ModelAsset,
 } from "@/lib/assets";
-import { FOLIAGE, HUE_SWAP_TO_GREEN, MATERIAL_TYPES } from "./disposition";
-import { GRADE_UNIFORM_DECL, NOISE_GLSL, NORMAL_UP_FRAGMENT, PHASE_VERTEX, PaletteStore, gradeFragment } from "./grading";
+import { FOLIAGE, HUE_SWAP_TO_GREEN, MATERIAL_TYPES, STABLE_NORMAL } from "./disposition";
+import { GRADE_UNIFORM_DECL, NOISE_GLSL, NORMAL_UP_FRAGMENT, PHASE_VERTEX, PaletteStore, STABLE_NORMAL_FRAGMENT, gradeFragment } from "./grading";
 import { SHADOW_CASTERS, type ForestViewProfile, type ViewOverrides } from "./profiles";
 import { createBatchSelector, frustumFor } from "./selector";
 import type { ForestWindow, ModelBatch } from "./window";
 
-export type FoliageUniforms = { uTime: { value: number }; uWind: { value: number } };
+/** `uFix`: 1 = stabilne oświetlenie dwustronnych źdźbeł (domyślnie), 0 = zachowanie sprzed poprawki (diagnostyka). */
+export type FoliageUniforms = { uTime: { value: number }; uWind: { value: number }; uFix: { value: number } };
 
 export function createFoliageUniforms(): FoliageUniforms {
-  return { uTime: { value: 0 }, uWind: { value: 1 } };
+  return { uTime: { value: 0 }, uWind: { value: 1 }, uFix: { value: 1 } };
 }
 
 /**
  * Dopracowanie współdzielonych materiałów (bez kopiowania): korekta koloru sterowana uniformami (paleta V2b), wiatr
  * zależny od wysokości wierzchołka i pozycji instancji, przyciemnienie nasady roślin (wtopienie w grunt), pochylenie
- * normalnych liści ku górze oraz zamiana czerwonej tekstury starych drzew na zieloną (jak w V2a, gdy paleta nie ma tintu).
+ * normalnych liści ku górze, stabilna normalna cienkich źdźbeł trawy (bez odwracania na tylnej ściance) oraz zamiana czerwonej tekstury starych drzew na zieloną (jak w V2a, gdy paleta nie ma tintu).
  * Idempotentne. Bez `palette` (testy) korekta jest neutralna i daje kolory V2a.
  */
 export function tuneMaterial(material: THREE.Material, uniforms: FoliageUniforms, palette: PaletteStore = new PaletteStore()): void {
@@ -30,11 +31,13 @@ export function tuneMaterial(material: THREE.Material, uniforms: FoliageUniforms
   const foliage = FOLIAGE[id];
   const swap = HUE_SWAP_TO_GREEN.has(id);
   const leafy = MATERIAL_TYPES[id] === "foliage";
+  const stable = STABLE_NORMAL.has(id);
   const grade = palette.get(id);
   material.userData.forestTuned = true;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uniforms.uTime;
     shader.uniforms.uWind = uniforms.uWind;
+    shader.uniforms.uFix = uniforms.uFix;
     shader.uniforms.uGreenSat = palette.greenSat;
     Object.assign(shader.uniforms, grade);
     const wind = foliage
@@ -56,9 +59,9 @@ export function tuneMaterial(material: THREE.Material, uniforms: FoliageUniforms
       .replace("#include <begin_vertex>", `#include <begin_vertex>${PHASE_VERTEX}${wind}`);
     const root = foliage && foliage.rootShade > 0 ? `diffuseColor.rgb *= mix(0.55, 1.0, smoothstep(0.0, ${foliage.rootShade.toFixed(2)}, vForestH));` : "";
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\n${GRADE_UNIFORM_DECL}\nvarying float vForestH;\n${NOISE_GLSL}`)
+      .replace("#include <common>", `#include <common>\n${GRADE_UNIFORM_DECL}\nuniform float uFix;\nvarying float vForestH;\n${NOISE_GLSL}`)
       .replace("#include <map_fragment>", `#include <map_fragment>${gradeFragment({ swap, foliage: leafy })}\n${root}`)
-      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>${leafy ? NORMAL_UP_FRAGMENT : ""}`);
+      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>${stable ? STABLE_NORMAL_FRAGMENT : ""}${leafy ? NORMAL_UP_FRAGMENT : ""}`);
   };
   material.customProgramCacheKey = () => `forest2:${id}`;
   material.needsUpdate = true;

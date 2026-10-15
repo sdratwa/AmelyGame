@@ -73,7 +73,38 @@ Domyślny preset to NATURAL. Przełączanie presetów zmienia tylko uniformy sha
 
 ## Testy
 
-`src/lib/forest-view/forestVisual.test.ts` (21 testów): ORIGINAL neutralny względem V2a, presety jako niezależne kopie, walidacja suwaków i JSON, mgła, jasność pni i sosen o 7:00 / 12:00 / 19:00 (cień, kontrast, brak przepalenia, spód koron), łagodniejsze cienie, ograniczenia ekspozycji i światła, krzywa letnia (słońce nad horyzontem, ciągłość), uspokojenie zieleni, różnice gatunków, suwak nasycenia tylko dla zieleni, shadery (wstawki tylko tam, gdzie trzeba, uniformy aktualizowane w miejscu), grunt (determinizm, brak zielonego dywanu, kontrast ścieżki). Poza testami jednostkowymi składane shadery (Standard i Lambert, sosna / krzew / trawa / kora / skały / grunt) przeszły kompilator `glslangValidator` w harnessie ES 3.0 (jednorazowo, nie jest częścią CI).
+`src/lib/forest-view/forestVisual.test.ts` (29 testów, w tym migotanie trawy): ORIGINAL neutralny względem V2a, presety jako niezależne kopie, walidacja suwaków i JSON, mgła, jasność pni i sosen o 7:00 / 12:00 / 19:00 (cień, kontrast, brak przepalenia, spód koron), łagodniejsze cienie, ograniczenia ekspozycji i światła, krzywa letnia (słońce nad horyzontem, ciągłość), uspokojenie zieleni, różnice gatunków, suwak nasycenia tylko dla zieleni, shadery (wstawki tylko tam, gdzie trzeba, uniformy aktualizowane w miejscu), grunt (determinizm, brak zielonego dywanu, kontrast ścieżki). Poza testami jednostkowymi składane shadery (Standard i Lambert, sosna / krzew / trawa / kora / skały / grunt) przeszły kompilator `glslangValidator` w harnessie ES 3.0 (jednorazowo, nie jest częścią CI).
+
+## Migotanie trawy (poprawka po testach wizualnych)
+
+**Objaw.** W NATURAL i FAIRYTALE (nie w ORIGINAL) źdźbła konkretnych kęp przy minimalnej zmianie kąta patrzenia przełączały się z jasnozielonych na prawie czarne.
+
+**Modele i materiał.** Cztery modele: `grass.common_short`, `grass.common_tall`, `grass.wispy_short`, `grass.wispy_tall`, wszystkie z jednym materiałem `grass` (`DoubleSide`, bez normal mapy, bez alfa, bez kolorów wierzchołków w użyciu). Tylko te modele używają materiału `grass`. Trawa nie rzuca cieni (`SHADOW_CASTERS` = drzewa, skały, krzewy), więc cienie własne trawy nie wchodzą w grę.
+
+**Dane geometrii** (`grassGeometry.test.ts`, odczyt GLB): normalne wszystkich wierzchołków trawy wskazują w górę (+Y, min. Ny 0,94 w `wispy_short`, 1,00 w pozostałych), a kierunek trójkątów (CCW) rozmija się z tymi normalnymi w 81 z 155 trójkątów `common_short`, 238 z 326 `common_tall`, 38 z 494 `wispy_short` i 29 z 622 `wispy_tall`. Modele z materiałami `leaves` i `flowers` mają zgodny kierunek trójkątów (0 rozbieżności we wszystkich 15 modelach).
+
+**Przyczyna (dwa mechanizmy, drugi tylko w NATURAL i FAIRYTALE).**
+
+1. Three.js dla `DoubleSide` mnoży normalną przez `faceDirection` (`gl_FrontFacing`). Cienkie źdźbło ma więc normalną +Y z jednej strony trójkąta i -Y z drugiej: strona od słońca nie dostaje światła kierunkowego, a półkula daje jej najciemniejszy kolor gruntu. Którą stroną patrzy kamera, decyduje kierunek trójkąta, a ten jest dla trawy niespójny z normalnymi. Przy ruchu kamery piksele przełączają się między stronami.
+2. V2b dodał dla trawy pochylenie normalnej ku górze `mix(normal, up, uUp)` z `up = 0,5`. Dla normalnej -Y z tylnej ścianki daje to dokładnie wektor zerowy, a `normalize(0)` jest niezdefiniowane w GLSL (NaN, czarne piksele, niestabilne przy minimalnym ruchu). ORIGINAL ma `up = 0`, więc tylna strona jest tylko ciemna (-Y), bez zerowania, dlatego tam błąd był łagodniejszy.
+
+Wiatr (przesuwa tylko pozycję wierzchołków, normalne zostają) i cienie własne (trawa nie rzuca cieni) nie mogą tego wywołać; odbiór cienia drzew przez trawę zostaje. Z-fighting nie był badany geometrycznie (nakładanie współpłaszczyznowych trójkątów), ale wybierałby między dwiema powierzchniami tego samego koloru, więc nie tłumaczy przełączania jasnozielony - prawie czarny; do potwierdzenia w trybie diagnostycznym ("Strona trójkąta").
+
+**Naprawa** (`grading.ts`, `disposition.ts`, `instancer.ts`):
+
+- materiał `grass` (zbiór `STABLE_NORMAL`) dostaje jedną, stabilną normalną z wierzchołków niezależną od strony trójkąta (`normal = normalize(vNormal)` zamiast odwracania), więc źdźbło jest oświetlone tak samo z obu stron; strona przednia wygląda dokładnie jak przedtem;
+- `NORMAL_UP_FRAGMENT` (wszystkie liście) ma zabezpieczenie: gdy mieszanie daje wektor o długości < 0,02, normalną jest kierunek "w górę" zamiast `normalize(0)`;
+- `receiveShadow` zostaje włączone dla trawy (cienie drzew padają na trawę), cienie, wiatr i ekspozycja nie są zmieniane; liście i kwiaty (`leaves`, `flowers`) nie dostają stabilnej normalnej, tylko zabezpieczenie przed zerem (matematycznie nieosiągalne dla ich `up` = 0,3-0,45, więc wyglądają jak przedtem).
+
+Nie zmieniono generatora, rozmieszczenia, seedów, zapisów, manifestu, presetów ani paczki parametrów (`up` trawy nadal 0,5).
+
+**Tryb diagnostyczny (tymczasowy).** Przycisk "Laboratorium trawy (diagnostyka)" w panelu `/dev/forest` albo `?lab=grass[&labModel=grass.common_tall]`. Kępa (albo grupa kęp, albo wszystkie cztery modele w rzędzie) z bliska na płaskim podłożu, kamera orbitalna (przeciągnięcie myszą, kółko, suwaki z krokiem 0,5° i przyciski ±1°, tryb "Drżenie ±2,5°" oraz "Obrót"). Przełączniki: cieniowanie (materiał lasu / czysty `MeshStandardMaterial` bez modyfikacji shaderów / normalne po odwróceniu strony / strona trójkąta: zielony front, czerwony tył), poprawka normalnych (`uFix`: wył. odtwarza błąd), cienie globalnie, `receiveShadow` tylko dla trawy, wiatr, słupek rzucający cień na kępę. Do usunięcia po ocenie (pliki: `grassLab.ts`, `GrassLabPanel.tsx`, kilka linii w `renderer.ts` i `ForestPrototype.tsx`; uniform `uFix` można wtedy zostawić na stałe jako 1).
+
+**Jak to sprawdzić w przeglądarce** (kolejność z przełącznikami): (1) preset NATURAL, "Materiał lasu", poprawka wył., "Drżenie": migotanie widać; (2) "Strona trójkąta" wskazuje granice stron, przy których zmienia się światło; (3) cienia wył./wł. i wiatr wył./wł.: migotanie zostaje (cienie i wiatr nie są przyczyną); (4) "Bez modyfikacji shaderów": brak NaN, ale tylna strona nadal ciemna zależnie od strony (czysty Three.js ma ten sam mechanizm odwracania); (5) poprawka wł.: źdźbła mają stałą jasność z obu stron.
+
+**Wpływ na wydajność.** Liczba instancji, trójkątów, draw calls, tekstur i pamięci bez zmian. Dodatkowa praca GPU tylko w fragment shaderze liści: jedno porównanie z uniformem i jedno `dot` (zabezpieczenie), w trawie dodatkowo jedno `normalize(vNormal)`; bez gałęzi zależnych od danych (uniform, więc spójne w całej klatce). FPS nie był mierzony; tryb diagnostyczny po wyłączeniu nie wykonuje żadnej pracy w pętli renderowania poza jednym sprawdzeniem wskaźnika.
+
+**Testy.** `forestVisual.test.ts` (matematyka normalnej przed i po poprawce: NaN na tylnej stronie przy `up` = 0,5, identyczna normalna obu stron po poprawce dla wszystkich presetów, brak zmian dla `leaves`/`flowers`/drzew; zakres wstawek shaderów; współdzielony `uFix`) i `grassGeometry.test.ts` (dane modeli). Złożone shadery `grass` i `leaves` (Standard) przeszły ponownie `glslangValidator` (jednorazowo, poza CI).
 
 ## Ryzyka i do sprawdzenia przez autora
 

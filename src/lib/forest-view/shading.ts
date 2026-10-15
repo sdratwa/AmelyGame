@@ -1,5 +1,5 @@
 import { atmosphereAt, type Rgb } from "./atmosphere";
-import { HUE_SWAP_TO_GREEN } from "./disposition";
+import { HUE_SWAP_TO_GREEN, STABLE_NORMAL } from "./disposition";
 import { srgbToLinear, type MaterialGrade, type VisualConfig } from "./visual";
 
 /**
@@ -126,4 +126,38 @@ export function estimatePixel(id: string, hour: number, config: VisualConfig, op
   const mapped = acesFilmic(out, atmo.exposure * config.tuning.exposure);
   const srgb: Rgb = [linearToSrgb255(mapped[0]), linearToSrgb255(mapped[1]), linearToSrgb255(mapped[2])];
   return { srgb, luminance: 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2] };
+}
+
+export type Vec3 = readonly [number, number, number];
+export type NormalShading = {
+  /** Normalna z wierzchołków bez odwracania na tylnej ściance (materiały z `STABLE_NORMAL`). */
+  stableFace: boolean;
+  /** Zabezpieczenie przed `normalize` wektora zerowego po pochyleniu normalnej ku górze. */
+  guard: boolean;
+};
+
+/** Zachowanie sprzed poprawki (V2b przy pierwszym wydaniu). */
+export const LEGACY_SHADING: NormalShading = { stableFace: false, guard: false };
+
+/** Zachowanie shadera dla materiału `id`; `fix` = false odtwarza błąd (`uFix` = 0). */
+export function normalShadingOf(id: string, fix = true): NormalShading {
+  return { stableFace: fix && STABLE_NORMAL.has(id), guard: fix };
+}
+
+const normalize3 = (v: Vec3): [number, number, number] => {
+  const l = Math.hypot(v[0], v[1], v[2]);
+  return [v[0] / l, v[1] / l, v[2] / l];
+};
+
+/**
+ * Mirror normalnej liścia/źdźbła z fragment shadera (`normal_fragment_begin` Three.js dla `DoubleSide`,
+ * `STABLE_NORMAL_FRAGMENT`, `NORMAL_UP_FRAGMENT`) we współrzędnych świata ("w górę" = +Y). Bez poprawki normalna jest
+ * odwracana na tylnej ściance, a `normalize` wektora zerowego daje NaN (czarne piksele).
+ */
+export function foliageNormal(vertexNormal: Vec3, frontFacing: boolean, up: number, shading: NormalShading): [number, number, number] {
+  const n0 = normalize3(vertexNormal);
+  const sign = shading.stableFace || frontFacing ? 1 : -1;
+  const m: [number, number, number] = [n0[0] * sign * (1 - up), n0[1] * sign * (1 - up) + up, n0[2] * sign * (1 - up)];
+  if (shading.guard && m[0] * m[0] + m[1] * m[1] + m[2] * m[2] < 0.0004) return [0, 1, 0];
+  return normalize3(m);
 }

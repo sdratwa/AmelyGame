@@ -25,6 +25,11 @@ import {
   tintedFog,
   tuneMaterial,
   visualFromJson,
+  MATERIAL_TYPES,
+  STABLE_NORMAL,
+  LEGACY_SHADING,
+  foliageNormal,
+  normalShadingOf,
   visualToJson,
   REFERENCE_ALBEDO_SRGB,
   type VisualConfig,
@@ -266,9 +271,36 @@ describe("V2b: shadery korekty materiałów", () => {
 
   it("liście dostają pochylenie normalnych, a kora i skały nie", () => {
     expect(compile("leaves_pine").shader.fragmentShader).toContain("uUp");
-    expect(compile("leaves_pine").shader.fragmentShader).toContain("normal = normalize(mix(normal");
-    expect(compile("bark_normaltree").shader.fragmentShader).not.toContain("normal = normalize(mix(normal");
+    expect(compile("leaves_pine").shader.fragmentShader).toContain("vec3 grMix = mix(normal, grUp, uUp)");
+    expect(compile("bark_normaltree").shader.fragmentShader).not.toContain("grMix");
     expect(compile("rocks").shader.fragmentShader).toContain("uGain");
+  });
+
+  it("stabilna normalna dwustronna jest tylko w materiale trawy, a zabezpieczenie przed zerem we wszystkich liściach", () => {
+    const stable = "if ( uFix > 0.5 ) normal = normalize( vNormal );";
+    for (const id of Object.keys(MATERIAL_TYPES)) {
+      const fragment = compile(id).shader.fragmentShader;
+      expect(fragment.includes(stable), id).toBe(STABLE_NORMAL.has(id));
+      expect(fragment.includes("dot(grMix, grMix) < 0.0004"), id).toBe(MATERIAL_TYPES[id] === "foliage");
+    }
+    expect([...STABLE_NORMAL]).toEqual(["grass"]);
+  });
+
+  it("poprawka normalnych jest domyślnie włączona (uFix = 1) i współdzielona przez wszystkie materiały", () => {
+    const uniforms = createFoliageUniforms();
+    expect(uniforms.uFix.value).toBe(1);
+    const a = new THREE.MeshStandardMaterial({ name: "grass" });
+    a.userData.assetMaterialId = "grass";
+    const b = new THREE.MeshStandardMaterial({ name: "leaves" });
+    b.userData.assetMaterialId = "leaves";
+    tuneMaterial(a, uniforms);
+    tuneMaterial(b, uniforms);
+    const sa = fakeShader();
+    const sb = fakeShader();
+    (a.onBeforeCompile as (s: unknown, r: unknown) => void)(sa, {});
+    (b.onBeforeCompile as (s: unknown, r: unknown) => void)(sb, {});
+    expect(sa.uniforms.uFix).toBe(uniforms.uFix);
+    expect(sb.uniforms.uFix).toBe(uniforms.uFix);
   });
 
   it("zamiana kanałów (czerwone liście) jest tylko w materiale starych drzew", () => {
@@ -370,5 +402,76 @@ describe("V2b: grunt (ściółka, ścieżki, brak zielonego dywanu)", () => {
     const b = stats(natural);
     expect(b.pathN).toBeGreaterThan(200);
     expect(b.pathLum - b.meadowLum).toBeGreaterThan(25);
+  });
+});
+
+describe("migotanie trawy: normalna dwustronnego źdźbła", () => {
+  const UP = [0, 1, 0] as const;
+  const sun = [0.5, 0.7, 0.2] as const;
+  const dot = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+  it("przed poprawką: tylna strona źdźbła z up = 0,5 dawała wektor zerowy (NaN), czyli czarne piksele", () => {
+    const front = foliageNormal(UP, true, 0.5, LEGACY_SHADING);
+    const back = foliageNormal(UP, false, 0.5, LEGACY_SHADING);
+    expect(front).toEqual([0, 1, 0]);
+    expect(back.every((v) => Number.isNaN(v))).toBe(true);
+  });
+
+  it("przed poprawką: bez pochylenia (ORIGINAL, up = 0) tylna strona to normalna -Y, bez słońca", () => {
+    const back = foliageNormal(UP, false, 0, LEGACY_SHADING);
+    expect(back[1]).toBe(-1);
+    expect(Math.max(0, dot(back, sun))).toBe(0);
+  });
+
+  it("po poprawce: obie strony źdźbła mają tę samą, skończoną normalną dla każdego presetu i każdej wartości up", () => {
+    const grass = normalShadingOf("grass");
+    for (const preset of PRESET_IDS) {
+      const up = presetConfig(preset).look.palette.grass.up;
+      for (const n of [UP, [0.05, 0.998, 0.02], [0.2, 0.96, -0.2], [0.3, 0.9, 0.3]] as const) {
+        const a = foliageNormal(n, true, up, grass);
+        const b = foliageNormal(n, false, up, grass);
+        expect(a.every(Number.isFinite), `${preset} front`).toBe(true);
+        expect(b).toEqual(a);
+        expect(Math.hypot(...a)).toBeCloseTo(1, 6);
+        expect(a[1], "źdźbło świeci od góry").toBeGreaterThan(0.85);
+      }
+    }
+  });
+
+  it("po poprawce: oświetlenie słońcem nie zależy od strony, z której patrzy kamera (brak migotania)", () => {
+    const grass = normalShadingOf("grass");
+    for (let tilt = 0; tilt < 0.6; tilt += 0.05) {
+      const n = [Math.sin(tilt), Math.cos(tilt), 0] as const;
+      const a = dot(foliageNormal(n, true, 0.5, grass), sun);
+      const b = dot(foliageNormal(n, false, 0.5, grass), sun);
+      expect(a).toBeCloseTo(b, 10);
+      expect(a).toBeGreaterThan(0.6);
+    }
+  });
+
+  it("poprawka z wyłączonym uFix odtwarza stare zachowanie, a front źdźbła i inne materiały wyglądają jak przedtem", () => {
+    expect(normalShadingOf("grass", false)).toEqual(LEGACY_SHADING);
+    for (const id of ["leaves", "flowers", "leaves_pine"]) {
+      const s = normalShadingOf(id);
+      expect(s.stableFace, id).toBe(false);
+      const n = [0.3, 0.9, 0.3] as const;
+      for (const up of [0, 0.3, 0.4, 0.45]) {
+        expect(foliageNormal(n, true, up, s)).toEqual(foliageNormal(n, true, up, LEGACY_SHADING));
+        expect(foliageNormal(n, false, up, s)).toEqual(foliageNormal(n, false, up, LEGACY_SHADING));
+      }
+    }
+    for (const up of [0, 0.5]) {
+      expect(foliageNormal(UP, true, up, normalShadingOf("grass"))).toEqual(foliageNormal(UP, true, up, LEGACY_SHADING));
+    }
+  });
+
+  it("paleta: żaden liść ani kwiat nie ma up, przy którym tylna strona poziomego liścia staje się zerem", () => {
+    for (const preset of PRESET_IDS) {
+      for (const id of Object.keys(MATERIAL_TYPES).filter((m) => MATERIAL_TYPES[m] === "foliage" && m !== "grass")) {
+        const up = presetConfig(preset).look.palette[id].up;
+        expect(up, `${preset}/${id}`).not.toBeCloseTo(0.5, 2);
+      }
+    }
+    expect(presetConfig("NATURAL").look.palette.grass.up, "to właśnie ta wartość uruchamiała błąd").toBe(0.5);
   });
 });
