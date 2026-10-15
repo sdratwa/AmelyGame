@@ -65,6 +65,15 @@
 - Kod v2 bez funkcji zależnych od silnika JS (sin, cos, tan itd.) i z zaokrągleniem pozycji; znane wyjątki z W0 (`Math.cos` w `bump`/`pad`) opisane w [swiat-w1a.md](swiat-w1a.md).
 - Wartości gęstości profili dobrane liczbowo; ocena wizualna i strojenie w V2.
 
+## V2a (prototyp wizualny)
+
+- Prototyp jest stroną deweloperską `/dev/forest` (tylko development) i nie dotyka `ForestScene`, mechaniki, zapisów ani rejestru generatorów.
+- Las pochodzi wyłącznie z generatora W1a; renderowane okno 3 x 3 sektory wokół sektora wzorcowego, strefa chodzenia: sektor + 15 m.
+- Zmiana jakości nie zmienia świata: tylko zasięgi, rzadzenie drobnej roślinności, LOD, cienie, rozdzielczość i efekty.
+- Domyślnie zielone odmiany: czerwone liście starych drzew i krzewu przekolorowane na zielono w shaderze, fioletowe `plant.7*` ukryte w widoku; niebieskie, różowe i pomarańczowe odmiany zostają na strefy magiczne.
+- Instancing V1 rozszerzony zgodnie wstecz (`updateWith`); LOD z histerezą i rozrzutem progów zamiast billboardów.
+- Żadnego progu FPS nie uznajemy za osiągnięty bez pomiaru autora (instrukcja w [prototyp-v2a.md](prototyp-v2a.md)).
+
 ## Otwarte
 
 - Sprzęt referencyjny dla progów FPS (HIGH, LOW).

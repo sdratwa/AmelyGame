@@ -28,12 +28,23 @@ export function composePlacementMatrix(target: THREE.Matrix4, p: Placement): THR
   return target.compose(_pos, _quat, _scale);
 }
 
+/**
+ * Własny przydział instancji do poziomów LOD: zwraca indeks poziomu (jak w `asset.levels`) albo wartość ujemną,
+ * gdy instancja ma zostać ukryta (odcięcie odległościowe, frustum, rzadzenie). `previous` to poprzedni poziom
+ * instancji (-1 = ukryta), co pozwala stosować histerezę.
+ */
+export type LevelSelector = (index: number, x: number, y: number, z: number, previous: number) => number;
+
 export type InstancedModel = {
   group: THREE.Group;
-  /** Liczba instancji na poziom LOD (indeksy jak w `asset.levels`). */
+  /** Liczba instancji na poziom LOD (indeksy jak w `asset.levels`); ukryte nie są liczone. */
   counts: () => number[];
   /** Ponownie przydziela instancje do poziomów LOD wg odległości od kamery. Tanie, wołać co kilka klatek. */
   updateLods: (camera: THREE.Vector3) => void;
+  /** Przydział z własną regułą (odcinanie, histereza, rzadzenie); zastępuje `updateLods`. */
+  updateWith: (select: LevelSelector) => void;
+  /** Liczba wszystkich instancji modelu (widocznych i ukrytych). */
+  total: number;
   /** Zwalnia tylko bufory instancji; geometrie i materiały należą do biblioteki. */
   dispose: () => void;
 };
@@ -68,7 +79,7 @@ export function createInstancedModel(asset: ModelAsset, placements: readonly Pla
   );
 
   const counts = asset.levels.map(() => 0);
-  const buckets = new Uint8Array(placements.length);
+  const buckets = new Int8Array(placements.length);
   const m = new THREE.Matrix4();
 
   const assign = (levelOf: (i: number) => number) => {
@@ -76,11 +87,12 @@ export function createInstancedModel(asset: ModelAsset, placements: readonly Pla
     for (let i = 0; i < placements.length; i++) {
       const level = levelOf(i);
       buckets[i] = level;
-      counts[level]++;
+      if (level >= 0) counts[level]++;
     }
     const cursor = counts.map(() => 0);
     for (let i = 0; i < placements.length; i++) {
       const level = buckets[i];
+      if (level < 0) continue;
       m.fromArray(matrices, i * 16);
       for (const mesh of meshes[level]) mesh.setMatrixAt(cursor[level], m);
       cursor[level]++;
@@ -98,6 +110,14 @@ export function createInstancedModel(asset: ModelAsset, placements: readonly Pla
 
   assign(() => 0);
 
+  const updateWith = (select: LevelSelector) => {
+    const last = asset.levels.length - 1;
+    assign((i) => {
+      const level = select(i, matrices[i * 16 + 12], matrices[i * 16 + 13], matrices[i * 16 + 14], buckets[i]);
+      return level < 0 ? -1 : level > last ? last : level;
+    });
+  };
+
   const updateLods = (camera: THREE.Vector3) => {
     if (asset.levels.length < 2) return;
     assign((i) => {
@@ -112,6 +132,8 @@ export function createInstancedModel(asset: ModelAsset, placements: readonly Pla
     group,
     counts: () => [...counts],
     updateLods,
+    updateWith,
+    total: placements.length,
     dispose: () => {
       for (const parts of meshes) for (const mesh of parts) mesh.dispose();
     },

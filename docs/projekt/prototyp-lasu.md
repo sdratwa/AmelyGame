@@ -2,6 +2,8 @@
 
 Cel: jak najszybciej pokazać atrakcyjny wizualnie fragment docelowego lasu z prawdziwymi modelami i zmierzyć wydajność, zanim zbudujemy cały las 300 x 300 m. Prototyp wchodzi po V1 (zatwierdzone i przetworzone modele) i W1a (generator terenu, ścieżek i rozsiewu); nie czeka na skrzynie, trolla ani walidator.
 
+Stan realizacji (V2a): trasa `/dev/forest`, opis w [prototyp-v2a.md](prototyp-v2a.md).
+
 Dostęp: trasa tylko deweloperska (np. `/dev/las-sektor`, w produkcji 404), ziarno z URL. Sektor pochodzi z generatora (etapy 1-4 potoku).
 
 ## Zawartość

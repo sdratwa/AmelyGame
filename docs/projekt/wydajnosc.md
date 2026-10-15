@@ -33,6 +33,10 @@ Stan po V1: profile zasobów (`src/lib/assets/profiles.ts`) obejmują wariant te
 
 Cały świat 300 x 300 m: ok. 22 tys. obiektów (ok. 2 tys. z kolizją), wszystkie 100 sektorów w ok. 120-220 ms, pojedynczy sektor ok. 1 ms (mediana), pełny `buildForest` z walidacją ok. 0,5-0,7 s. Szacunek trójkątów LOD 0: ok. 16-17 mln w całym lesie, ok. 8,5 mln w najgęstszym oknie 7 x 7 - budżet z tego dokumentu wymaga w V2 LOD, ograniczenia odległości i profili jakości. Raport: `npm run world:report`.
 
+## Prototyp V2a (szacunek bez GPU)
+
+Seed 2030, sektor 5_5, okno 3 x 3: trójkąty modeli ok. 184-242 tys. (LOW), 329-411 tys. (MEDIUM), 487-602 tys. (HIGH) plus grunt 10-33 tys.; okno 7 x 7 (`?stress=49`): ok. 0,7-1,0 mln (LOW), 1,1-1,5 mln (MEDIUM), 1,6-1,9 mln (HIGH). Budżety z tej strony są przekroczone w HIGH i MEDIUM; decyzja po teście FPS autora. Szczegóły i instrukcja: [prototyp-v2a.md](prototyp-v2a.md); raport: `npm run forest:report`.
+
 ## Pomiar
 
 Overlay (`?debug=1`): FPS średni i 1% low, czas klatki, draw calls, trójkąty, tekstury, geometrie (`renderer.info`), przełącznik profilu, suwak skali rozdzielczości, przycisk "Kopiuj raport" (JSON). Logika (generator) ma budżet czasu sprawdzany w testach Vitest. Agent nie uruchamia przeglądarki; wyniki FPS dostarcza autor.
