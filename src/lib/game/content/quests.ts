@@ -55,7 +55,7 @@ export const QUESTS: readonly QuestDef[] = [
       {
         id: "blueprint",
         title: "Schemat",
-        hint: "Skrzynię ze schematem pilnuje troll. Spróbuj z nim porozmawiać i rozwiązać jego zagadkę.",
+        hint: "Skrzynię ze schematem pilnuje troll. Zanim się z nim zmierzysz, możesz już zbierać drewno piłą i kamień kilofem.",
         objectives: [
           { id: "blueprint", title: "Zdobądź schemat mostu", kind: "obtained", item: "item.bridge_blueprint", count: 1 },
           {

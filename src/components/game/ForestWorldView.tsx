@@ -1,13 +1,31 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ForestRenderer, type PanelStats } from "@/lib/forest-view";
 import type { QualityId } from "@/lib/assets";
-import type { ForestPose, ItemId } from "@/lib/game/engine";
+import { ITEMS, type Command, type ForestPose, type GameState, type ItemId } from "@/lib/game/engine";
+import { ForestInteractor, type InteractorSnapshot } from "@/lib/game/systems/interactor";
+import { forestObject } from "@/lib/game/world/lookup";
+import { harvestOf } from "@/lib/game/world/harvest";
 import { safeForestPose } from "@/lib/game/world/generators/v2";
 import { cn } from "@/lib/utils";
 import { ForestHand } from "./ForestHand";
+import { Minimap } from "./Minimap";
+import { useGamePause } from "./quest/useGamePause";
+
+const MINIMAP_KEY = "miasto.forest.minimap";
+const POLL_MS = 100;
+const NO_INTERACTION: InteractorSnapshot = { target: null, prompt: null, window: null, opening: null };
+
+function readMinimap(): boolean {
+  try {
+    return window.localStorage.getItem(MINIMAP_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
 
 const POSE_REPORT_MS = 2000;
 /** Esc zwalnia mysz (przeglądarka), a dopiero kolejne Esc opuszcza las; ta zwłoka chroni przed przypadkowym wyjściem. */
@@ -18,6 +36,9 @@ const QUALITIES: readonly QualityId[] = ["LOW", "MEDIUM", "HIGH"];
 
 export type ForestWorldViewProps = {
   seed: number;
+  /** Stan gry (źródło prawdy): skrzynie, ekwipunek, zebrane obiekty i zadania; widok niczego nie przechowuje sam. */
+  gameState: GameState;
+  dispatch: (command: Command) => void;
   /** Zapisana pozycja; niepoprawna (np. wewnątrz drzewa) zostanie zastąpiona punktem wejścia. */
   startPose: ForestPose | null;
   bridgeBuilt: boolean;
@@ -60,8 +81,17 @@ function DiagnosticsPanel({ stats }: { stats: PanelStats }) {
   );
 }
 
+function openedChestIds(state: GameState): string[] {
+  return Object.entries(state.chests)
+    .filter(([, c]) => c.opened)
+    .map(([id]) => id)
+    .sort();
+}
+
 export function ForestWorldView({
   seed,
+  gameState,
+  dispatch,
   startPose,
   bridgeBuilt,
   hour,
@@ -79,7 +109,13 @@ export function ForestWorldView({
   const [fatal, setFatal] = useState<string | null>(null);
   const [debug, setDebug] = useState(false);
   const [pose] = useState(() => safeForestPose(seed, startPose, bridgeBuilt));
-  const initial = useRef({ pose, quality, hour, bridgeBuilt });
+  const initial = useRef({ pose, quality, hour, bridgeBuilt, opened: openedChestIds(gameState), harvested: gameState.harvested });
+  const stateRef = useRef(gameState);
+  const dispatchRef = useRef(dispatch);
+  const [snap, setSnap] = useState<InteractorSnapshot>(NO_INTERACTION);
+  const [minimap, setMinimap] = useState(readMinimap);
+  const [interactor] = useState(() => new ForestInteractor());
+  const harvestedSeen = useRef(gameState.harvested.length);
   const ready = useRef(false);
   const callbacks = useRef({ onPose, onLeave });
   const guard = useRef({ suspended, suspendedEnd: 0, unlockedAt: 0, locked: false });
@@ -87,6 +123,18 @@ export function ForestWorldView({
   useEffect(() => {
     callbacks.current = { onPose, onLeave };
   }, [onPose, onLeave]);
+  useEffect(() => {
+    stateRef.current = gameState;
+    dispatchRef.current = dispatch;
+  }, [gameState, dispatch]);
+  useEffect(() => {
+    interactor.bind({
+      getState: () => stateRef.current,
+      dispatch: (c) => dispatchRef.current(c),
+      getPose: () => rendererRef.current?.getPose() ?? null,
+      now: () => performance.now(),
+    });
+  }, [interactor]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -98,7 +146,7 @@ export function ForestWorldView({
         container,
         quality: init.quality,
         hour: init.hour,
-        stream: { seed, pose: init.pose, bridgeBuilt: init.bridgeBuilt },
+        stream: { seed, pose: init.pose, bridgeBuilt: init.bridgeBuilt, opened: init.opened, harvested: init.harvested },
         onStats: setStats,
       });
     } catch (e) {
@@ -133,12 +181,78 @@ export function ForestWorldView({
   useEffect(() => rendererRef.current?.setHour(hour), [hour]);
   useEffect(() => rendererRef.current?.setQuality(quality), [quality]);
   useEffect(() => rendererRef.current?.setBridgeBuilt(bridgeBuilt), [bridgeBuilt]);
+
+  const windowOpen = snap.window !== null;
+  useGamePause(dispatch, "ui.panel", "ui.chest", windowOpen);
+  const frozen = suspended || windowOpen;
   useEffect(() => {
-    rendererRef.current?.setSuspended(suspended);
+    rendererRef.current?.setSuspended(frozen);
     const g = guard.current;
-    if (g.suspended && !suspended) g.suspendedEnd = performance.now();
-    g.suspended = suspended;
+    if (g.suspended && !frozen) g.suspendedEnd = performance.now();
+    g.suspended = frozen;
+  }, [frozen]);
+  useEffect(() => {
+    if (windowOpen) document.exitPointerLock?.();
+  }, [windowOpen]);
+
+  const openedKey = openedChestIds(gameState).join("|");
+  useEffect(() => {
+    rendererRef.current?.setChestStates(openedKey ? openedKey.split("|") : [], true);
+  }, [openedKey]);
+
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    renderer.setHarvested(gameState.harvested);
+    for (const id of gameState.harvested.slice(harvestedSeen.current)) {
+      const obj = forestObject(seed, id);
+      const info = obj ? harvestOf(obj) : null;
+      if (obj && info) renderer.burst(info.kind === "tree" ? "wood" : "stone", obj.x, obj.y + (info.kind === "tree" ? 1.4 : 0.5), obj.z);
+    }
+    harvestedSeen.current = gameState.harvested.length;
+  }, [gameState.harvested, seed]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!ready.current) return;
+      setSnap(interactor.poll());
+    }, POLL_MS);
+    return () => {
+      clearInterval(id);
+      interactor.reset();
+    };
+  }, [interactor]);
+
+  const suspendedRef = useRef(suspended);
+  useEffect(() => {
+    suspendedRef.current = suspended;
   }, [suspended]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "e" && e.key !== "E") return;
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || suspendedRef.current || !ready.current) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (!interactor.press()) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setSnap(interactor.snapshot);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [interactor]);
+
+  const getPose = useCallback(() => rendererRef.current?.getPose() ?? null, []);
+  const toggleMinimap = useCallback(() => {
+    setMinimap((on) => {
+      const next = !on;
+      try {
+        window.localStorage.setItem(MINIMAP_KEY, next ? "on" : "off");
+      } catch {
+        // zapamiętanie widoczności mapy nie jest krytyczne
+      }
+      return next;
+    });
+  }, []);
 
   const locked = stats?.locked ?? false;
   useEffect(() => {
@@ -154,6 +268,10 @@ export function ForestWorldView({
         setDebug((d) => !d);
         return;
       }
+      if ((e.key === "m" || e.key === "M") && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (!suspendedRef.current && ready.current && !(e.target instanceof HTMLInputElement)) toggleMinimap();
+        return;
+      }
       if (e.key !== "Escape") return;
       const g = guard.current;
       const now = performance.now();
@@ -163,7 +281,7 @@ export function ForestWorldView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [toggleMinimap]);
 
   const error = fatal ?? stats?.error ?? null;
   const percent = Math.round((stats?.loadProgress ?? 0) * 100);
@@ -172,7 +290,39 @@ export function ForestWorldView({
     <section data-testid="forest-view" className="relative h-full w-full overflow-hidden bg-slate-900">
       <div ref={containerRef} data-testid="forest-canvas" className="absolute inset-0" />
 
-      {!loading && !error && <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70" aria-hidden />}
+      {!loading && !error && (
+        <div
+          data-testid="crosshair"
+          data-active={snap.target !== null}
+          className={cn(
+            "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all",
+            snap.target ? "h-3 w-3 border-2 border-amber-200 bg-amber-200/30" : "h-1.5 w-1.5 bg-white/70",
+          )}
+          aria-hidden
+        />
+      )}
+
+      {!loading && !error && snap.prompt && !windowOpen && (
+        <div className="pointer-events-none absolute inset-x-0 top-[58%] z-10 flex justify-center px-4">
+          <p
+            data-testid="interaction-prompt"
+            data-tone={snap.prompt.tone}
+            className={cn(
+              "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold shadow-xl backdrop-blur",
+              snap.prompt.tone === "action" ? "bg-amber-100/90 text-amber-950" : "bg-slate-900/80 text-slate-100",
+            )}
+          >
+            {snap.prompt.key && <kbd className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-100">{snap.prompt.key}</kbd>}
+            {snap.prompt.text}
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && minimap && (
+        <div className="absolute bottom-3 right-3 z-10 hidden sm:block">
+          <Minimap seed={seed} state={gameState} getPose={getPose} size={190} />
+        </div>
+      )}
 
       <div className="absolute left-3 top-3 z-10 flex flex-col items-start gap-2 sm:left-5 sm:top-5">
         <Button data-testid="leave-forest" variant="secondary" onClick={onLeave}>
@@ -197,7 +347,7 @@ export function ForestWorldView({
         </div>
         {!loading && !error && (
           <p className="hidden max-w-[17rem] rounded-lg bg-black/45 px-3 py-2 text-xs text-white backdrop-blur sm:block">
-            WASD – chodzenie, Shift – bieg, mysz – rozglądanie. Esc zwalnia mysz, J – dziennik, F3 – diagnostyka.
+            WASD – chodzenie, Shift – bieg, mysz – rozglądanie, E – użyj / otwórz, I – ekwipunek, M – mapa, J – dziennik. Esc zwalnia mysz, F3 – diagnostyka.
           </p>
         )}
         {debug && stats && <DiagnosticsPanel stats={stats} />}
@@ -231,6 +381,47 @@ export function ForestWorldView({
       )}
 
       {!loading && !error && <ForestHand item={held} />}
+
+      <Dialog open={windowOpen} onOpenChange={(o) => !o && interactor.closeWindow()}>
+        <DialogContent className="max-w-sm border-amber-200/30 bg-slate-900 text-white" data-testid="chest-window">
+          <DialogHeader>
+            <DialogTitle>Baśniowa skrzynia</DialogTitle>
+            <DialogDescription className="text-slate-400">W środku coś leży.</DialogDescription>
+          </DialogHeader>
+          {snap.window && (
+            <div data-testid="chest-contents" className="flex items-center gap-3 rounded-xl border border-amber-200/30 bg-amber-100/5 p-3">
+              <span aria-hidden className="text-4xl">
+                {ITEMS[snap.window.item].emoji}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-base font-bold text-amber-100">{ITEMS[snap.window.item].name}</span>
+                <span className="block text-xs text-slate-300">{ITEMS[snap.window.item].description}</span>
+              </span>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              data-testid="chest-leave"
+              variant="secondary"
+              onClick={() => {
+                interactor.closeWindow();
+                setSnap(interactor.snapshot);
+              }}
+            >
+              Zostaw
+            </Button>
+            <Button
+              data-testid="chest-take"
+              onClick={() => {
+                interactor.takeFromWindow();
+                setSnap(interactor.snapshot);
+              }}
+            >
+              Zabierz <kbd className="ml-1 rounded bg-black/25 px-1 text-[10px]">E</kbd>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

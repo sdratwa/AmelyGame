@@ -32,6 +32,7 @@ import {
   SaveProblemScreen,
   type SaveProblem,
 } from "./Screens";
+import { InventoryPanel } from "./InventoryPanel";
 import { JournalPanel, type SaveStatus } from "./quest/JournalPanel";
 import { QuestBoardDialog } from "./quest/QuestBoardDialog";
 import { QuestTracker } from "./quest/QuestTracker";
@@ -108,7 +109,7 @@ export function GameApp() {
   const [saving, setSaving] = useState(false);
   const [forestLoading, setForestLoading] = useState(false);
   const [forestQuality, setForestQuality] = useState<QualityId>(readQuality);
-  const [panel, setPanel] = useState<"board" | "journal" | null>(null);
+  const [panel, setPanel] = useState<"board" | "journal" | "inventory" | null>(null);
 
   const getStore = useCallback((): SaveStore => {
     storeRef.current ??= new LocalStorageSaveStore();
@@ -222,6 +223,8 @@ export function GameApp() {
   const journalOpen = panel === "journal" && playing && !state.dialog;
   useGamePause(dispatch, "ui.panel", "ui.board", boardOpen);
   useGamePause(dispatch, "ui.panel", "ui.journal", journalOpen);
+  const inventoryOpen = panel === "inventory" && playing && !state.dialog;
+  useGamePause(dispatch, "ui.panel", "ui.inventory", inventoryOpen);
   useGamePause(dispatch, "ui.forest", "ui.forest_loading", state.view === "forest" && forestLoading);
 
   const changeForestQuality = useCallback((quality: QualityId) => {
@@ -238,13 +241,14 @@ export function GameApp() {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key !== "j" && e.key !== "J") return;
+      const which = e.key === "j" || e.key === "J" ? "journal" : e.key === "i" || e.key === "I" ? "inventory" : null;
+      if (!which) return;
       setPanel((cur) => {
-        if (cur === "journal") return null;
+        if (cur === which) return null;
         if (cur !== null) return cur;
         if (document.querySelector('[data-slot="dialog-content"]')) return cur;
         document.exitPointerLock?.();
-        return "journal";
+        return which;
       });
     };
     window.addEventListener("keydown", onKey);
@@ -361,6 +365,8 @@ export function GameApp() {
         {state.view === "forest" && state.world && (
           <ForestWorldView
             seed={state.world.seed}
+            gameState={state}
+            dispatch={dispatch}
             startPose={state.forestPose}
             bridgeBuilt={state.bridge.built}
             hour={clock.hour + clock.minute / 60}
@@ -407,6 +413,7 @@ export function GameApp() {
         onSave={saveNow}
         onClose={closePanel}
       />
+      <InventoryPanel open={inventoryOpen} state={state} onClose={closePanel} />
       <InventoryBar state={state} onSelect={select} onEat={eat} />
       {state.dead && <DeathOverlay onRespawn={() => dispatch({ type: "respawn" })} />}
       {saveError && (

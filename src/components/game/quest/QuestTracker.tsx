@@ -20,6 +20,12 @@ export function QuestTracker({ quest }: { quest: QuestView | null }) {
       <div className="mt-2">
         <ObjectiveList objectives={quest.objectives} testId="tracker-objectives" compact />
       </div>
+      {quest.parallel.length > 0 && (
+        <div className="mt-2 border-t border-white/10 pt-2">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Surowce na most</p>
+          <ObjectiveList objectives={quest.parallel} testId="tracker-parallel" compact />
+        </div>
+      )}
       {quest.hint && (
         <p data-testid="tracker-hint" className="mt-2 border-t border-white/10 pt-2 text-[11px] leading-snug text-slate-300">
           {quest.hint}

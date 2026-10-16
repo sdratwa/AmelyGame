@@ -127,7 +127,7 @@ export function InventoryBar({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
+      if (e.defaultPrevented || e.target instanceof HTMLInputElement) return;
       if (e.key >= "1" && e.key <= "8") onSelect(Number(e.key) - 1);
       if ((e.key === "e" || e.key === "E") && canEat) onEat();
     };

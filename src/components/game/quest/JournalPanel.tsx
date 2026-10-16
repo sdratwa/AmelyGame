@@ -29,6 +29,7 @@ function ActiveQuest({ quest }: { quest: QuestView }) {
         {quest.progress.stages.map((stage, i) => {
           const current = i === quest.progress.currentStage;
           const visible = stage.objectives.filter((o) => o.visible);
+          const parallel = visible.filter((o) => quest.parallel.some((p) => p.id === o.id));
           return (
             <li
               key={stage.id}
@@ -43,6 +44,11 @@ function ActiveQuest({ quest }: { quest: QuestView }) {
               {(current || stage.done) && (
                 <div className="mt-1">
                   <ObjectiveList objectives={visible} testId={current ? "journal-current-objectives" : undefined} />
+                </div>
+              )}
+              {!current && !stage.done && parallel.length > 0 && (
+                <div className="mt-1">
+                  <ObjectiveList objectives={parallel} testId={`journal-parallel-${stage.id}`} />
                 </div>
               )}
               {current && quest.hint && <p className="mt-1.5 text-xs italic text-slate-400">{quest.hint}</p>}

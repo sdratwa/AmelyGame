@@ -11,6 +11,11 @@ export type QuestView = {
   stage: StageDef | null;
   /** Widoczne cele bieżącego etapu. */
   objectives: ObjectiveProgress[];
+  /**
+   * Cele z późniejszych etapów, które da się realizować już teraz niezależnie od kolejności (zbieranie surowców):
+   * dzięki nim gracz widzi postęp drewna i kamienia, nawet gdy bieżący etap dotyczy czegoś innego.
+   */
+  parallel: ObjectiveProgress[];
   hint: string | null;
   read: boolean;
 };
@@ -21,12 +26,23 @@ function toView(state: GameState, def: QuestDef): QuestView | null {
   const active = progress.status === "active";
   const stage = active ? (def.stages[progress.currentStage] ?? null) : null;
   const stageProgress = active ? progress.stages[progress.currentStage] : undefined;
+  const parallel: ObjectiveProgress[] = [];
+  if (active) {
+    def.stages.forEach((st, i) => {
+      if (i <= progress.currentStage) return;
+      st.objectives.forEach((o, k) => {
+        const p = progress.stages[i]?.objectives[k];
+        if (o.kind === "holding" && p?.visible) parallel.push(p);
+      });
+    });
+  }
   return {
     def,
     status: progress.status,
     progress,
     stage,
     objectives: stageProgress ? stageProgress.objectives.filter((o) => o.visible) : [],
+    parallel,
     hint: stage?.hint ?? null,
     read: state.quests.read.includes(def.id),
   };
