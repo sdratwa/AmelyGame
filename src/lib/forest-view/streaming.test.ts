@@ -141,6 +141,40 @@ describe("F1: streamowane sektory lasu", () => {
     }
   }, 120_000);
 
+  it("setRemoved usuwa zebrane obiekty z instancji (także w nowo dociągniętych sektorach) i je przywraca", () => {
+    const { forest, stream, applied } = setup("LOW", 2);
+    const p = at(forest, 4, 4);
+    stream.prepareInitial(p.x, p.z);
+    pump(stream, p.x, p.z, () => stream.stats().resident === 25 && !stream.stats().building);
+    stream.update(p.x, p.z, 0, 1e12);
+    const idsOf = () => new Set(applied[applied.length - 1].flatMap((b) => b.ids));
+    const before = idsOf();
+    const victims = forest.sector(4, 4).objects.filter((o) => before.has(o.id)).slice(0, 3).map((o) => o.id);
+    expect(victims).toHaveLength(3);
+
+    stream.setRemoved(new Set(victims));
+    stream.update(p.x, p.z, 0, performance.now());
+    const after = idsOf();
+    for (const id of victims) expect(after.has(id)).toBe(false);
+    expect(after.size).toBe(before.size - 3);
+
+    const far = forest.sector(8, 4).objects.find((o) => !before.has(o.id) && batchesFor([o]).instanceCount === 1);
+    expect(far).toBeDefined();
+    stream.setRemoved(new Set([...victims, far!.id]));
+    const e = at(forest, 6, 4);
+    for (let ix = 4; ix <= 8; ix++) {
+      const q = at(forest, ix, 4);
+      pump(stream, q.x, q.z, () => stream.stats().queued === 0 && !stream.stats().building);
+    }
+    stream.update(e.x, e.z, 0, 1e12);
+    expect(idsOf().has(far!.id)).toBe(false);
+
+    stream.setRemoved(new Set());
+    stream.update(e.x, e.z, 0, 1e12);
+    expect(idsOf().has(far!.id)).toBe(true);
+    stream.dispose();
+  }, 120_000);
+
   it("wszystkie modele lasu są wykryte do wczytania przed streamingiem (bez ukrytych odmian)", () => {
     const ids = forestModelIds(forestOf(SEED));
     expect(ids.length).toBeGreaterThan(10);

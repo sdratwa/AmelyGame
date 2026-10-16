@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
-import { forestOf, forestWalkOf } from "@/lib/game/world/lookup";
+import { loadChestAsset } from "@/lib/assets/props";
+import { forestChestsOf, forestOf, forestWalkOf, syncHarvestedColliders } from "@/lib/game/world/lookup";
 import { BRIDGE_FLAG } from "@/lib/game/world/generators/v2";
 import { BENCHMARK_SECONDS, benchmarkPose, buildBenchmarkRoute, type BenchmarkRoute } from "./benchmark";
 import { atmosphereAt, DEFAULT_HOUR, type AtmosphereState, type Rgb } from "./atmosphere";
@@ -11,6 +12,7 @@ import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PaletteStore, g
 import { GrassLab, sanitizeLab, type LabOptions } from "./grassLab";
 import { ForestInstancer, type InstancerStats } from "./instancer";
 import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOverrides } from "./profiles";
+import { ChestLayer, FxBurst, type BurstKind } from "./props";
 import { STREAM_RADIUS } from "./stream";
 import { forestModelIds, StreamedForest, type StreamStats } from "./streaming";
 import { buildForestWindow, type ForestWindow, type WindowOptions } from "./window";
@@ -84,6 +86,10 @@ export type StreamOptions = {
   pose: { x: number; z: number; yaw: number };
   /** Czy most jest zbudowany (otwiera przejście przez rzekę). */
   bridgeBuilt?: boolean;
+  /** Identyfikatory skrzyń otwartych w zapisie (pokrywa od razu otwarta, bez animacji). */
+  opened?: readonly string[];
+  /** Identyfikatory zebranych drzew i skał (znikają z lasu i z kolizji). */
+  harvested?: readonly string[];
 };
 
 export type RendererOptions = {
@@ -206,6 +212,10 @@ export class ForestRenderer {
   private built: Built | null = null;
   private stream: StreamedForest | null = null;
   private streamOptions: StreamOptions | null = null;
+  private chestLayer: ChestLayer | null = null;
+  private fx: FxBurst | null = null;
+  private openedChests = new Set<string>();
+  private harvestedIds = new Set<string>();
   private readonly worldFlags = new Set<string>();
   private suspended = false;
   private loadProgress = 0;
@@ -250,6 +260,8 @@ export class ForestRenderer {
     this.onLab = options.onLab;
     this.windowOptions = options.window ?? {};
     this.streamOptions = options.stream ?? null;
+    this.openedChests = new Set(options.stream?.opened ?? []);
+    this.harvestedIds = new Set(options.stream?.harvested ?? []);
     if (options.stream?.bridgeBuilt) this.worldFlags.add(BRIDGE_FLAG);
     this.quality = options.quality ?? DEFAULT_QUALITY;
     this.profile = VIEW_PROFILES[this.quality];
@@ -339,6 +351,36 @@ export class ForestRenderer {
   setBridgeBuilt(built: boolean): void {
     if (built) this.worldFlags.add(BRIDGE_FLAG);
     else this.worldFlags.delete(BRIDGE_FLAG);
+  }
+
+  /**
+   * Stan otwarcia skrzyń wg gry (źródło prawdy to stan gry, renderer tylko go pokazuje). Skrzynia, która właśnie się
+   * otworzyła, animuje pokrywę i sypie iskry; przy `animate = false` (wczytanie zapisu) pokrywa jest od razu otwarta.
+   */
+  setChestStates(opened: Iterable<string>, animate = true): void {
+    this.openedChests = new Set(opened);
+    const layer = this.chestLayer;
+    const seed = this.streamOptions?.seed;
+    if (!layer || seed === undefined) return;
+    const started = layer.setOpened((id) => this.openedChests.has(id), animate);
+    for (const id of started) {
+      const c = forestChestsOf(seed).find((p) => p.id === id);
+      if (c) this.fx?.spawn("sparkle", c.x, c.y + 0.7, c.z);
+    }
+  }
+
+  /** Zebrane drzewa i skały: znikają z instancji i z kolizji (świat chodzenia jest wspólny dla całego lasu). */
+  setHarvested(ids: Iterable<string>): void {
+    this.harvestedIds = new Set(ids);
+    const seed = this.streamOptions?.seed;
+    if (seed === undefined) return;
+    syncHarvestedColliders(seed, [...this.harvestedIds]);
+    this.stream?.setRemoved(this.harvestedIds);
+  }
+
+  /** Krótki efekt cząstek (drzazgi, odłamki) w danym punkcie świata. */
+  burst(kind: BurstKind, x: number, y: number, z: number): void {
+    this.fx?.spawn(kind, x, y, z);
   }
 
   /** Zawieszenie sterowania (np. otwarty dziennik): zeruje klawisze i zatrzymuje ruch gracza. */
@@ -522,6 +564,15 @@ export class ForestRenderer {
   }
 
   private disposeStream(): void {
+    if (this.chestLayer) {
+      this.scene.remove(this.chestLayer.group);
+      this.chestLayer.dispose();
+      this.chestLayer = null;
+    }
+    if (this.fx) {
+      this.fx.dispose();
+      this.fx = null;
+    }
     if (this.stream) {
       this.scene.remove(this.stream.group);
       this.stream.dispose();
@@ -561,6 +612,19 @@ export class ForestRenderer {
         await library.dispose();
         return;
       }
+      let chestAsset: Awaited<ReturnType<typeof loadChestAsset>> | null = null;
+      try {
+        chestAsset = await loadChestAsset();
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : String(e);
+        console.error(e);
+      }
+      if (gen !== this.generation || this.disposed) {
+        chestAsset?.dispose();
+        instancer.dispose();
+        await library.dispose();
+        return;
+      }
       const stream = new StreamedForest({
         forest,
         profile: this.profile,
@@ -574,6 +638,18 @@ export class ForestRenderer {
         tuneGround: (material) => tuneGroundMaterial(material, this.palette),
       });
       stream.prepareInitial(opts.pose.x, opts.pose.z);
+      stream.setRemoved(this.harvestedIds);
+      syncHarvestedColliders(opts.seed, [...this.harvestedIds]);
+      if (chestAsset) {
+        const shadows = this.shadowsOn();
+        const layer = new ChestLayer(chestAsset, forestChestsOf(opts.seed), { castShadow: shadows, receiveShadow: shadows });
+        layer.setOpened((id) => this.openedChests.has(id), false);
+        this.chestLayer = layer;
+        this.scene.add(layer.group);
+      }
+      const fx = new FxBurst();
+      this.fx = fx;
+      this.scene.add(fx.points);
       this.library = library;
       this.instancer = instancer;
       this.stream = stream;
@@ -787,6 +863,7 @@ export class ForestRenderer {
     const shadows = p.shadows.enabled && this.overrides.shadows;
     this.renderer.shadowMap.enabled = shadows;
     this.sun.castShadow = shadows;
+    this.chestLayer?.setShadows(shadows, shadows);
     const sc = this.sun.shadow.camera;
     const d = p.shadows.distance;
     sc.left = -d;
@@ -964,6 +1041,8 @@ export class ForestRenderer {
       this.camera.rotation.set(s.pitch, s.yaw, 0);
       this.updateInstances(time);
       this.updateSun();
+      this.chestLayer?.update(dt, s);
+      this.fx?.update(dt);
     }
     this.skyUniforms.uSunDir.value.set(...this.atmosphere.sunDir);
     this.sky.position.copy(this.camera.position);

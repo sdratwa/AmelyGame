@@ -122,6 +122,7 @@ export class StreamedForest {
   private applied = 0;
   private disposed = false;
   private readonly initialKeys = new Set<string>();
+  private removed: ReadonlySet<string> = new Set();
 
   constructor(private readonly o: StreamedForestOptions) {
     this.group.name = "forest-stream";
@@ -186,6 +187,29 @@ export class StreamedForest {
     const first = !this.initialApplied;
     this.initialApplied = true;
     return this.applyInstances(now, first);
+  }
+
+  /**
+   * Ustawia obiekty usunięte ze świata (zebrane drzewa i skały). Przebudowuje tylko partie sektorów, które zawierają
+   * zmienione obiekty, i wymusza odświeżenie instancji bez czekania na limit częstości.
+   */
+  setRemoved(ids: ReadonlySet<string>): void {
+    const changed = new Set<string>();
+    for (const id of ids) if (!this.removed.has(id)) changed.add(id);
+    for (const id of this.removed) if (!ids.has(id)) changed.add(id);
+    this.removed = new Set(ids);
+    if (changed.size === 0) return;
+    for (const tile of this.tiles.values()) {
+      if (!tile.sector.objects.some((o) => changed.has(o.id))) continue;
+      tile.batches = this.batchesOf(tile.sector);
+      this.instancesDirty = true;
+      this.lastApply = -Infinity;
+    }
+  }
+
+  private batchesOf(sector: ForestSector): ModelBatch[] {
+    const objects = this.removed.size === 0 ? sector.objects : sector.objects.filter((o) => !this.removed.has(o.id));
+    return batchesFor(objects).batches;
   }
 
   stats(): StreamStats {
@@ -272,7 +296,7 @@ export class StreamedForest {
       key: job.key,
       sector: job.sector,
       mesh,
-      batches: batchesFor(job.sector.objects).batches,
+      batches: this.batchesOf(job.sector),
       triangles: meshData.triangleCount,
     });
     this.instancesDirty = true;
