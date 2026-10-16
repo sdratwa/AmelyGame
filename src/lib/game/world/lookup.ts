@@ -1,4 +1,5 @@
 import { FOREST_START_REGION, parseObjectId, regionKey } from "./bounds";
+import { chestCollider, chestPlacements, type ChestPlacement } from "./chests";
 import { createForest, type ForestSector, type ForestWorld } from "./generators/v2/forest";
 import type { WorldObject } from "./objects";
 import { WalkWorld } from "./walk";
@@ -53,6 +54,7 @@ export function forestWalkOf(seed: number): WalkWorld {
   if (hit) return hit;
   const colliders: WorldObject[] = [];
   for (const sector of forest.allSectors()) colliders.push(...sector.colliders);
+  for (const chest of forestChestsOf(seed)) colliders.push(chestCollider(chest));
   const walk = new WalkWorld({
     regions: [forest.region],
     terrain: forest.terrain,
@@ -63,4 +65,45 @@ export function forestWalkOf(seed: number): WalkWorld {
   });
   walks.set(forest, walk);
   return walk;
+}
+
+const chestCache = new WeakMap<ForestWorld, ChestPlacement[]>();
+
+/** Ustawienie trzech skrzyń questa w lesie danego seeda (kotwice W1b, wysokość z terenu, obrót); wynik jest buforowany. */
+export function forestChestsOf(seed: number): readonly ChestPlacement[] {
+  const forest = forestOf(seed);
+  let hit = chestCache.get(forest);
+  if (!hit) {
+    hit = chestPlacements(forest);
+    chestCache.set(forest, hit);
+  }
+  return hit;
+}
+
+const harvestedColliders = new WeakMap<WalkWorld, Map<string, WorldObject>>();
+
+/**
+ * Zgrywa kolizje z listą pozyskanych obiektów (źródłem prawdy jest stan gry): usuwa colliderów pozyskanych drzew i skał,
+ * a przywraca te, których nie ma na liście (świat chodzenia jest buforowany między sesjami tego samego seeda).
+ */
+export function syncHarvestedColliders(seed: number, harvested: readonly string[]): void {
+  const walk = forestWalkOf(seed);
+  let removed = harvestedColliders.get(walk);
+  if (!removed) {
+    removed = new Map();
+    harvestedColliders.set(walk, removed);
+  }
+  const want = new Set(harvested);
+  for (const [id, obj] of [...removed]) {
+    if (!want.has(id)) {
+      walk.addObject(obj);
+      removed.delete(id);
+    }
+  }
+  for (const id of want) {
+    if (removed.has(id)) continue;
+    const obj = forestObject(seed, id);
+    if (!obj?.collider) continue;
+    if (walk.removeObject(id)) removed.set(id, obj);
+  }
 }
