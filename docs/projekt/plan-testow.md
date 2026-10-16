@@ -93,3 +93,11 @@ Zrealizowane w `src/lib/game/world/*.test.ts`: determinizm i zróżnicowanie ter
 - `save/migration.test.ts`: migracja v1 -> v2 (zachowane domy, portfel, czas, zdrowie, imię; mapowanie przedmiotów; pozycja poprawna zachowana, niepoprawna przeniesiona do punktu wejścia; zapis legacy czytelny przez `LocalStorageSaveStore`; kopie `premigration` i `.bak`; uszkodzony SaveV1 jest odrzucany bez zgadywania; migracja jest czysta i deterministyczna; po migracji quest da się ukończyć).
 - `save/save.test.ts`: m.in. `Autosaver` traktuje postęp questa jako istotną zmianę.
 - `world/generators/v2/anchors.test.ts`: patrz [swiat-w1a.md](swiat-w1a.md).
+
+## Zrealizowane w UI1 + F1
+
+- `systems/questView.test.ts`: widok tablicy i questa wyliczany ze stanu (bez logiki w React).
+- `forest-view/stream.test.ts`: planista streamingu (kolejność, histereza, brzegi siatki, tekstury z paddingiem).
+- `forest-view/streaming.test.ts`: pierścień początkowy i okno, zgodność instancji z załadowanymi sektorami po przejściu przez granice, zwalnianie geometrii i tekstur, brak budowania przy kręceniu się na granicy, wielokrotne tworzenie i `dispose`, wykrycie wszystkich modeli lasu, brak szwów między płytkami.
+- `world/forestWalk.test.ts`: indeks colliderów całego lasu, rzeka nieprzekraczalna bez mostu (3 seedy, co 5 m), przejście z flagą mostu, `safeForestPose` dla wschodniego brzegu.
+- Test ręczny w przeglądarce: kroki w raporcie F1 i [las-w-grze-f1.md](las-w-grze-f1.md).

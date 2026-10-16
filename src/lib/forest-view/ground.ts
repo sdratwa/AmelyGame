@@ -172,7 +172,10 @@ type Fields = {
   riverside: Float32Array;
 };
 
-function buildFields(forest: ForestWorld, bounds: Bounds): Fields {
+type FieldBuilder = { fields: Fields; step: (rows: number) => boolean };
+
+/** Pola strefowe (ścieżka, woda, zbocze, profile roślinności) próbkowane co `FIELD_CELL`; liczone porcjami wierszy. */
+function createFieldBuilder(forest: ForestWorld, bounds: Bounds): FieldBuilder {
   const n = Math.ceil((bounds.maxX - bounds.minX) / FIELD_CELL) + 1;
   const total = n * n;
   const f: Fields = {
@@ -188,11 +191,12 @@ function buildFields(forest: ForestWorld, bounds: Bounds): Fields {
   const geo = forest.geometry;
   const w = new Float64Array(geo.weightCount);
   const ids = geo.weightProfiles.map((p) => p.id);
-  for (let j = 0; j < n; j++) {
+  let j = 0;
+  const fillRow = (row: number) => {
     for (let i = 0; i < n; i++) {
       const x = bounds.minX + i * FIELD_CELL;
-      const z = bounds.minZ + j * FIELD_CELL;
-      const k = j * n + i;
+      const z = bounds.minZ + row * FIELD_CELL;
+      const k = row * n + i;
       f.trail[k] = Math.min(geo.trailGap(x, z), 8);
       f.water[k] = Math.min(geo.waterGap(x, z), 10);
       const g = forest.terrain.gradient(x, z);
@@ -205,8 +209,15 @@ function buildFields(forest: ForestWorld, bounds: Bounds): Fields {
         else if (ids[p] === "riverside") f.riverside[k] += w[p];
       }
     }
-  }
-  return f;
+  };
+  return {
+    fields: f,
+    step(rows) {
+      const end = Math.min(n, j + rows);
+      while (j < end) fillRow(j++);
+      return j >= n;
+    },
+  };
 }
 
 function sampleField(arr: Float32Array, n: number, fx: number, fz: number): number {
@@ -291,9 +302,11 @@ export type GroundBuilder = {
 export function createGroundBuilder(inputs: GroundInputs): GroundBuilder {
   const { forest, bounds, size } = inputs;
   const mpp = (bounds.maxX - bounds.minX) / size;
-  const fields = buildFields(forest, bounds);
+  const fieldBuilder = createFieldBuilder(forest, bounds);
+  const fields = fieldBuilder.fields;
   const seed = (forest.seed ^ 0x51ed270b) | 0;
-  const brushes = paintBrushes(inputs.objects, bounds, size, mpp, seed);
+  let brushes: Brushes = { litter: new Uint8Array(0), shade: new Uint8Array(0), needles: new Uint8Array(0) };
+  let phase: 0 | 1 | 2 = 0;
   const data = new Uint8Array(size * size * 4);
   let row = 0;
 
@@ -451,17 +464,27 @@ export function createGroundBuilder(inputs: GroundInputs): GroundBuilder {
     metersPerPixel: mpp,
     data,
     step(rows) {
+      if (phase === 0) {
+        if (fieldBuilder.step(Math.max(1, Math.ceil(rows / 2)))) phase = 1;
+        return false;
+      }
+      if (phase === 1) {
+        brushes = paintBrushes(inputs.objects, bounds, size, mpp, seed);
+        phase = 2;
+        return false;
+      }
       const end = Math.min(size, row + rows);
       while (row < end) fill(row++);
       return row >= size;
     },
-    progress: () => row / size,
+    progress: () => (phase === 2 ? row / size : 0),
   };
 }
 
 /** Synchroniczna wersja (testy, małe rozmiary). */
 export function buildGroundTexture(inputs: GroundInputs): GroundTexture {
   const b = createGroundBuilder(inputs);
-  b.step(inputs.size);
+  let done = false;
+  while (!done) done = b.step(inputs.size);
   return { data: b.data, size: b.size, metersPerPixel: b.metersPerPixel };
 }

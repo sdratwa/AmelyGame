@@ -1,5 +1,5 @@
 import type { HeightField } from "@/lib/game/world/terrain";
-import type { WalkWorld } from "@/lib/game/world/walk";
+import type { WalkWorld, WorldFlags } from "@/lib/game/world/walk";
 
 export const EYE_HEIGHT = 1.62;
 export const WALK_SPEED = 3.2;
@@ -23,6 +23,8 @@ export class FirstPersonController {
   readonly state: PlayerState;
   /** Ostatnia blokada z W0 (do diagnostyki). */
   lastBlock: string | null = null;
+  /** Flagi świata (np. `bridge.built` otwiera przejście przez rzekę); zmieniane z zewnątrz w trakcie gry. */
+  flags: WorldFlags | undefined;
 
   constructor(
     private readonly walk: WalkWorld,
@@ -57,7 +59,7 @@ export class FirstPersonController {
       const rz = f.x;
       const vx = (f.x * input.forward + rx * input.right) / Math.max(1, len);
       const vz = (f.z * input.forward + rz * input.right) / Math.max(1, len);
-      const result = this.walk.move({ x: s.x, z: s.z }, { x: s.x + vx * speed * step, z: s.z + vz * speed * step });
+      const result = this.walk.move({ x: s.x, z: s.z }, { x: s.x + vx * speed * step, z: s.z + vz * speed * step }, this.flags);
       moved = Math.hypot(result.x - s.x, result.z - s.z);
       s.x = result.x;
       s.z = result.z;

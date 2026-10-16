@@ -133,55 +133,20 @@ export function pickStart(forest: ForestWorld, sector: ForestSector, walk: WalkW
   return { x: FOREST_START.x, z: FOREST_START.z, yaw: 0 };
 }
 
-/** Okno lasu dla prototypu V2a: wszystko pochodzi z generatora W1a (teren, rozmieszczenie, kolizje). */
-export function buildForestWindow(options: WindowOptions = {}): ForestWindow {
-  const seed = options.seed ?? DEFAULT_SEED;
-  const forest = createForest(seed);
-  const showcase = pickShowcaseSectors(forest, 6);
-  const wanted = options.sector ? clampSector(forest, options.sector) : { ix: showcase[0].ix, iz: showcase[0].iz };
-  const radius = options.radius ?? 1;
-  const { nx, nz } = forest.sectorGrid;
-  const xr = windowRange(wanted.ix, radius, nx);
-  const zr = windowRange(wanted.iz, radius, nz);
-
-  const sectors: ForestSector[] = [];
-  for (let iz = zr.start; iz <= zr.end; iz++) for (let ix = xr.start; ix <= xr.end; ix++) sectors.push(forest.sector(ix, iz));
-  const first = sectors[0].bounds;
-  const last = sectors[sectors.length - 1].bounds;
-  const windowBounds: Bounds = { minX: first.minX, minZ: first.minZ, maxX: last.maxX, maxZ: last.maxZ };
-  const chosen = forest.sector(wanted.ix, wanted.iz);
-
-  const stress = radius > 1;
-  const margin = options.walkMargin ?? WALK_MARGIN;
-  const rb = forest.region.bounds;
-  const walkBounds: Bounds = stress
-    ? windowBounds
-    : {
-        minX: Math.max(rb.minX, chosen.bounds.minX - margin),
-        minZ: Math.max(rb.minZ, chosen.bounds.minZ - margin),
-        maxX: Math.min(rb.maxX, chosen.bounds.maxX + margin),
-        maxZ: Math.min(rb.maxZ, chosen.bounds.maxZ + margin),
-      };
-
-  const objects: WorldObject[] = [];
-  const colliders: WorldObject[] = [];
+/** Grupuje obiekty wg modelu w partie instancji z danymi do LOD/odcinania; ukryte odmiany (disposition) są pomijane. */
+export function batchesFor(objects: readonly WorldObject[]): { batches: ModelBatch[]; instanceCount: number; hiddenCount: number } {
   const grouped = new Map<string, WorldObject[]>();
   let hiddenCount = 0;
-  for (const s of sectors) {
-    for (const o of s.objects) {
-      objects.push(o);
-      if (o.collider) colliders.push(o);
-      const id = o.variant ? `${o.kind}.${o.variant}` : o.kind;
-      if (lookOf(id).mode === "hide") {
-        hiddenCount++;
-        continue;
-      }
-      const list = grouped.get(id);
-      if (list) list.push(o);
-      else grouped.set(id, [o]);
+  for (const o of objects) {
+    const id = o.variant ? `${o.kind}.${o.variant}` : o.kind;
+    if (lookOf(id).mode === "hide") {
+      hiddenCount++;
+      continue;
     }
+    const list = grouped.get(id);
+    if (list) list.push(o);
+    else grouped.set(id, [o]);
   }
-
   const batches: ModelBatch[] = [];
   let instanceCount = 0;
   for (const [modelId, list] of [...grouped].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
@@ -214,6 +179,88 @@ export function buildForestWindow(options: WindowOptions = {}): ForestWindow {
     });
     instanceCount += n;
   }
+  return { batches, instanceCount, hiddenCount };
+}
+
+/** Łączy partie z wielu sektorów w jedną partię na model (kolejność modeli i obiektów jest stabilna). */
+export function mergeBatches(parts: readonly (readonly ModelBatch[])[]): ModelBatch[] {
+  const byModel = new Map<string, ModelBatch[]>();
+  for (const list of parts) {
+    for (const b of list) {
+      const arr = byModel.get(b.modelId);
+      if (arr) arr.push(b);
+      else byModel.set(b.modelId, [b]);
+    }
+  }
+  const out: ModelBatch[] = [];
+  for (const [modelId, list] of [...byModel].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    if (list.length === 1) {
+      out.push(list[0]);
+      continue;
+    }
+    const total = list.reduce((n, b) => n + b.ids.length, 0);
+    const cat = (pick: (b: ModelBatch) => Float32Array) => {
+      const arr = new Float32Array(total);
+      let at = 0;
+      for (const b of list) {
+        arr.set(pick(b), at);
+        at += b.ids.length;
+      }
+      return arr;
+    };
+    out.push({
+      modelId,
+      kind: list[0].kind,
+      placements: list.flatMap((b) => b.placements),
+      ids: list.flatMap((b) => b.ids),
+      rank: cat((b) => b.rank),
+      radius: cat((b) => b.radius),
+      centerY: cat((b) => b.centerY),
+      jitter: cat((b) => b.jitter),
+    });
+  }
+  return out;
+}
+
+/** Okno lasu dla prototypu V2a: wszystko pochodzi z generatora W1a (teren, rozmieszczenie, kolizje). */
+export function buildForestWindow(options: WindowOptions = {}): ForestWindow {
+  const seed = options.seed ?? DEFAULT_SEED;
+  const forest = createForest(seed);
+  const showcase = pickShowcaseSectors(forest, 6);
+  const wanted = options.sector ? clampSector(forest, options.sector) : { ix: showcase[0].ix, iz: showcase[0].iz };
+  const radius = options.radius ?? 1;
+  const { nx, nz } = forest.sectorGrid;
+  const xr = windowRange(wanted.ix, radius, nx);
+  const zr = windowRange(wanted.iz, radius, nz);
+
+  const sectors: ForestSector[] = [];
+  for (let iz = zr.start; iz <= zr.end; iz++) for (let ix = xr.start; ix <= xr.end; ix++) sectors.push(forest.sector(ix, iz));
+  const first = sectors[0].bounds;
+  const last = sectors[sectors.length - 1].bounds;
+  const windowBounds: Bounds = { minX: first.minX, minZ: first.minZ, maxX: last.maxX, maxZ: last.maxZ };
+  const chosen = forest.sector(wanted.ix, wanted.iz);
+
+  const stress = radius > 1;
+  const margin = options.walkMargin ?? WALK_MARGIN;
+  const rb = forest.region.bounds;
+  const walkBounds: Bounds = stress
+    ? windowBounds
+    : {
+        minX: Math.max(rb.minX, chosen.bounds.minX - margin),
+        minZ: Math.max(rb.minZ, chosen.bounds.minZ - margin),
+        maxX: Math.min(rb.maxX, chosen.bounds.maxX + margin),
+        maxZ: Math.min(rb.maxZ, chosen.bounds.maxZ + margin),
+      };
+
+  const objects: WorldObject[] = [];
+  const colliders: WorldObject[] = [];
+  for (const s of sectors) {
+    for (const o of s.objects) {
+      objects.push(o);
+      if (o.collider) colliders.push(o);
+    }
+  }
+  const { batches, instanceCount, hiddenCount } = batchesFor(objects);
 
   const walkRegion: RegionDef = { ...FOREST_START_REGION, bounds: walkBounds };
   const walk = new WalkWorld({

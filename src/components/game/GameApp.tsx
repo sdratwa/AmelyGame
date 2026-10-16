@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   boardEntries,
@@ -19,7 +20,8 @@ import { loadGame, type BootResult } from "@/lib/game/save/loader";
 import { createNewGameParams } from "@/lib/game/save/newGame";
 import { LocalStorageSaveStore, type SaveStore } from "@/lib/game/save/store";
 import { cn } from "@/lib/utils";
-import { ForestView } from "./ForestView";
+import type { QualityId } from "@/lib/assets";
+
 import { InventoryBar, TopBar } from "./Hud";
 import {
   BootScreen,
@@ -37,7 +39,24 @@ import { useGamePause } from "./quest/useGamePause";
 import { ShopInterior } from "./ShopInterior";
 import { WorldMap } from "./WorldMap";
 
+const ForestWorldView = dynamic(() => import("./ForestWorldView").then((m) => m.ForestWorldView), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center bg-slate-950 text-slate-300">Wchodzisz do lasu…</div>
+  ),
+});
+
 const TICK_MS = 250;
+const QUALITY_KEY = "miasto.forest.quality";
+
+function readQuality(): QualityId {
+  try {
+    const v = window.localStorage.getItem(QUALITY_KEY);
+    return v === "LOW" || v === "HIGH" || v === "MEDIUM" ? v : "MEDIUM";
+  } catch {
+    return "MEDIUM";
+  }
+}
 
 function readSpeed(): number {
   const raw = new URLSearchParams(window.location.search).get("speed");
@@ -87,6 +106,8 @@ export function GameApp() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [forestLoading, setForestLoading] = useState(false);
+  const [forestQuality, setForestQuality] = useState<QualityId>(readQuality);
   const [panel, setPanel] = useState<"board" | "journal" | null>(null);
 
   const getStore = useCallback((): SaveStore => {
@@ -201,6 +222,16 @@ export function GameApp() {
   const journalOpen = panel === "journal" && playing && !state.dialog;
   useGamePause(dispatch, "ui.panel", "ui.board", boardOpen);
   useGamePause(dispatch, "ui.panel", "ui.journal", journalOpen);
+  useGamePause(dispatch, "ui.forest", "ui.forest_loading", state.view === "forest" && forestLoading);
+
+  const changeForestQuality = useCallback((quality: QualityId) => {
+    setForestQuality(quality);
+    try {
+      window.localStorage.setItem(QUALITY_KEY, quality);
+    } catch {
+      // zapis ustawienia jakości nie jest krytyczny
+    }
+  }, []);
 
   useEffect(() => {
     if (!playing) return;
@@ -327,14 +358,19 @@ export function GameApp() {
             onLeave={leave}
           />
         )}
-        {state.view === "forest" && (
-          <ForestView
-            season={clock.season}
-            isDay={clock.isDay}
-            held={heldId}
+        {state.view === "forest" && state.world && (
+          <ForestWorldView
+            seed={state.world.seed}
             startPose={state.forestPose}
+            bridgeBuilt={state.bridge.built}
+            hour={clock.hour + clock.minute / 60}
+            quality={forestQuality}
+            onQualityChange={changeForestQuality}
+            held={heldId}
+            suspended={panel !== null || !!state.dialog || state.dead}
             onPose={onPose}
             onLeave={leave}
+            onLoadingChange={setForestLoading}
           />
         )}
 

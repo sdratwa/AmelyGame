@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
+import { forestOf, forestWalkOf } from "@/lib/game/world/lookup";
+import { BRIDGE_FLAG } from "@/lib/game/world/generators/v2";
 import { BENCHMARK_SECONDS, benchmarkPose, buildBenchmarkRoute, type BenchmarkRoute } from "./benchmark";
 import { atmosphereAt, DEFAULT_HOUR, type AtmosphereState, type Rgb } from "./atmosphere";
 import { FirstPersonController, type MoveInput } from "./controller";
@@ -9,6 +11,8 @@ import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PaletteStore, g
 import { GrassLab, sanitizeLab, type LabOptions } from "./grassLab";
 import { ForestInstancer, type InstancerStats } from "./instancer";
 import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOverrides } from "./profiles";
+import { STREAM_RADIUS } from "./stream";
+import { forestModelIds, StreamedForest, type StreamStats } from "./streaming";
 import { buildForestWindow, type ForestWindow, type WindowOptions } from "./window";
 import { DEFAULT_PRESET, isModified, presetConfig, sanitizeTuning, tintedFog, type PresetId, type VisualConfig, type VisualTuning } from "./visual";
 
@@ -43,6 +47,10 @@ export type PanelStats = {
   presetModified: boolean;
   /** Tymczasowy tryb diagnostyczny trawy jest włączony. */
   lab: boolean;
+  /** Tryb streamingu (gra): stan okna sektorów; w prototypie null. */
+  stream: StreamStats | null;
+  /** Postęp ładowania początkowego pierścienia sektorów (0-1) w trybie streamingu. */
+  loadProgress: number;
 };
 
 export type BenchmarkReport = {
@@ -69,8 +77,19 @@ export type BenchmarkReport = {
   note: string;
 };
 
+/** Tryb gry: cały las 300 x 300 m z streamingiem sektorów zamiast jednego okna prototypu. */
+export type StreamOptions = {
+  seed: number;
+  /** Pozycja startowa gracza (już zwalidowana, np. `safeForestPose`). */
+  pose: { x: number; z: number; yaw: number };
+  /** Czy most jest zbudowany (otwiera przejście przez rzekę). */
+  bridgeBuilt?: boolean;
+};
+
 export type RendererOptions = {
   container: HTMLElement;
+  /** Tryb gry (streaming). Bez tego renderer działa jak prototyp `/dev/forest`. */
+  stream?: StreamOptions;
   window?: WindowOptions;
   quality?: QualityId;
   hour?: number;
@@ -80,6 +99,10 @@ export type RendererOptions = {
   /** Zmiana ustawień laboratorium trawy wywołana z poziomu sceny (przeciąganie myszą, kółko, obrót automatyczny). */
   onLab?: (options: LabOptions) => void;
 };
+
+/** Limity czasu pracy streamingu na klatkę (ms): w trakcie ładowania ekran jest zasłonięty, w grze liczy się płynność. */
+const LOADING_BUDGET_MS = 28;
+const STREAM_BUDGET_MS = 4;
 
 const toLinear = (c: Rgb) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
 
@@ -181,6 +204,11 @@ export class ForestRenderer {
   private readonly frameStats = new FrameStats(0.5);
   private bench: { stats: FrameStats; route: BenchmarkRoute; t: number; calls: number; tris: number; n: number; resolve: (r: BenchmarkReport) => void } | null = null;
   private built: Built | null = null;
+  private stream: StreamedForest | null = null;
+  private streamOptions: StreamOptions | null = null;
+  private readonly worldFlags = new Set<string>();
+  private suspended = false;
+  private loadProgress = 0;
   private controller: FirstPersonController | null = null;
   private library: AssetLibrary | null = null;
   private instancer: ForestInstancer | null = null;
@@ -221,6 +249,8 @@ export class ForestRenderer {
     this.onStats = options.onStats;
     this.onLab = options.onLab;
     this.windowOptions = options.window ?? {};
+    this.streamOptions = options.stream ?? null;
+    if (options.stream?.bridgeBuilt) this.worldFlags.add(BRIDGE_FLAG);
     this.quality = options.quality ?? DEFAULT_QUALITY;
     this.profile = VIEW_PROFILES[this.quality];
     this.overrides = { ...DEFAULT_OVERRIDES, ...options.overrides };
@@ -274,7 +304,8 @@ export class ForestRenderer {
     canvas.addEventListener("webglcontextlost", lost);
     this.cleanup.push(() => canvas.removeEventListener("webglcontextlost", lost));
     this.raf = requestAnimationFrame(this.frame);
-    void this.rebuildWorld();
+    if (this.streamOptions) void this.startStream();
+    else void this.rebuildWorld();
   }
 
   // ---- publiczne API ----
@@ -295,6 +326,29 @@ export class ForestRenderer {
 
   getHour(): number {
     return this.hour;
+  }
+
+  /** Pozycja gracza (tryb gry): do zapisu w stanie gry; przed końcem ładowania zwraca pozycję startową. */
+  getPose(): { x: number; z: number; yaw: number } | null {
+    const s = this.controller?.state;
+    if (s) return { x: s.x, z: s.z, yaw: s.yaw };
+    return this.streamOptions ? { ...this.streamOptions.pose } : null;
+  }
+
+  /** Flaga świata `bridge.built`: otwiera lub zamyka przejście przez rzekę (kolizje, nie wygląd). */
+  setBridgeBuilt(built: boolean): void {
+    if (built) this.worldFlags.add(BRIDGE_FLAG);
+    else this.worldFlags.delete(BRIDGE_FLAG);
+  }
+
+  /** Zawieszenie sterowania (np. otwarty dziennik): zeruje klawisze i zatrzymuje ruch gracza. */
+  setSuspended(suspended: boolean): void {
+    this.suspended = suspended;
+    if (suspended) this.keys.clear();
+  }
+
+  get isStreaming(): boolean {
+    return this.streamOptions !== null;
   }
 
   getVisual(): VisualConfig {
@@ -386,6 +440,7 @@ export class ForestRenderer {
     for (const fn of this.cleanup) fn();
     this.cleanup = [];
     if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
+    this.disposeStream();
     this.disposeView();
     this.disposeBuilt();
     this.sky.geometry.dispose();
@@ -430,6 +485,7 @@ export class ForestRenderer {
   }
 
   private async rebuildView(): Promise<void> {
+    if (this.streamOptions) return void this.restartStream();
     const gen = ++this.generation;
     if (!this.built) return void this.rebuildWorld();
     this.loading = `Ładowanie modeli (${this.quality})`;
@@ -453,6 +509,83 @@ export class ForestRenderer {
         if (fresh.water) this.scene.add(fresh.water);
       }
       await this.buildInstances(gen);
+    } catch (e) {
+      if (gen === this.generation) this.fail(e);
+    }
+  }
+
+  private async restartStream(): Promise<void> {
+    const pose = this.getPose();
+    if (!this.streamOptions || !pose) return;
+    this.streamOptions = { ...this.streamOptions, pose };
+    await this.startStream();
+  }
+
+  private disposeStream(): void {
+    if (this.stream) {
+      this.scene.remove(this.stream.group);
+      this.stream.dispose();
+      this.stream = null;
+    }
+    this.disposeView();
+    this.controller = null;
+  }
+
+  /** Buduje las gry: świat chodzenia całego lasu, modele i streamowane sektory wokół pozycji startowej. */
+  private async startStream(): Promise<void> {
+    const opts = this.streamOptions;
+    if (!opts) return;
+    const gen = ++this.generation;
+    this.loading = "Generowanie lasu";
+    this.error = null;
+    this.loadProgress = 0;
+    this.disposeStream();
+    await tick();
+    if (gen !== this.generation || this.disposed) return;
+    try {
+      const forest = forestOf(opts.seed);
+      const walk = forestWalkOf(opts.seed);
+      await tick();
+      if (gen !== this.generation || this.disposed) return;
+      const library = new AssetLibrary({
+        profile: this.profile.assets,
+        onError: (e) => {
+          this.error = e.message;
+        },
+      });
+      const instancer = new ForestInstancer(library, { batches: [] }, this.profile, this.overrides, this.palette);
+      this.loading = `Ładowanie modeli (${this.quality})`;
+      await instancer.preload(forestModelIds(forest));
+      if (gen !== this.generation || this.disposed) {
+        instancer.dispose();
+        await library.dispose();
+        return;
+      }
+      const stream = new StreamedForest({
+        forest,
+        profile: this.profile,
+        quality: this.quality,
+        radius: STREAM_RADIUS[this.quality],
+        groundStyle: this.visual.look.groundStyle,
+        palette: this.palette,
+        instancer,
+        anisotropy: Math.min(this.profile.assets.anisotropy, this.renderer.capabilities.getMaxAnisotropy()),
+        receiveShadow: this.shadowsOn(),
+        tuneGround: (material) => tuneGroundMaterial(material, this.palette),
+      });
+      stream.prepareInitial(opts.pose.x, opts.pose.z);
+      this.library = library;
+      this.instancer = instancer;
+      this.stream = stream;
+      this.scene.add(stream.group, instancer.group);
+      instancer.setOverrides(this.overrides);
+      const controller = new FirstPersonController(walk, forest.terrain, opts.pose);
+      controller.flags = this.worldFlags;
+      this.controller = controller;
+      this.lastCamPos.set(1e9, 0, 0);
+      this.dirtyInstances = true;
+      this.applyProfileToRenderer();
+      this.loading = "Wczytywanie lasu";
     } catch (e) {
       if (gen === this.generation) this.fail(e);
     }
@@ -787,6 +920,7 @@ export class ForestRenderer {
   }
 
   private moveInput(): MoveInput {
+    if (this.suspended) return { forward: 0, right: 0, sprint: false };
     const k = this.keys;
     const forward = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
     const right = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);
@@ -813,7 +947,8 @@ export class ForestRenderer {
       this.camera.lookAt(pose.target);
       if (lab.current.occluder) lab.placeOccluder(new THREE.Vector3(...this.atmosphere.sunDir).normalize());
       this.updateSun();
-    } else if (ctl && this.built) {
+    } else if (ctl && (this.built || this.stream)) {
+      if (this.stream) this.advanceStream(ctl.state, time);
       if (this.bench) {
         const b = this.bench;
         b.t += dt;
@@ -821,7 +956,7 @@ export class ForestRenderer {
         const pose = benchmarkPose(b.route, b.t);
         ctl.teleport(pose.x, pose.z, pose.yaw);
         ctl.state.pitch = pose.pitch;
-      } else {
+      } else if (!this.loading && !this.suspended) {
         ctl.update(dt, this.moveInput());
       }
       const s = ctl.state;
@@ -856,6 +991,22 @@ export class ForestRenderer {
       this.emit();
     }
   };
+
+  private advanceStream(pos: { x: number; z: number }, time: number): void {
+    const stream = this.stream;
+    if (!stream) return;
+    const loading = this.loading !== null;
+    if (stream.update(pos.x, pos.z, loading ? LOADING_BUDGET_MS : STREAM_BUDGET_MS, time)) this.dirtyInstances = true;
+    if (!loading) return;
+    this.loadProgress = stream.initialProgress();
+    if (stream.initialReady()) {
+      this.loading = null;
+      this.loadProgress = 1;
+      this.dirtyInstances = true;
+    } else {
+      this.loading = `Wczytywanie lasu ${Math.round(this.loadProgress * 100)}%`;
+    }
+  }
 
   private updateInstances(time: number): void {
     if (!this.instancer) return;
@@ -971,6 +1122,8 @@ export class ForestRenderer {
       preset: this.visual.preset,
       presetModified: isModified(this.visual),
       lab: this.lab !== null,
+      stream: this.stream?.stats() ?? null,
+      loadProgress: this.loadProgress,
     });
   }
 }

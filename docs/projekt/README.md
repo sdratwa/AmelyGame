@@ -11,6 +11,7 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 - [swiat-w1a.md](swiat-w1a.md) - generator lasu W1a (v2): teren, rzeka, ścieżki, profile, roślinność, sektory, testy i ryzyka; sekcja W1b: kotwice questa, walidacja 200 seedów.
 - [swiat-generator.md](swiat-generator.md) - las 300x300 m, sektory, `terrainHeight`, walidator, zgodność wersji generatora.
 - [quest-bridge-01.md](quest-bridge-01.md) - quest "Most do nieznanego".
+- [las-w-grze-f1.md](las-w-grze-f1.md) - F1: las 3D w normalnej grze (streaming sektorów, globalne kolizje, jakość, ograniczenia).
 - [plan-testow.md](plan-testow.md) - testy mechanik, generatora, zapisu.
 - [zasoby-3d.md](zasoby-3d.md) - modele 3D po V1: pakiet i licencja, wybrane modele, potok optymalizacji, manifest, ładowanie w R3F, ograniczenia.
 - [wydajnosc.md](wydajnosc.md) - budżety, profile jakości, pomiary.
@@ -36,6 +37,9 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 - V2b: poprawka migotania trawy zatwierdzona technicznie (e9e3391, końcowa kontrola wizualna po stronie autora); domyślny preset to MIASTO_DEFAULT (ORIGINAL z wybranymi suwakami). Laboratorium trawy i strojenie grafiki nie są dalej rozwijane.
 - V2b (jakość wizualna): zrobione, czeka na ocenę autora w przeglądarce; opis i szacunki w [prototyp-v2b.md](prototyp-v2b.md). Nie zmienia generatora, `worldGenVersion`, zapisów ani liczby obiektów.
 - E2 + Q1 + W1b (silnik questa, SaveV2, kotwice w generatorze v2): zrobione, czeka na akceptację raportu. Brak jeszcze interfejsu questa (UI1) i lasu v2 w grze (F1); patrz [decyzje.md](decyzje.md).
+
+- UI1 (tablica ogłoszeń, dziennik J, tracker): zrobione; quest można przyjąć, śledzić i zapisać w normalnej grze.
+- F1 (las 3D w grze): zrobione, czeka na ocenę autora w przeglądarce; patrz [las-w-grze-f1.md](las-w-grze-f1.md). M1, C1, T1, R1 nie rozpoczęte.
 
 ## Kolejność etapów
 

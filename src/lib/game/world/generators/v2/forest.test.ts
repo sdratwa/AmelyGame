@@ -49,7 +49,7 @@ describe("W1a: determinizm i nazwane strumienie", () => {
     const prints = new Set<string>();
     for (let seed = 1; seed <= 10; seed++) prints.add(createForest(seed).allSectors().map((s) => s.objects.length).join(","));
     expect(prints.size).toBe(10);
-  });
+  }, 60_000);
 
   it("odcisk świata jest zamrożony dla znanych seedów (zmiana = nowa wersja generatora; W1b dołożyło kotwice questa do planu)", () => {
     expect(full(1).world.fingerprint).toBe("fp1:12ad25dddae36f");

@@ -99,11 +99,20 @@
 - Silnik ufa klientowi co do `at` (pozycji gracza) i identyfikatora pozyskiwanego obiektu w granicach zasięgu kotwic; pełna weryfikacja po stronie serwera nie jest potrzebna dla gry lokalnej.
 - Wada znaleziona przez walidator na 200 seedach (skała na osi mostu) naprawiona strefami `poi.bridge_axis_*`.
 
+## UI1 + F1 (tablica ogłoszeń i las 3D w grze)
+
+- Logika questa zostaje w silniku; komponenty React tylko wyświetlają `questProgress` i wysyłają komendy `board.read` / `quest.accept`.
+- Las w grze to renderer prototypu `/dev/forest` w trybie streamingu; stary las r3f usunięty.
+- Kolizje lasu są globalne (jeden `WalkWorld` ze wszystkimi colliderami), niezależne od streamingu renderowania.
+- Promienie streamingu: LOW 2, MEDIUM 3, HIGH 4 sektory; MEDIUM domyślnie, wybór zapamiętany w przeglądarce.
+- Czas gry jest wstrzymany na czas ładowania lasu; godzina i światło w lesie wynikają z zegara gry.
+- Pozycja na moście i wschodnim brzegu jest poprawna w zapisie tylko po `bridge.built`.
+
 ## Otwarte
 
 - Sprzęt referencyjny dla progów FPS (HIGH, LOW).
 - Treść dwóch zapowiedzi na tablicy.
-- Interfejs questa (tablica, dziennik, skrzynie, troll, pozyskiwanie, budowa, minimapa) jeszcze nie istnieje; silnik jest gotowy i przetestowany. Stary `ForestScene` pozostaje lasem w grze do punktu kontrolnego B.
+- Interfejs questa: tablica, dziennik i tracker są w grze (UI1); skrzynie, troll, pozyskiwanie, budowa i minimapa w 3D (M1, C1, T1, R1) jeszcze nie istnieją; silnik jest gotowy i przetestowany.
 - Tutorial jako maszyna kroków (zastąpienie `tutorialDone`).
 - Wygląd trolla (pod kątem dzieci od 8 lat).
 - Skały S/M/L i paprocie: wybrano wariant A (V1); decyzja o B (inny pakiet CC0) lub C (płatna wersja Pro, wymaga zgody autora) po ocenie wizualnej w V2 - patrz [zasoby-3d.md](zasoby-3d.md).

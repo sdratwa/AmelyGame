@@ -1,8 +1,9 @@
 import type { ForestPose } from "../../../core/state";
 import { FOREST_START_REGION } from "../../bounds";
-import { createForest, type ForestWorld } from "./forest";
+import { forestOf, forestWalkOf } from "../../lookup";
+import type { ForestWorld } from "./forest";
 import { MAX_TERRAIN_TAN } from "./validate";
-import { FOREST_START } from "./plan";
+import { BRIDGE_FLAG, FOREST_START } from "./plan";
 
 const BODY_RADIUS = 0.5;
 const BANK_MARGIN = 1.5;
@@ -28,9 +29,19 @@ export function isValidForestPosition(forest: ForestWorld, x: number, z: number)
   return forest.collidersNear(x, z, BODY_RADIUS).length === 0;
 }
 
+/** Po zbudowaniu mostu poprawna jest też pozycja na moście i na drugim brzegu: decyduje świat chodzenia z otwartym przejściem. */
+function isValidPositionWithBridge(seed: number, x: number, z: number): boolean {
+  const b = FOREST_START_REGION.bounds;
+  if (![x, z].every(Number.isFinite)) return false;
+  if (x < b.minX + 1 || x > b.maxX - 1 || z < b.minZ + 1 || z > b.maxZ - 1) return false;
+  const open = { has: (flag: string) => flag === BRIDGE_FLAG };
+  return forestWalkOf(seed).checkPoint(x, z, open) === null;
+}
+
 /** Pozycja z zapisu, jeśli jest poprawna w lesie danego seeda, w przeciwnym razie punkt wejścia. */
-export function safeForestPose(seed: number, pose: ForestPose | null): ForestPose {
+export function safeForestPose(seed: number, pose: ForestPose | null, bridgeBuilt = false): ForestPose {
   if (!pose) return forestEntryPose();
-  const forest = createForest(seed);
-  return isValidForestPosition(forest, pose.x, pose.z) ? { ...pose } : forestEntryPose();
+  if (isValidForestPosition(forestOf(seed), pose.x, pose.z)) return { ...pose };
+  if (bridgeBuilt && isValidPositionWithBridge(seed, pose.x, pose.z)) return { ...pose };
+  return forestEntryPose();
 }

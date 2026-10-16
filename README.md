@@ -20,7 +20,7 @@ Zasoby 3D (modele lasu, CC0 Quaternius): `npm run assets:report` (raport z manif
 
 1. **Imię** → ekran ładowania świata → mapa świata z góry.
 2. **Tutorial** – podświetlony las z wykrzyknikiem, reszta wyszarzona. Trzeba kliknąć las.
-3. **Las (FPV)** – chodzenie po lesie w widoku pierwszej osoby: `↑/↓` (lub `W/S`) – przód/tył, `←/→` – obrót, `A/D` – krok w bok, `Esc` – powrót na mapę. Na mobile są przyciski na ekranie. W rączce widać zaznaczony przedmiot (domyślnie telefon).
+3. **Las (FPV)** – las 3D 300 × 300 m (streaming sektorów, kolizje, rzeka bez przejścia do czasu mostu): `W/S/A/D` – ruch, `Shift` – bieg, mysz – rozglądanie, `F3` – diagnostyka, jakość Niska/Średnia/Wysoka, `Esc` (dwa razy) – powrót na mapę. Szczegóły i ograniczenia: [`docs/projekt/las-w-grze-f1.md`](docs/projekt/las-w-grze-f1.md). Tablica ogłoszeń w mieście: quest „Most do nieznanego”, dziennik `J`. W rączce widać zaznaczony przedmiot (domyślnie telefon).
 4. **Sklep „Żappka”** – wnętrze sklepu: kupno jedzenia (leczy życie), w środku życie nie spada (schronienie). Wyjście: `Esc`.
 5. **Dwa domy na sprzedaż** – cena losowa 200–500 tys. zł, 6-cyfrowy telefon, a wygląd zależy od ceny: 4 poziomy (1 Chatka < 275 tys., 2 Domek < 350 tys., 3 Dom z poddaszem < 425 tys., 4 Rezydencja). Dom można kupić i ulepszać do poziomu 4 (koszt: 60 / 90 / 130 tys. zł).
 6. **Pasek górny** – życie (lewo); portfel (start: 1 000 000 zł), dzień/noc, pora roku i rok (prawo). Start: zima 2030.

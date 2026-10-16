@@ -10,7 +10,7 @@ import { FOLIAGE, HUE_SWAP_TO_GREEN, MATERIAL_TYPES, STABLE_NORMAL } from "./dis
 import { GRADE_UNIFORM_DECL, NOISE_GLSL, NORMAL_UP_FRAGMENT, PHASE_VERTEX, PaletteStore, STABLE_NORMAL_FRAGMENT, gradeFragment } from "./grading";
 import { SHADOW_CASTERS, type ForestViewProfile, type ViewOverrides } from "./profiles";
 import { createBatchSelector, frustumFor } from "./selector";
-import type { ForestWindow, ModelBatch } from "./window";
+import type { ModelBatch } from "./window";
 
 /** `uFix`: 1 = stabilne oświetlenie dwustronnych źdźbeł (domyślnie), 0 = zachowanie sprzed poprawki (diagnostyka). */
 export type FoliageUniforms = { uTime: { value: number }; uWind: { value: number }; uFix: { value: number } };
@@ -89,11 +89,12 @@ export class ForestInstancer {
   readonly group = new THREE.Group();
   readonly uniforms = createFoliageUniforms();
   private entries: Entry[] = [];
+  private readonly assets = new Map<string, ModelAsset>();
   private last: InstancerStats = { visible: 0, total: 0, activeModels: 0, triangles: 0, drawCalls: 0, perLevel: [], fallbackModels: 0 };
 
   constructor(
     readonly library: AssetLibrary,
-    readonly window: ForestWindow,
+    readonly window: { batches: readonly ModelBatch[] },
     readonly profile: ForestViewProfile,
     private overrides: ViewOverrides,
     readonly palette: PaletteStore = new PaletteStore(),
@@ -103,12 +104,38 @@ export class ForestInstancer {
 
   /** Ładuje modele (zawsze z zastępnikiem przy błędzie, który jest oznaczony w statystykach) i buduje instancje. */
   async init(): Promise<{ failed: string[] }> {
-    const loaded = await Promise.all(this.window.batches.map(async (batch) => ({ batch, asset: await this.library.loadOrFallback(batch.modelId) })));
+    const failed = await this.preload(this.window.batches.map((b) => b.modelId));
+    this.setBatches(this.window.batches);
+    return { failed };
+  }
+
+  /** Ładuje (z cache biblioteki) modele o podanych ID i dostraja ich materiały; nie tworzy instancji. */
+  async preload(modelIds: readonly string[]): Promise<string[]> {
     const failed: string[] = [];
-    const wantShadow = this.profile.shadows.enabled && this.overrides.shadows;
-    for (const { batch, asset } of loaded) {
+    const wanted = [...new Set(modelIds)].filter((id) => !this.assets.has(id));
+    const loaded = await Promise.all(wanted.map(async (id) => ({ id, asset: await this.library.loadOrFallback(id) })));
+    for (const { id, asset } of loaded) {
       if (asset.fallback) failed.push(asset.id);
       for (const lod of asset.levels) for (const part of lod.parts) tuneMaterial(part.material, this.uniforms, this.palette);
+      this.assets.set(id, asset);
+    }
+    return failed;
+  }
+
+  /**
+   * Zastępuje wszystkie instancje nowym zestawem partii (modele muszą być wcześniej załadowane przez `preload`).
+   * Geometrie i materiały zostają w bibliotece, więc wymiana kosztuje tylko bufory instancji.
+   */
+  setBatches(batches: readonly ModelBatch[]): void {
+    for (const { model } of this.entries) {
+      this.group.remove(model.group);
+      model.dispose();
+    }
+    this.entries = [];
+    const wantShadow = this.profile.shadows.enabled && this.overrides.shadows;
+    for (const batch of batches) {
+      const asset = this.assets.get(batch.modelId);
+      if (!asset) throw new Error(`Model ${batch.modelId} nie został załadowany (preload)`);
       const casts = SHADOW_CASTERS.has(batch.kind);
       const model = createInstancedModel(asset, batch.placements, {
         profile: this.profile.assets,
@@ -118,7 +145,6 @@ export class ForestInstancer {
       this.group.add(model.group);
       this.entries.push({ batch, asset, model });
     }
-    return { failed };
   }
 
   setOverrides(overrides: ViewOverrides): void {

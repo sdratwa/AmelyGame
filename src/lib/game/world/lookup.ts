@@ -1,6 +1,7 @@
 import { FOREST_START_REGION, parseObjectId, regionKey } from "./bounds";
 import { createForest, type ForestSector, type ForestWorld } from "./generators/v2/forest";
 import type { WorldObject } from "./objects";
+import { WalkWorld } from "./walk";
 
 const FOREST_CACHE_LIMIT = 3;
 const forests = new Map<number, ForestWorld>();
@@ -38,4 +39,28 @@ export function forestObject(seed: number, id: string): WorldObject | null {
     byId.set(sector, index);
   }
   return index.get(id) ?? null;
+}
+
+const walks = new WeakMap<ForestWorld, WalkWorld>();
+
+/**
+ * Świat chodzenia po całym lesie: wszystkie collidery (drzewa i skały), bariery (rzeka) i przejścia (most po fladze
+ * `bridge.built`). Cały las ma ok. 2000 colliderów, więc kolizje nie zależą od streamingu sektorów renderowania.
+ */
+export function forestWalkOf(seed: number): WalkWorld {
+  const forest = forestOf(seed);
+  const hit = walks.get(forest);
+  if (hit) return hit;
+  const colliders: WorldObject[] = [];
+  for (const sector of forest.allSectors()) colliders.push(...sector.colliders);
+  const walk = new WalkWorld({
+    regions: [forest.region],
+    terrain: forest.terrain,
+    objects: colliders,
+    barriers: forest.plan.barriers,
+    passages: forest.plan.passages,
+    cellSize: 10,
+  });
+  walks.set(forest, walk);
+  return walk;
 }
