@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "props": [
+    {
+      "id": "chest.fairy",
+      "file": "chest.fairy.glb",
+      "bytes": 461904,
+      "triangles": 7708,
+      "bodyNode": "Chest_Body",
+      "hingeNode": "Lid_Hinge",
+      "lidNode": "Chest_Lid",
+      "hinge": {
+        "x": 0,
+        "y": 0.505,
+        "z": -0.365
+      },
+      "front": "+z",
+      "openAxis": "x",
+      "openAngleDeg": -105,
+      "sourceBounds": {
+        "min": [
+          -0.596,
+          0,
+          -0.446
+        ],
+        "max": [
+          0.596,
+          0.888,
+          0.4564
+        ]
+      },
+      "worldScale": 0.85,
+      "source": {
+        "file": "assets/source/miasto_skrzynia_basniowa.glb",
+        "sha256": "ebf543dc0488421118ed27c6c33db97fe4dc151ed665c80172ded7a05202a8bc",
+        "sourceMeshes": 22,
+        "sourceTriangles": 7708,
+        "author": "dostarczone przez autora projektu Miasto",
+        "note": "Źródło bez materiałów i normalnych: kolory wierzchołków (COLOR_0). Normalne liczone w potoku (próg załamania 35 stopni)."
+      }
+    }
+  ]
+}

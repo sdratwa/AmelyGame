@@ -73,7 +73,7 @@ function defaultManifestLoader(url: string): Promise<unknown> {
   });
 }
 
-function createDefaultGlbLoader(): (url: string) => Promise<GlbResult> {
+export function createDefaultGlbLoader(): (url: string) => Promise<GlbResult> {
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   return async (url) => {
