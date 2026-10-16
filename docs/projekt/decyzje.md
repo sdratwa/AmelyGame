@@ -108,11 +108,21 @@
 - Czas gry jest wstrzymany na czas ładowania lasu; godzina i światło w lesie wynikają z zegara gry.
 - Pozycja na moście i wschodnim brzegu jest poprawna w zapisie tylko po `bridge.built`.
 
+## M1 + C1 (skrzynie, interakcje, minimapa)
+
+- Skrzynie leżą dokładnie na kotwicach W1b; generator i jego wersja bez zmian. Model GLB od autora zachowuje kolory wierzchołków; normalne liczy potok.
+- Skrzynie renderowane jako dwie siatki instancjonowane (korpusy, pokrywy): stała liczba wywołań rysowania, niezależna animacja pokryw.
+- Logika interakcji jest w czystym `ForestInteractor` (testowalnym bez przeglądarki); React wyświetla podpowiedź i okno, a stan skrzyń, zebranych obiektów i ekwipunku pochodzi ze stanu gry.
+- E przy celu interakcji ma pierwszeństwo przed jedzeniem; bez celu zachowanie bez zmian.
+- Zebrane drzewa i skały znikają (bez pniaków) i tracą kolizję; to uproszczenie do ewentualnej zmiany po ocenie.
+- Minimapa nie zdradza położenia skrzyń ani trolla: tylko orientacyjne koła poszukiwań dla celów bieżącego etapu, z przesuniętym środkiem. Mgła odkrywania zostaje na M2.
+- Tracker i dziennik pokazują postęp surowców także poza etapem materiałów (`QuestView.parallel`), bo etap trolla nie jest jeszcze dostępny w grze.
+
 ## Otwarte
 
 - Sprzęt referencyjny dla progów FPS (HIGH, LOW).
 - Treść dwóch zapowiedzi na tablicy.
-- Interfejs questa: tablica, dziennik i tracker są w grze (UI1); skrzynie, troll, pozyskiwanie, budowa i minimapa w 3D (M1, C1, T1, R1) jeszcze nie istnieją; silnik jest gotowy i przetestowany.
+- Interfejs questa: tablica, dziennik i tracker są w grze (UI1); skrzynie, pozyskiwanie i minimapa w 3D są w grze (M1 + C1); troll i budowa mostu (T1, R1) jeszcze nie istnieją; silnik jest gotowy i przetestowany.
 - Tutorial jako maszyna kroków (zastąpienie `tutorialDone`).
 - Wygląd trolla (pod kątem dzieci od 8 lat).
 - Skały S/M/L i paprocie: wybrano wariant A (V1); decyzja o B (inny pakiet CC0) lub C (płatna wersja Pro, wymaga zgody autora) po ocenie wizualnej w V2 - patrz [zasoby-3d.md](zasoby-3d.md).

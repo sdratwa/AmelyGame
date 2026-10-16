@@ -101,3 +101,16 @@ Zrealizowane w `src/lib/game/world/*.test.ts`: determinizm i zróżnicowanie ter
 - `forest-view/streaming.test.ts`: pierścień początkowy i okno, zgodność instancji z załadowanymi sektorami po przejściu przez granice, zwalnianie geometrii i tekstur, brak budowania przy kręceniu się na granicy, wielokrotne tworzenie i `dispose`, wykrycie wszystkich modeli lasu, brak szwów między płytkami.
 - `world/forestWalk.test.ts`: indeks colliderów całego lasu, rzeka nieprzekraczalna bez mostu (3 seedy, co 5 m), przejście z flagą mostu, `safeForestPose` dla wschodniego brzegu.
 - Test ręczny w przeglądarce: kroki w raporcie F1 i [las-w-grze-f1.md](las-w-grze-f1.md).
+
+## Zrealizowane w M1 + C1
+
+- `assets/props.test.ts`: manifest i SHA źródła, struktura modelu skrzyni (korpus, pivot `Lid_Hinge`), skala, kolory i normalne.
+- `world/chests.test.ts`: kotwice, osiągalność, brak kolizji z drzewami i skałami, deterministyczność na 10 seedach.
+- `systems/interaction.test.ts`: wybór celu (stożek, dystans, stan skrzyni, blokada trolla, narzędzia), prompt mniejszy niż zasięg silnika.
+- `systems/interactor.test.ts`: przebieg E (otwarcie, okno, zabranie), szybkie wielokrotne E, odejście, wyjście z lasu w trakcie animacji, pełny ekwipunek, skrzynia trolla, zbieranie z narzędziem i bez, śmierć.
+- `systems/minimap.test.ts`: model z prawdziwej geometrii, rzut i strzałka, sekret (brak współrzędnych celów), obszary poszukiwań.
+- `systems/m1c1.test.ts`: pełny przebieg grywalnego fragmentu przez interakcje, zapis i wczytanie, skrzynia otwarta bez zabrania, wystarczalność surowców (24 seedy), usuwanie i przywracanie kolizji zebranych obiektów.
+- `systems/questView.test.ts`: cele równoległe (surowce) w trackerze i dzienniku.
+- `forest-view/props.test.ts`: animacja pokrywy (czas, krzywa, pivot, niezależność skrzyń, wczytanie bez animacji, odcinanie dystansem, 2 siatki), cząstki.
+- `forest-view/streaming.test.ts`: `setRemoved` (usuwanie i przywracanie instancji, także w dociąganych sektorach).
+- Nie ma automatycznego testu WebGL: wygląd, FPS i klawisze w przeglądarce sprawdza autor wg instrukcji w raporcie.

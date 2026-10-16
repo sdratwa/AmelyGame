@@ -35,7 +35,7 @@ Las 300 x 300 m (generator v2) jest teraz lasem w normalnej grze. Nie ma drugieg
 
 - Brak sterowania dotykowego w lesie 3D (klawiatura i mysz z pointer lock).
 - Brak pór roku w 3D (las wygląda tak samo zimą i latem).
-- W lesie 3D nie ma jeszcze skrzyń, trolla, pozyskiwania, narzędzi w rączce ani widocznego mostu (M1/C1/T1/R1): quest można przyjąć i śledzić, ale nie da się go jeszcze posunąć w 3D.
+- Skrzynie, pozyskiwanie i minimapa doszły w M1 + C1 ([m1-c1-skrzynie-minimapa.md](m1-c1-skrzynie-minimapa.md)). Nadal brak trolla, narzędzi w rączce i widocznego mostu (T1/R1).
 - Gęstość trawy HIGH jest taka sama jak MEDIUM; krawędź lasu jest widoczna z bliska.
 - Modele są ładowane przy każdym wejściu (kilka sekund przy pierwszym wejściu; brak pomiaru na sprzęcie referencyjnym).
 - Styl gruntu jest ustalany przy starcie widoku (zmiana wymaga ponownego wejścia).
