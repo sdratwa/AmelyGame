@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
+import { loadTrollAsset, type TrollAsset } from "@/lib/assets/characters";
 import { loadChestAsset } from "@/lib/assets/props";
 import { forestChestsOf, forestOf, forestWalkOf, syncHarvestedColliders } from "@/lib/game/world/lookup";
 import { BRIDGE_FLAG } from "@/lib/game/world/generators/v2";
@@ -12,6 +13,7 @@ import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PaletteStore, g
 import { GrassLab, sanitizeLab, type LabOptions } from "./grassLab";
 import { ForestInstancer, type InstancerStats } from "./instancer";
 import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOverrides } from "./profiles";
+import { NpcLayer, type NpcStats } from "./npc";
 import { ChestLayer, FxBurst, type BurstKind } from "./props";
 import { STREAM_RADIUS } from "./stream";
 import { forestModelIds, StreamedForest, type StreamStats } from "./streaming";
@@ -53,6 +55,10 @@ export type PanelStats = {
   stream: StreamStats | null;
   /** Postęp ładowania początkowego pierścienia sektorów (0-1) w trybie streamingu. */
   loadProgress: number;
+  /** Troll (prezentacja): stan animacji i patrolu; null, gdy model się nie wczytał albo nie jesteśmy w lesie. */
+  npc?: NpcStats | null;
+  /** Błąd wczytania modelu NPC (gra działa dalej bez niego). */
+  npcError?: string | null;
 };
 
 export type BenchmarkReport = {
@@ -213,6 +219,8 @@ export class ForestRenderer {
   private stream: StreamedForest | null = null;
   private streamOptions: StreamOptions | null = null;
   private chestLayer: ChestLayer | null = null;
+  private npcLayer: NpcLayer | null = null;
+  private npcError: string | null = null;
   private fx: FxBurst | null = null;
   private openedChests = new Set<string>();
   private harvestedIds = new Set<string>();
@@ -376,6 +384,11 @@ export class ForestRenderer {
     if (seed === undefined) return;
     syncHarvestedColliders(seed, [...this.harvestedIds]);
     this.stream?.setRemoved(this.harvestedIds);
+  }
+
+  /** Reakcja NPC z gry (np. gniew trolla po nieudanej próbie); false, gdy nic się nie wydarzyło (brak animacji, trwa inna reakcja, NPC daleko). */
+  reactNpc(npc: "troll", kind: "angry"): boolean {
+    return this.npcLayer?.react(npc, kind) ?? false;
   }
 
   /** Krótki efekt cząstek (drzazgi, odłamki) w danym punkcie świata. */
@@ -569,6 +582,11 @@ export class ForestRenderer {
       this.chestLayer.dispose();
       this.chestLayer = null;
     }
+    if (this.npcLayer) {
+      this.scene.remove(this.npcLayer.group);
+      this.npcLayer.dispose();
+      this.npcLayer = null;
+    }
     if (this.fx) {
       this.fx.dispose();
       this.fx = null;
@@ -619,8 +637,17 @@ export class ForestRenderer {
         this.error = e instanceof Error ? e.message : String(e);
         console.error(e);
       }
+      let trollAsset: TrollAsset | null = null;
+      this.npcError = null;
+      try {
+        trollAsset = await loadTrollAsset();
+      } catch (e) {
+        this.npcError = e instanceof Error ? e.message : String(e);
+        console.error(e);
+      }
       if (gen !== this.generation || this.disposed) {
         chestAsset?.dispose();
+        trollAsset?.dispose();
         instancer.dispose();
         await library.dispose();
         return;
@@ -646,6 +673,18 @@ export class ForestRenderer {
         layer.setOpened((id) => this.openedChests.has(id), false);
         this.chestLayer = layer;
         this.scene.add(layer.group);
+      }
+      if (trollAsset) {
+        const shadows = this.shadowsOn();
+        try {
+          const npc = new NpcLayer(trollAsset, { forest, walk, seed: opts.seed, castShadow: shadows, receiveShadow: shadows });
+          this.npcLayer = npc;
+          this.scene.add(npc.group);
+        } catch (e) {
+          this.npcError = e instanceof Error ? e.message : String(e);
+          console.error(e);
+          trollAsset.dispose();
+        }
       }
       const fx = new FxBurst();
       this.fx = fx;
@@ -864,6 +903,7 @@ export class ForestRenderer {
     this.renderer.shadowMap.enabled = shadows;
     this.sun.castShadow = shadows;
     this.chestLayer?.setShadows(shadows, shadows);
+    this.npcLayer?.setShadows(shadows, shadows);
     const sc = this.sun.shadow.camera;
     const d = p.shadows.distance;
     sc.left = -d;
@@ -1034,6 +1074,7 @@ export class ForestRenderer {
         ctl.teleport(pose.x, pose.z, pose.yaw);
         ctl.state.pitch = pose.pitch;
       } else if (!this.loading && !this.suspended) {
+        ctl.blockers = this.npcLayer?.blockers() ?? [];
         ctl.update(dt, this.moveInput());
       }
       const s = ctl.state;
@@ -1042,6 +1083,7 @@ export class ForestRenderer {
       this.updateInstances(time);
       this.updateSun();
       this.chestLayer?.update(dt, s);
+      if (!this.suspended) this.npcLayer?.update(dt, s);
       this.fx?.update(dt);
     }
     this.skyUniforms.uSunDir.value.set(...this.atmosphere.sunDir);
@@ -1203,6 +1245,8 @@ export class ForestRenderer {
       lab: this.lab !== null,
       stream: this.stream?.stats() ?? null,
       loadProgress: this.loadProgress,
+      npc: this.npcLayer?.stats() ?? null,
+      npcError: this.npcError,
     });
   }
 }

@@ -7,6 +7,7 @@ import { ForestRenderer, type PanelStats } from "@/lib/forest-view";
 import type { QualityId } from "@/lib/assets";
 import { ITEMS, type Command, type ForestPose, type GameState, type ItemId } from "@/lib/game/engine";
 import { ForestInteractor, type InteractorSnapshot } from "@/lib/game/systems/interactor";
+import { dispatchWithReactions } from "@/lib/game/systems/npcReactions";
 import { forestObject } from "@/lib/game/world/lookup";
 import { harvestOf } from "@/lib/game/world/harvest";
 import { safeForestPose } from "@/lib/game/world/generators/v2";
@@ -77,6 +78,12 @@ function DiagnosticsPanel({ stats }: { stats: PanelStats }) {
       <div>
         draw calls {stats.drawCalls} · trójkąty {(stats.triangles / 1000).toFixed(0)} tys.
       </div>
+      {stats.npc && (
+        <div>
+          troll {stats.npc.visible ? stats.npc.state : "daleko"} · patrol {stats.npc.patrol} ({stats.npc.routePoints} pkt) · x {stats.npc.x.toFixed(1)} z {stats.npc.z.toFixed(1)}
+        </div>
+      )}
+      {stats.npcError && <div className="text-red-300">model trolla: {stats.npcError}</div>}
     </div>
   );
 }
@@ -130,7 +137,13 @@ export function ForestWorldView({
   useEffect(() => {
     interactor.bind({
       getState: () => stateRef.current,
-      dispatch: (c) => dispatchRef.current(c),
+      dispatch: (c) =>
+        dispatchWithReactions(
+          stateRef.current,
+          c,
+          (command) => dispatchRef.current(command),
+          (reaction) => rendererRef.current?.reactNpc(reaction.npc, reaction.kind),
+        ),
       getPose: () => rendererRef.current?.getPose() ?? null,
       now: () => performance.now(),
     });

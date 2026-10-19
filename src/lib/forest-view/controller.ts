@@ -1,11 +1,13 @@
 import type { HeightField } from "@/lib/game/world/terrain";
-import type { WalkWorld, WorldFlags } from "@/lib/game/world/walk";
+import type { WalkBlock, WalkWorld, WorldFlags } from "@/lib/game/world/walk";
+import type { Blocker } from "@/lib/npc/patrol";
 
 export const EYE_HEIGHT = 1.62;
 export const WALK_SPEED = 3.2;
 export const SPRINT_SPEED = 5.6;
 export const MAX_FRAME_DT = 0.1;
 const MAX_PITCH = 1.45;
+const NPC_BLOCK: WalkBlock = { reason: "object", by: "npc" };
 
 export type PlayerState = { x: number; z: number; yaw: number; pitch: number; eyeY: number };
 export type MoveInput = { forward: number; right: number; sprint: boolean };
@@ -25,6 +27,8 @@ export class FirstPersonController {
   lastBlock: string | null = null;
   /** Flagi świata (np. `bridge.built` otwiera przejście przez rzekę); zmieniane z zewnątrz w trakcie gry. */
   flags: WorldFlags | undefined;
+  /** Ruchome okręgi kolizji (NPC): gracz nie wchodzi w nie, ale też nie zostaje wypchnięty w drzewo lub rzekę. */
+  blockers: readonly Blocker[] = [];
 
   constructor(
     private readonly walk: WalkWorld,
@@ -46,6 +50,30 @@ export class FirstPersonController {
     this.state.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.state.pitch - dy * sensitivity));
   }
 
+  /** Wypycha punkt z okręgów kolizji NPC; wypchnięcie sprawdza `walk.move`, a gdy nie da się go wykonać, gracz zostaje w miejscu. */
+  private avoidBlockers(from: { x: number; z: number }, to: { x: number; z: number; blocked: WalkBlock[] }) {
+    if (this.blockers.length === 0) return to;
+    const radius = this.walk.config.playerRadius;
+    let x = to.x;
+    let z = to.z;
+    let pushed = false;
+    for (const b of this.blockers) {
+      const min = b.r + radius;
+      const d = Math.hypot(x - b.x, z - b.z);
+      if (d >= min) continue;
+      const nx = d > 1e-6 ? (x - b.x) / d : 1;
+      const nz = d > 1e-6 ? (z - b.z) / d : 0;
+      x = b.x + nx * min;
+      z = b.z + nz * min;
+      pushed = true;
+    }
+    if (!pushed) return to;
+    const slid = this.walk.move({ x: to.x, z: to.z }, { x, z }, this.flags);
+    const stillInside = this.blockers.some((b) => Math.hypot(slid.x - b.x, slid.z - b.z) < b.r + radius - 0.02);
+    if (stillInside) return { x: from.x, z: from.z, blocked: [NPC_BLOCK] };
+    return { x: slid.x, z: slid.z, blocked: slid.blocked.length > 0 ? slid.blocked : [NPC_BLOCK] };
+  }
+
   /** Zwraca przebytą odległość (m). `dt` w sekundach; długie klatki są obcinane do `MAX_FRAME_DT`. */
   update(dt: number, input: MoveInput): number {
     const step = Math.min(Math.max(dt, 0), MAX_FRAME_DT);
@@ -59,7 +87,8 @@ export class FirstPersonController {
       const rz = f.x;
       const vx = (f.x * input.forward + rx * input.right) / Math.max(1, len);
       const vz = (f.z * input.forward + rz * input.right) / Math.max(1, len);
-      const result = this.walk.move({ x: s.x, z: s.z }, { x: s.x + vx * speed * step, z: s.z + vz * speed * step }, this.flags);
+      let result = this.walk.move({ x: s.x, z: s.z }, { x: s.x + vx * speed * step, z: s.z + vz * speed * step }, this.flags);
+      result = this.avoidBlockers({ x: s.x, z: s.z }, result);
       moved = Math.hypot(result.x - s.x, result.z - s.z);
       s.x = result.x;
       s.z = result.z;
