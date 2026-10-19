@@ -1,0 +1,289 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "license": "Mixkit Sound Effects Free License (https://mixkit.co/license/#sfxFree)",
+  "assets": {
+    "ambience.day": {
+      "id": "ambience.day",
+      "role": "ambience",
+      "channels": 2,
+      "loop": true,
+      "seconds": 54.386,
+      "frames": 2610543,
+      "files": [
+        {
+          "url": "/audio/ambience.day.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 607230
+        },
+        {
+          "url": "/audio/ambience.day.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 789774
+        }
+      ],
+      "loudness": {
+        "measuredLufs": -19.3,
+        "targetLufs": -23,
+        "appliedGainDb": -3.7,
+        "sourceTruePeakDb": -4.1
+      },
+      "loopCrossfadeSeconds": 0.3,
+      "verify": {
+        "ogg": {
+          "frames": 2610543,
+          "seconds": 54.3863125,
+          "seamJump": 0.00083,
+          "typicalDelta": 0.00189
+        },
+        "m4a": {
+          "frames": 2611200,
+          "seconds": 54.4,
+          "seamJump": 0.00347,
+          "typicalDelta": 0.00168
+        }
+      },
+      "source": {
+        "file": "mixkit-birds-in-forest-loop-1239.wav",
+        "bytes": 9646710,
+        "sha256": "3a3b8591d7242792952026f8e5b98a392900a820357e814a266e6b55ac422b6c",
+        "seconds": 54.686
+      }
+    },
+    "ambience.night": {
+      "id": "ambience.night",
+      "role": "ambience",
+      "channels": 2,
+      "loop": true,
+      "seconds": 46.742,
+      "frames": 2243625,
+      "files": [
+        {
+          "url": "/audio/ambience.night.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 623920
+        },
+        {
+          "url": "/audio/ambience.night.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 688669
+        }
+      ],
+      "loudness": {
+        "measuredLufs": -22.3,
+        "targetLufs": -23,
+        "appliedGainDb": -0.7,
+        "sourceTruePeakDb": -14
+      },
+      "loopCrossfadeSeconds": 0.3,
+      "verify": {
+        "ogg": {
+          "frames": 2243625,
+          "seconds": 46.7421875,
+          "seamJump": 0.02843,
+          "typicalDelta": 0.02512
+        },
+        "m4a": {
+          "frames": 2244608,
+          "seconds": 46.76266666666667,
+          "seamJump": 0.02368,
+          "typicalDelta": 0.02494
+        }
+      },
+      "source": {
+        "file": "mixkit-forest-at-night-1224.wav",
+        "bytes": 8298970,
+        "sha256": "0c883b47e9a0a37a39ab445ec1e6288e0f90573cf0376f90ca99798fafe609a5",
+        "seconds": 47.042
+      }
+    },
+    "bird.cockatoo": {
+      "id": "bird.cockatoo",
+      "role": "bird",
+      "channels": 1,
+      "loop": false,
+      "seconds": 1.476,
+      "frames": 70849,
+      "files": [
+        {
+          "url": "/audio/bird.cockatoo.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 12449
+        },
+        {
+          "url": "/audio/bird.cockatoo.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 12002
+        }
+      ],
+      "loudness": {
+        "measuredLufs": -12.1,
+        "targetLufs": -17,
+        "appliedGainDb": -4.9,
+        "sourceTruePeakDb": -3.2
+      },
+      "loopCrossfadeSeconds": 0,
+      "verify": {
+        "ogg": {
+          "frames": 70849,
+          "seconds": 1.4760208333333333,
+          "seamJump": 0,
+          "typicalDelta": 0.02425
+        },
+        "m4a": {
+          "frames": 71680,
+          "seconds": 1.4933333333333334,
+          "seamJump": 0,
+          "typicalDelta": 0.02434
+        }
+      },
+      "source": {
+        "file": "mixkit-cockatoo-bird-squawk-2437.wav",
+        "bytes": 390632,
+        "sha256": "889d156a7808a62eb018b76aecccced9ec762b8da9a8e757d816065bf89c5b8b",
+        "seconds": 1.476
+      }
+    },
+    "bird.jungle": {
+      "id": "bird.jungle",
+      "role": "bird",
+      "channels": 1,
+      "loop": false,
+      "seconds": 1.515,
+      "frames": 72721,
+      "files": [
+        {
+          "url": "/audio/bird.jungle.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 11054
+        },
+        {
+          "url": "/audio/bird.jungle.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 13070
+        }
+      ],
+      "loudness": {
+        "measuredLufs": -11.4,
+        "targetLufs": -17,
+        "appliedGainDb": -5.6,
+        "sourceTruePeakDb": -0.1
+      },
+      "loopCrossfadeSeconds": 0,
+      "verify": {
+        "ogg": {
+          "frames": 72721,
+          "seconds": 1.5150208333333333,
+          "seamJump": 0.00002,
+          "typicalDelta": 0.01568
+        },
+        "m4a": {
+          "frames": 73728,
+          "seconds": 1.536,
+          "seamJump": 0,
+          "typicalDelta": 0.01605
+        }
+      },
+      "source": {
+        "file": "mixkit-bird-screeching-in-the-jungle-2436.wav",
+        "bytes": 400952,
+        "sha256": "dffeef134a35070d61ecb5899ad9bce8c424fee0ede35e0fa3ab7e292c2abbe2",
+        "seconds": 1.515
+      }
+    },
+    "bird.screech": {
+      "id": "bird.screech",
+      "role": "bird",
+      "channels": 1,
+      "loop": false,
+      "seconds": 2.034,
+      "frames": 97632,
+      "files": [
+        {
+          "url": "/audio/bird.screech.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 14456
+        },
+        {
+          "url": "/audio/bird.screech.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 17279
+        }
+      ],
+      "loudness": {
+        "measuredLufs": -12.8,
+        "targetLufs": -17,
+        "appliedGainDb": -4.2,
+        "sourceTruePeakDb": -0.1
+      },
+      "loopCrossfadeSeconds": 0,
+      "verify": {
+        "ogg": {
+          "frames": 97632,
+          "seconds": 2.034,
+          "seamJump": 0,
+          "typicalDelta": 0.01127
+        },
+        "m4a": {
+          "frames": 98304,
+          "seconds": 2.048,
+          "seamJump": 0,
+          "typicalDelta": 0.01128
+        }
+      },
+      "source": {
+        "file": "mixkit-bird-screech-2435.wav",
+        "bytes": 538274,
+        "sha256": "924e8651d62bf1b4b8b987b66e2de40a61acf33368d3e1c28494081143fe33b5",
+        "seconds": 2.034
+      }
+    },
+    "event.wolves": {
+      "id": "event.wolves",
+      "role": "event",
+      "channels": 1,
+      "loop": false,
+      "seconds": 9.742,
+      "frames": 467639,
+      "files": [
+        {
+          "url": "/audio/event.wolves.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 84951
+        },
+        {
+          "url": "/audio/event.wolves.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 81240
+        }
+      ],
+      "loudness": {
+        "measuredLufs": -13.3,
+        "targetLufs": -19,
+        "appliedGainDb": -5.7,
+        "sourceTruePeakDb": -1
+      },
+      "loopCrossfadeSeconds": 0,
+      "verify": {
+        "ogg": {
+          "frames": 467639,
+          "seconds": 9.742479166666667,
+          "seamJump": 0,
+          "typicalDelta": 0.00217
+        },
+        "m4a": {
+          "frames": 467968,
+          "seconds": 9.749333333333333,
+          "seamJump": 0.00001,
+          "typicalDelta": 0.00212
+        }
+      },
+      "source": {
+        "file": "mixkit-wolves-at-scary-forest-2485.wav",
+        "bytes": 1718616,
+        "sha256": "110529734c439b611642577372e36e63444a6af6eb6af1e3c1acfda6a4f1f4d0",
+        "seconds": 9.742
+      }
+    }
+  }
+}

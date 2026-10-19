@@ -14,6 +14,7 @@
     "assets:props": "node scripts/assets/build-props.mjs",
     "assets:troll": "node scripts/assets/build-troll.mjs",
     "assets:deer": "node scripts/assets/build-deer.mjs",
+    "assets:audio": "node --experimental-strip-types --no-warnings scripts/assets/build-audio.mjs",
     "world:report": "FOREST_REPORT=1 vitest run src/lib/game/world/generators/v2/forest.report.test.ts --silent=false",
     "forest:report": "FOREST_REPORT=1 vitest run src/lib/forest-view/forestView.report.test.ts --silent=false"
   },
