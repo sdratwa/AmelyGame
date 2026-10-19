@@ -17,7 +17,7 @@ beforeAll(async () => {
 });
 
 describe("troll: struktura plików GLB", () => {
-  it("źródło: 22 siatki, 22 materiały, 66 tekstur, 13299 trójkątów, szkielet 66 kości i dwie animacje walk (2,33 s) i angry_01 (3,5 s)", async () => {
+  it("źródło: 22 siatki, 22 materiały, 66 tekstur, 13299 trójkątów, szkielet 65 kości i 7 animacji (Walk, Idle, Nervous, Surprised, Happy, Dance, Angry)", async () => {
     const doc = await readGlbDocument(entry().source.file);
     const root = doc.getRoot();
     expect(root.listMeshes()).toHaveLength(22);
@@ -26,11 +26,16 @@ describe("troll: struktura plików GLB", () => {
     const tris = root.listMeshes().reduce((n, m) => n + m.listPrimitives().reduce((k, p) => k + p.getIndices()!.getCount() / 3, 0), 0);
     expect(tris).toBe(13299);
     expect(root.listSkins()).toHaveLength(1);
-    expect(root.listSkins()[0].listJoints()).toHaveLength(66);
+    expect(root.listSkins()[0].listJoints()).toHaveLength(65);
     const clips = Object.fromEntries(root.listAnimations().map((a) => [a.getName(), Math.max(...a.listSamplers().map((s) => s.getInput()!.getMax([])[0]))]));
-    expect(Object.keys(clips).sort()).toEqual(["angry_01", "walk"]);
-    expect(clips.walk).toBeCloseTo(2.33, 2);
-    expect(clips.angry_01).toBeCloseTo(3.5, 2);
+    expect(Object.keys(clips).sort()).toEqual([...TROLL_REQUIRED_CLIPS].sort());
+    expect(clips.Walk).toBeCloseTo(1.433, 2);
+    expect(clips.Idle).toBeCloseTo(4.033, 2);
+    expect(clips.Nervous).toBeCloseTo(7.033, 2);
+    expect(clips.Surprised).toBeCloseTo(4.033, 2);
+    expect(clips.Happy).toBeCloseTo(3.633, 2);
+    expect(clips.Dance).toBeCloseTo(14.767, 2);
+    expect(clips.Angry).toBeCloseTo(3.3, 2);
   });
 
   it("manifest zgadza się z plikiem i z oryginałem (rozmiar, SHA-256); oryginał zostaje w assets/source", () => {
@@ -40,7 +45,7 @@ describe("troll: struktura plików GLB", () => {
     expect(src.length).toBe(e.source.bytes);
     expect(e.source.sha256).toBe(createHash("sha256").update(src).digest("hex"));
     expect(e.triangles).toBe(13299);
-    expect(e.bones).toBe(66);
+    expect(e.bones).toBe(65);
   });
 
   it("wariant gry: jedna siatka ze skórą, jeden materiał, trzy atlasy WebP; trójkąty, kości i animacje bez zmian", async () => {
@@ -59,7 +64,7 @@ describe("troll: struktura plików GLB", () => {
     expect(tris).toBe(13299);
     const jointNames = (r: typeof game) => r.listSkins()[0].listJoints().map((j) => j.getName());
     expect(jointNames(game)).toEqual(jointNames(src));
-    const nodeNames = (r: typeof game) => r.listNodes().map((n) => n.getName()).filter((n) => n.startsWith("mixamorig") || n === "Armature").sort();
+    const nodeNames = (r: typeof game) => r.listNodes().map((n) => n.getName()).filter((n) => n.startsWith("mixamorig") || n === "Troll_Rig").sort();
     expect(nodeNames(game)).toEqual(nodeNames(src));
     // Animacje: te same klipy, kanały i próbki co do wartości (optymalizacja nie dotyka ani kości, ani animacji).
     const channels = (r: typeof game) =>
@@ -112,7 +117,7 @@ describe("troll: koszt renderowania i oświetlenie", () => {
       if ((o as THREE.SkinnedMesh).isSkinnedMesh) skinned.push(o as THREE.SkinnedMesh);
     });
     expect(skinned).toHaveLength(1);
-    expect(skinned[0].skeleton.bones).toHaveLength(66);
+    expect(skinned[0].skeleton.bones).toHaveLength(65);
     expect(Array.isArray(skinned[0].material)).toBe(false);
     expect((skinned[0].material as THREE.Material).type).toBe("MeshStandardMaterial");
     expect(asset.triangles).toBe(13299);
@@ -145,12 +150,10 @@ describe("troll: ładowanie przez GLTFLoader i system zasobów", () => {
     expect(size.y * asset.scale).toBeLessThan(2.8);
   });
 
-  it("klipy walk i angry_01 są w pliku; Idle i Talk nie istnieją i nie są udawane", () => {
-    expect(asset.clips.map((c) => c.name).sort()).toEqual(["angry_01", "walk"]);
-    for (const name of TROLL_REQUIRED_CLIPS) expect(asset.clips.some((c) => c.name === name)).toBe(true);
-    expect(asset.clips.some((c) => /idle|talk/i.test(c.name))).toBe(false);
-    expect(asset.clips.find((c) => c.name === "walk")!.duration).toBeCloseTo(2.333, 2);
-    expect(asset.clips.find((c) => c.name === "angry_01")!.duration).toBeCloseTo(3.5, 2);
+  it("wszystkie 7 klipów z pliku jest załadowanych, z czasami zgodnymi z manifestem; nie ma klipu Talk", () => {
+    expect(asset.clips.map((c) => c.name).sort()).toEqual([...TROLL_REQUIRED_CLIPS].sort());
+    for (const c of entry().clips) expect(asset.clips.find((x) => x.name === c.name)!.duration).toBeCloseTo(c.duration, 2);
+    expect(asset.clips.some((c) => /talk/i.test(c.name))).toBe(false);
     expect(asset.scene.getObjectByName(sceneNodeName("mixamorig:Hips"))).toBeDefined();
   });
 
@@ -167,9 +170,9 @@ describe("troll: ładowanie przez GLTFLoader i system zasobów", () => {
         loadJson: readJson,
         loadGlb: async (url) => {
           const g = await readGlb(url);
-          return { scene: g.scene, animations: g.animations.filter((c) => c.name !== "angry_01") };
+          return { scene: g.scene, animations: g.animations.filter((c) => c.name !== "Angry") };
         },
       }),
-    ).rejects.toThrow(/angry_01/);
+    ).rejects.toThrow(/Angry/);
   });
 });

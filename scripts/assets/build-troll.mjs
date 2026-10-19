@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Potok postaci: `assets/source/friendly_forest_troll_3d_model.glb` -> `public/characters/troll.forest.glb` + `characters.json`.
+ * Potok postaci: `assets/source/forest_troll_animated.glb` -> `public/characters/troll.forest.glb` + `characters.json`.
  *
  *   npm run assets:troll
  *
- * Źródło: 22 siatki (tripo_part_N), 22 materiały, 66 tekstur (kolor, normalne, metaliczność/chropowatość), jeden
- * szkielet Mixamo (66 kości) i dwie animacje (walk, angry_01). Wariant gry:
+ * Źródło (Blender + Mixamo): 22 siatki (tripo_part_N) pod węzłem `Troll_Rig` (obrót 90° wokół X i skala 0,01), 22 materiały,
+ * 66 tekstur (kolor, normalne, metaliczność/chropowatość), jeden szkielet Mixamo (65 kości w skórze) i 7 animacji
+ * (Walk, Idle, Nervous, Surprised, Happy, Dance, Angry). Wariant gry:
  *  - szkielet, nazwy kości i animacje zostają NIETKNIĘTE (te same węzły, te same kanały i próbki),
  *  - 22 siatki scalone w jedną siatkę ze skórą (JOINTS_0/WEIGHTS_0 kopiowane 1:1), więc jeden materiał i jedno wywołanie rysowania,
  *  - 66 tekstur złożone w trzy atlasy 2048 x 2048 (kolor, normalne, MR) z marginesem 8 px i rozszerzeniem krawędzi
@@ -21,11 +22,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NodeIO, TextureInfo } from "@gltf-transform/core";
 import { ALL_EXTENSIONS, EXTTextureWebP } from "@gltf-transform/extensions";
-import { getBounds, prune } from "@gltf-transform/functions";
+import { prune } from "@gltf-transform/functions";
 import sharp from "sharp";
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const SRC = path.join(ROOT, "assets/source/friendly_forest_troll_3d_model.glb");
+const SRC = path.join(ROOT, "assets/source/forest_troll_animated.glb");
 const OUT_DIR = path.join(ROOT, "public/characters");
 const FILE = "troll.forest.glb";
 const ATLAS = 2048;
@@ -39,7 +42,6 @@ const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const doc = await io.read(SRC);
 const root = doc.getRoot();
-const sourceBounds = getBounds(root.listScenes()[0]);
 const sourceTris = root.listMeshes().reduce((n, m) => n + m.listPrimitives().reduce((k, p) => k + p.getIndices().getCount() / 3, 0), 0);
 const sourceSkin = root.listSkins()[0];
 const sourceClips = root.listAnimations().map((a) => ({ name: a.getName(), channels: a.listChannels().length }));
@@ -213,6 +215,34 @@ if (JSON.stringify(jointNames(cr.listSkins()[0])) !== JSON.stringify(jointNames(
 const clips = cr.listAnimations().map((a) => ({ name: a.getName(), channels: a.listChannels().length }));
 if (JSON.stringify(clips) !== JSON.stringify(sourceClips)) throw new Error("Zmieniły się animacje.");
 
+
+/**
+ * Obwiednia postaci w pozie wiązania po skinningu (jednostki sceny, z obrotem i skalą węzła `Troll_Rig`). `getBounds`
+ * z gltf-transform tu nie działa (pomija skórę), więc liczymy ją Three.js na kopii pliku bez tekstur (GLTFLoader nie
+ * dekoduje obrazów w Node).
+ */
+async function measureRestBounds(bytes) {
+  const copy = await io.readBinary(bytes);
+  for (const t of copy.getRoot().listTextures()) t.dispose();
+  for (const e of copy.getRoot().listExtensionsUsed()) e.dispose();
+  const plain = await new NodeIO().writeBinary(copy);
+  const gltf = await new GLTFLoader().parseAsync(plain.buffer.slice(plain.byteOffset, plain.byteOffset + plain.byteLength), "");
+  gltf.scene.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  gltf.scene.traverse((o) => {
+    if (!o.isSkinnedMesh) return;
+    o.skeleton.update();
+    for (let i = 0; i < o.geometry.getAttribute("position").count; i++) {
+      o.getVertexPosition(i, v);
+      box.expandByPoint(v.applyMatrix4(o.matrixWorld));
+    }
+  });
+  return { min: box.min.toArray(), max: box.max.toArray() };
+}
+const sourceBounds = await measureRestBounds(glb);
+if (!(sourceBounds.max[1] - sourceBounds.min[1] > 0)) throw new Error("Nie udało się zmierzyć wysokości postaci.");
+
 const manifestPath = path.join(OUT_DIR, "characters.json");
 const entry = {
   id: "troll.forest",
@@ -225,17 +255,20 @@ const entry = {
   hipsBone: "mixamorig:Hips",
   clips: clips.map((c) => ({ ...c, duration: round(cr.listAnimations().find((a) => a.getName() === c.name).listSamplers().reduce((m, s) => Math.max(m, s.getInput().getMax([])[0]), 0), 3) })),
   /** Wysokość postaci w pozie wiązania (jednostki modelu); skala do świata = targetHeight / sourceHeight. */
-  sourceHeight: round(sourceBounds.max[1] - sourceBounds.min[1], 4),
-  sourceBounds: { min: sourceBounds.min.map((v) => round(v)), max: sourceBounds.max.map((v) => round(v)) },
+  sourceHeight: round(sourceBounds.max[1] - sourceBounds.min[1], 7),
+  sourceBounds: { min: sourceBounds.min.map((v) => round(v, 7)), max: sourceBounds.max.map((v) => round(v, 7)) },
+  /** Przód modelu (kierunek, w który patrzą palce stóp) w układzie sceny; zgodny z konwencją azymutu `atan2(dx, dz)`. */
+  forward: "+z",
+  rigNode: "Troll_Rig",
   targetHeight: 2.7,
   atlas: { size: ATLAS, padding: PAD, rowsUsed: usedRows, textures: ["Troll_basecolor", "Troll_normal", "Troll_metalrough"].map((n, i) => ({ name: n, bytes: Object.values(atlases)[i].length })) },
   optimisation: { before: { meshes: 22, materials: 22, textures: 66 }, after: { meshes: 1, materials: 1, textures: 3 } },
   source: {
-    file: "assets/source/friendly_forest_troll_3d_model.glb",
+    file: "assets/source/forest_troll_animated.glb",
     sha256: sha256(fs.readFileSync(SRC)),
     bytes: fs.statSync(SRC).size,
     author: "dostarczone przez autora projektu Miasto",
-    note: "Szkielet Mixamo (66 kości) i animacje walk, angry_01 bez zmian; brak animacji Idle i Talk.",
+    note: "Szkielet Mixamo (65 kości w skórze) i 7 animacji (Walk, Idle, Nervous, Surprised, Happy, Dance, Angry) bez zmian; Walk jest w miejscu (bez root motion).",
   },
 };
 fs.writeFileSync(manifestPath, JSON.stringify({ schemaVersion: 1, characters: [entry] }, null, 2) + "\n");

@@ -18,6 +18,10 @@ export type CharacterEntry = {
   sourceHeight: number;
   sourceBounds: { min: number[]; max: number[] };
   targetHeight: number;
+  /** Przód modelu w układzie sceny (patrz potok): `+z` zgodne z azymutem `atan2(dx, dz)`. */
+  forward: "+z";
+  /** Węzeł szkieletu z obrotem i skalą (Blender: 90° wokół X, skala 0,01); skala do świata dotyczy całej postaci. */
+  rigNode: string;
   atlas: { size: number; padding: number; rowsUsed: number; textures: { name: string; bytes: number }[] };
   optimisation: { before: { meshes: number; materials: number; textures: number }; after: { meshes: number; materials: number; textures: number } };
   source: { file: string; sha256: string; bytes: number; author: string; note: string };
@@ -37,8 +41,8 @@ export class CharacterLoadError extends Error {
 }
 
 export const TROLL_ID = "troll.forest";
-/** Animacje wymagane od modelu trolla; brak którejkolwiek to błąd, a nie ciche udawanie ruchu. */
-export const TROLL_REQUIRED_CLIPS = ["walk", "angry_01"] as const;
+/** Animacje wymagane od modelu trolla (nazwy klipów w pliku); brak którejkolwiek to błąd, a nie ciche udawanie ruchu. */
+export const TROLL_REQUIRED_CLIPS = ["Walk", "Idle", "Nervous", "Surprised", "Happy", "Dance", "Angry"] as const;
 const DEFAULT_CHARACTERS_URL = "/characters";
 
 export type CharacterLoaderOptions = {
@@ -68,7 +72,7 @@ const defaultJson = (url: string) =>
 
 function isEntry(raw: unknown): raw is CharacterEntry {
   const e = raw as Partial<CharacterEntry> | null;
-  return !!e && typeof e.id === "string" && typeof e.file === "string" && typeof e.meshNode === "string" && typeof e.hipsBone === "string" && typeof e.sourceHeight === "number" && typeof e.targetHeight === "number" && Array.isArray(e.clips);
+  return !!e && typeof e.id === "string" && typeof e.file === "string" && typeof e.meshNode === "string" && typeof e.hipsBone === "string" && typeof e.sourceHeight === "number" && typeof e.targetHeight === "number" && e.forward === "+z" && Array.isArray(e.clips);
 }
 
 /** Nazwa kości po sanityzacji przez GLTFLoader (np. `mixamorig:Hips` -> `mixamorigHips`). */
@@ -76,7 +80,7 @@ export const sceneNodeName = (name: string) => THREE.PropertyBinding.sanitizeNod
 
 /**
  * Wczytuje trolla przez wspólny GLTFLoader i sprawdza strukturę: jedna siatka ze skórą, oczekiwana liczba kości,
- * kość bioder oraz klipy `walk` i `angry_01` (długości zgodne z manifestem).
+ * kość bioder oraz klipy z `TROLL_REQUIRED_CLIPS` (długości zgodne z manifestem).
  */
 export async function loadTrollAsset(options: CharacterLoaderOptions = {}): Promise<TrollAsset> {
   const base = options.baseUrl ?? DEFAULT_CHARACTERS_URL;

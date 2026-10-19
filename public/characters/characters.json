@@ -4,37 +4,64 @@
     {
       "id": "troll.forest",
       "file": "troll.forest.glb",
-      "bytes": 2209804,
+      "bytes": 3226960,
       "triangles": 13299,
       "vertices": 12954,
-      "bones": 66,
+      "bones": 65,
       "meshNode": "Troll_Body",
       "hipsBone": "mixamorig:Hips",
       "clips": [
         {
-          "name": "walk",
+          "name": "Walk",
           "channels": 195,
-          "duration": 2.333
+          "duration": 1.433
         },
         {
-          "name": "angry_01",
+          "name": "Idle",
           "channels": 195,
-          "duration": 3.5
+          "duration": 4.033
+        },
+        {
+          "name": "Nervous",
+          "channels": 195,
+          "duration": 7.033
+        },
+        {
+          "name": "Surprised",
+          "channels": 195,
+          "duration": 4.033
+        },
+        {
+          "name": "Dance",
+          "channels": 195,
+          "duration": 14.767
+        },
+        {
+          "name": "Happy",
+          "channels": 195,
+          "duration": 3.633
+        },
+        {
+          "name": "Angry",
+          "channels": 195,
+          "duration": 3.3
         }
       ],
-      "sourceHeight": 0.949,
+      "sourceHeight": 0.0094904,
       "sourceBounds": {
         "min": [
-          -0.4995,
+          -0.0049948,
           0,
-          -0.2289
+          -0.0022885
         ],
         "max": [
-          0.4995,
-          0.949,
-          0.2289
+          0.0049948,
+          0.0094904,
+          0.0022885
         ]
       },
+      "forward": "+z",
+      "rigNode": "Troll_Rig",
       "targetHeight": 2.7,
       "atlas": {
         "size": 2048,
@@ -68,11 +95,11 @@
         }
       },
       "source": {
-        "file": "assets/source/friendly_forest_troll_3d_model.glb",
-        "sha256": "3a9bf924ccc7d9db8c971ee7f267a2ceaa03fe9e81a2df3ae91be52704a25cd2",
-        "bytes": 6228248,
+        "file": "assets/source/forest_troll_animated.glb",
+        "sha256": "e18b97fb7895df7f15100d3839639eadbe3ae975dd5a1f6691c412441d2f2991",
+        "bytes": 7279036,
         "author": "dostarczone przez autora projektu Miasto",
-        "note": "Szkielet Mixamo (66 kości) i animacje walk, angry_01 bez zmian; brak animacji Idle i Talk."
+        "note": "Szkielet Mixamo (65 kości w skórze) i 7 animacji (Walk, Idle, Nervous, Surprised, Happy, Dance, Angry) bez zmian; Walk jest w miejscu (bez root motion)."
       }
     }
   ]

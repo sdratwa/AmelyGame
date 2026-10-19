@@ -133,4 +133,48 @@ describe("patrol: ruch", () => {
     expect(p.isYielding).toBe(true);
     expect(p.moving).toBe(false);
   });
+
+  it("stop w marszu hamuje łagodnie (bez skoku prędkości), staje w miejscu i nie przekracza punktu trasy", () => {
+    const p = new Patroller(route, { ...home, yaw: 0 }, { ...config, turnAccel: 4 }, mulberry32(4));
+    for (let i = 0; i < 60 * 30 && !(p.mode === "walk" && p.speed >= config.speed - 1e-6); i++) p.update(1 / 60);
+    expect(p.speed).toBeCloseTo(config.speed, 6);
+    let prev = p.speed;
+    let braked = 0;
+    const player = { x: p.x + 8, z: p.z };
+    for (let i = 0; i < 60 * 3; i++) {
+      p.update(1 / 60, { stop: true, face: player });
+      expect(prev - p.speed).toBeLessThanOrEqual((config.accel / 60) * 1.01 + 1e-9);
+      if (p.speed > 0) braked = i;
+      prev = p.speed;
+    }
+    expect(braked / 60).toBeGreaterThan(0.1);
+    expect(braked / 60).toBeLessThan(0.6);
+    expect(p.speed).toBe(0);
+    expect(p.mode).toBe("hold");
+    expect(p.moving).toBe(false);
+  });
+
+  it("obrót ku graczowi jest płynny: ograniczona prędkość i przyspieszenie kątowe, bez skoku o kąt półpełny", () => {
+    const p = new Patroller(route, { ...home, yaw: 0 }, { ...config, turnAccel: 4 }, mulberry32(4));
+    const player = { x: p.x, z: p.z - 6 };
+    let prevYaw = p.yaw;
+    let prevVel = 0;
+    let maxStep = 0;
+    let maxAccel = 0;
+    let frames = 0;
+    for (; frames < 60 * 10; frames++) {
+      p.update(1 / 60, { stop: true, face: player });
+      const d = Math.atan2(Math.sin(p.yaw - prevYaw), Math.cos(p.yaw - prevYaw));
+      maxStep = Math.max(maxStep, Math.abs(d));
+      maxAccel = Math.max(maxAccel, Math.abs(d * 60 - prevVel) * 60);
+      prevVel = d * 60;
+      prevYaw = p.yaw;
+      if (Math.abs(Math.atan2(Math.sin(Math.PI - p.yaw), Math.cos(Math.PI - p.yaw))) < 1e-6) break;
+    }
+    expect(maxStep * 60).toBeLessThanOrEqual(config.turnRate + 1e-6);
+    expect(maxAccel).toBeLessThan(20);
+    expect(frames / 60).toBeGreaterThan(1.5);
+    expect(frames / 60).toBeLessThan(5);
+    expect(p.yawVelocity).toBe(0);
+  });
 });

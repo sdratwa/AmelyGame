@@ -68,8 +68,10 @@ export type PatrolConfig = {
   speed: number;
   waitMin: number;
   waitMax: number;
-  /** Prędkość obrotu (rad/s). */
+  /** Maksymalna prędkość obrotu (rad/s). */
   turnRate: number;
+  /** Przyspieszenie kątowe przy obrocie ku celowi (rad/s^2); domyślnie 5. Obrót rusza i hamuje łagodnie. */
+  turnAccel?: number;
   /** Przyspieszenie i hamowanie (m/s^2): postać rusza i staje łagodnie, a tempo kroków da się dopasować do chwilowej prędkości. */
   accel: number;
 };
@@ -81,7 +83,9 @@ export type PatrolMode = "walk" | "wait" | "hold";
 export type PatrolContext = {
   /** Postój wymuszony z zewnątrz (np. reakcja gniewu): postać stoi i nie przesuwa się. */
   hold?: boolean;
-  /** Dokąd patrzeć podczas postoju wymuszonego. */
+  /** Łagodne zatrzymanie: postać hamuje do zera (z przyspieszeniem patrolu) i dopiero potem stoi; odwrotność `hold`, bez szarpnięcia. */
+  stop?: boolean;
+  /** Dokąd patrzeć podczas postoju (`hold` lub `stop`); obrót jest płynny (ograniczone przyspieszenie kątowe). */
   face?: Point;
   /** Przeszkody dynamiczne (gracz): patrol czeka, gdy ktoś stoi na drodze. */
   blockers?: readonly Blocker[];
@@ -120,6 +124,8 @@ export class Patroller {
   lastStep = 0;
   /** Chwilowa prędkość marszu (m/s). */
   speed = 0;
+  /** Chwilowa prędkość kątowa obrotu ku celowi (rad/s, ze znakiem). */
+  yawVelocity = 0;
   private index = 0;
   private timer: number;
   private yielded = false;
@@ -156,12 +162,17 @@ export class Patroller {
   update(dt: number, ctx: PatrolContext = {}): void {
     const step = Math.min(Math.max(dt, 0), MAX_STEP);
     this.lastStep = 0;
-    if (ctx.hold) {
-      this.speed = 0;
-      this.mode = "hold";
-      if (ctx.face) this.yaw = turnToward(this.yaw, Math.atan2(ctx.face.x - this.x, ctx.face.z - this.z), this.config.turnRate * step);
+    if (ctx.hold || ctx.stop) {
+      if (ctx.stop && !ctx.hold && this.mode === "walk" && this.speed > 1e-3 && this.hasRoute) this.brake(step);
+      else {
+        this.speed = 0;
+        this.mode = "hold";
+      }
+      if (ctx.face) this.faceSmoothly(Math.atan2(ctx.face.x - this.x, ctx.face.z - this.z), step);
+      else this.yawVelocity = 0;
       return;
     }
+    this.yawVelocity = 0;
     if (this.mode === "hold") {
       this.mode = "wait";
       this.timer = Math.min(this.timer, 0.4);
@@ -207,6 +218,37 @@ export class Patroller {
       this.mode = "wait";
       this.timer = this.nextWait();
     }
+  }
+
+  /** Hamowanie w marszu: dalej wzdłuż odcinka, aż prędkość spadnie do zera (nie dalej niż do celu odcinka). */
+  private brake(step: number): void {
+    const target = this.target();
+    const dist = Math.hypot(target.x - this.x, target.z - this.z);
+    this.speed = Math.max(0, this.speed - this.config.accel * step);
+    const advance = Math.min(dist, this.speed * step);
+    if (dist > 1e-9) {
+      this.x += ((target.x - this.x) / dist) * advance;
+      this.z += ((target.z - this.z) / dist) * advance;
+    }
+    this.lastStep = advance;
+    if (this.speed <= 1e-3 || dist - advance < 1e-6) {
+      this.speed = 0;
+      this.mode = "hold";
+    }
+  }
+
+  /** Obrót ku azymutowi z ograniczoną prędkością i przyspieszeniem kątowym (łagodny start i hamowanie, bez gwałtownego obrotu). */
+  private faceSmoothly(target: number, step: number): void {
+    const alpha = this.config.turnAccel ?? 5;
+    const error = wrap(target - this.yaw);
+    const desired = Math.sign(error) * Math.min(this.config.turnRate, Math.sqrt(2 * alpha * Math.abs(error)));
+    const dv = desired - this.yawVelocity;
+    this.yawVelocity += Math.sign(dv) * Math.min(Math.abs(dv), alpha * step);
+    const move = this.yawVelocity * step;
+    if (Math.abs(error) <= Math.abs(move) || Math.abs(error) < 1e-4) {
+      this.yaw = target;
+      this.yawVelocity = 0;
+    } else this.yaw = wrap(this.yaw + move);
   }
 
   private blocked(ctx: PatrolContext, x: number, z: number): boolean {

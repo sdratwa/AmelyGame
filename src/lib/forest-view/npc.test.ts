@@ -14,13 +14,13 @@ beforeEach(async () => {
 const make = () => new NpcLayer(asset, { forest: forestOf(SEED), walk: forestWalkOf(SEED), seed: SEED, castShadow: false, receiveShadow: false });
 
 describe("NpcLayer: troll w scenie F1", () => {
-  it("startuje w miejscu kotwicy W1b i raportuje statystyki modelu (jedna siatka, 66 kości, 22 materiały źródłowe zredukowane do 1)", () => {
+  it("startuje w miejscu kotwicy W1b i raportuje statystyki modelu (jedna siatka, 65 kości, 22 materiały źródłowe zredukowane do 1)", () => {
     const layer = make();
     const place = trollPlacement(forestOf(SEED));
     const stats = layer.stats();
     expect(stats.x).toBeCloseTo(place.home.x, 6);
     expect(stats.z).toBeCloseTo(place.home.z, 6);
-    expect(stats.bones).toBe(66);
+    expect(stats.bones).toBe(65);
     expect(stats.triangles).toBe(13299);
     expect(stats.materials).toBe(1);
     expect(stats.routePoints).toBeGreaterThanOrEqual(3);

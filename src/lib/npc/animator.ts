@@ -15,6 +15,13 @@ export type AnimStateSpec = {
   procedural?: boolean;
   /** Tempo klipu jest skalowane do prędkości w świecie (`setLocomotionSpeed`), żeby stopy nie ślizgały się po ziemi. */
   locomotion?: boolean;
+  /** Reakcję jednorazową wolno przerwać (płynnie) zmianą stanu podstawowego lub `cancel`; pozostałe grają do końca. */
+  interruptible?: boolean;
+};
+
+export type TriggerOptions = {
+  /** Kolejne reakcje jednorazowe odtwarzane po tej (płynne przejście z ostatniej klatki, każda w całości). */
+  then?: readonly string[];
 };
 
 /** Amplitudy (rad) i częstotliwości (Hz) sinusoidalnego ruchu kości w osiach X, Y, Z (obrót lokalny). */
@@ -27,9 +34,11 @@ export type AnimatorOptions = {
   base: string;
   procedural?: readonly ProceduralBone[];
   onChange?: (change: { from: string | null; to: string; kind: "base" | "reaction" | "return" }) => void;
+  /** Wywoływane, gdy klip jednorazowy dojdzie do końca (zdarzenie `finished` miksera), przed przejściem do następnego stanu. */
+  onFinished?: (id: string) => void;
 };
 
-const DEFAULT_FADE = 0.25;
+const DEFAULT_FADE = 0.3;
 const PROCEDURAL_BLEND_SECONDS = 0.5;
 
 /**
@@ -49,10 +58,20 @@ export class NpcAnimator {
   private currentId: string | null = null;
   private baseId: string;
   private reactionId: string | null = null;
+  private chain: string[] = [];
+  private finishedId: string | null = null;
+  private readonly finishListener = (event: { action?: THREE.AnimationAction }) => {
+    for (const [id, action] of this.actions) {
+      if (action === event.action && id === this.reactionId) this.finishedId = id;
+    }
+  };
   private procWeight = 0;
   private clock = 0;
   private speedFactor = 1;
+  private readonly blend = new Map<string, number>();
+  private fadeSeconds = DEFAULT_FADE;
   private readonly onChange?: AnimatorOptions["onChange"];
+  private readonly onFinished?: AnimatorOptions["onFinished"];
 
   constructor(
     private readonly root: THREE.Object3D,
@@ -60,6 +79,8 @@ export class NpcAnimator {
   ) {
     this.mixer = new THREE.AnimationMixer(root);
     this.onChange = options.onChange;
+    this.onFinished = options.onFinished;
+    this.mixer.addEventListener("finished", this.finishListener as never);
     for (const clip of options.clips) this.registerClip(clip);
     for (const spec of options.states) this.registerState(spec);
     for (const def of options.procedural ?? []) {
@@ -112,13 +133,25 @@ export class NpcAnimator {
     return this.currentId ? (this.actions.get(this.currentId)?.time ?? 0) : 0;
   }
 
-  /** Wagi aktywnych klipów (do testów i diagnostyki przejść). */
+  /** Długość klipu aktualnego stanu (s). */
+  get stateDuration(): number {
+    return this.currentId ? (this.actions.get(this.currentId)?.getClip().duration ?? 0) : 0;
+  }
+
+  /** Czy trwa reakcja, której nie wolno przerwać. */
+  get locked(): boolean {
+    return this.reactionId !== null && !this.specs.get(this.reactionId)?.interruptible;
+  }
+
+  /** Reakcje czekające w łańcuchu (po bieżącej). */
+  get queued(): readonly string[] {
+    return this.chain;
+  }
+
+  /** Wagi aktywnych stanów (do testów i diagnostyki przejść); zawsze sumują się do 1. */
   weights(): Record<string, number> {
     const out: Record<string, number> = {};
-    for (const [id, action] of this.actions) {
-      const w = action.isRunning() ? action.getEffectiveWeight() : 0;
-      if (w > 1e-4) out[id] = w;
-    }
+    for (const [id, w] of this.blend) if (w > 1e-4) out[id] = w;
     return out;
   }
 
@@ -132,14 +165,38 @@ export class NpcAnimator {
     if (!spec || !spec.loop || !this.has(id)) return false;
     if (this.baseId === id && (this.isReacting || this.currentId === id)) return true;
     this.baseId = id;
+    if (this.reactionId && !this.locked) this.clearReaction();
     if (!this.isReacting) this.switchTo(id, "base");
     return true;
   }
 
-  /** Uruchamia jednorazową reakcję i po jej końcu wraca do stanu podstawowego. Zwraca false, gdy reakcji nie ma albo trwa inna. */
-  trigger(id: string): boolean {
-    const spec = this.specs.get(id);
-    if (!spec || spec.loop || !this.has(id) || this.isReacting) return false;
+  /** Przerywa reakcję, jeśli wolno (płynny powrót do stanu podstawowego). Zwraca true, gdy nic już nie gra jako reakcja. */
+  cancel(): boolean {
+    if (!this.reactionId) return true;
+    if (this.locked) return false;
+    this.clearReaction();
+    this.switchTo(this.baseId, "return");
+    return true;
+  }
+
+  private clearReaction(): void {
+    this.reactionId = null;
+    this.chain = [];
+    this.finishedId = null;
+  }
+
+  /**
+   * Uruchamia jednorazową reakcję; po jej zakończeniu (zdarzenie `finished` miksera) gra kolejne z `then`, a na końcu wraca do
+   * stanu podstawowego. Zwraca false, gdy reakcji (albo któregoś ogniwa łańcucha) nie ma albo trwa inna reakcja.
+   */
+  trigger(id: string, options: TriggerOptions = {}): boolean {
+    const chain = options.then ?? [];
+    for (const next of [id, ...chain]) {
+      const spec = this.specs.get(next);
+      if (!spec || spec.loop || !this.has(next)) return false;
+    }
+    if (this.reactionId && !this.cancel()) return false;
+    this.chain = [...chain];
     this.reactionId = id;
     this.switchTo(id, "reaction");
     return true;
@@ -172,33 +229,64 @@ export class NpcAnimator {
     const spec = this.specs.get(id)!;
     const next = this.actionOf(id);
     const prevId = this.currentId;
-    const prev = prevId && prevId !== id ? this.actions.get(prevId) : undefined;
+    // Wejście w klip, który jeszcze znika z poprzedniego przejścia, zaczyna od jego bieżącej wagi: suma wag zostaje równa 1.
+    const carried = this.blend.get(id) ?? 0;
     next.reset();
     next.time = spec.startTime ?? 0;
     next.setEffectiveTimeScale(this.timeScaleOf(spec));
-    next.setEffectiveWeight(1);
     next.play();
-    if (prev) next.crossFadeFrom(prev, spec.fade ?? DEFAULT_FADE, false);
     this.currentId = id;
+    this.fadeSeconds = Math.max(spec.fade ?? DEFAULT_FADE, 0);
+    this.blend.set(id, prevId && this.fadeSeconds > 0 ? carried : 1);
+    this.advanceBlend(0);
     this.onChange?.({ from: prevId, to: id, kind });
   }
 
-  /** Posuwa animację o `dt` sekund; po zakończeniu reakcji (z wyprzedzeniem na przejście) wraca do stanu podstawowego. */
+  /**
+   * Płynne przejście: waga bieżącego stanu rośnie liniowo, a pozostałych (także tych, które jeszcze znikają z poprzedniego
+   * przejścia) maleje proporcjonalnie, więc suma wag zawsze wynosi 1 (żadnych dwóch pełnych animacji naraz i bez skoku do T-pose).
+   */
+  private advanceBlend(step: number): void {
+    const id = this.currentId;
+    if (!id) return;
+    let current = this.blend.get(id) ?? 0;
+    if (current < 1) current = this.fadeSeconds > 0 ? Math.min(1, current + step / this.fadeSeconds) : 1;
+    this.blend.set(id, current);
+    let others = 0;
+    for (const [other, w] of this.blend) if (other !== id) others += w;
+    const scale = others > 1e-9 ? (1 - current) / others : 0;
+    for (const [other, w] of [...this.blend]) {
+      if (other === id) continue;
+      const next = w * scale;
+      if (next <= 1e-4) {
+        this.blend.delete(other);
+        this.actions.get(other)?.stop();
+      } else this.blend.set(other, next);
+    }
+    for (const [key, w] of this.blend) this.actions.get(key)?.setEffectiveWeight(w);
+  }
+
+  /** Posuwa animację o `dt` sekund; koniec reakcji wynika ze zdarzenia `finished` miksera, nie z licznika czasu. */
   update(dt: number): void {
     const step = Math.max(0, dt);
     this.clock += step;
-    const reactionId = this.reactionId;
-    if (reactionId) {
-      const action = this.actions.get(reactionId)!;
-      const clip = action.getClip();
-      const scale = Math.abs(action.getEffectiveTimeScale()) || 1;
-      const fadeBack = this.specs.get(this.baseId)?.fade ?? DEFAULT_FADE;
-      if (action.time + fadeBack * scale >= clip.duration - 1e-6) {
+    this.advanceBlend(step);
+    this.mixer.update(step);
+    const finished = this.finishedId;
+    if (finished) {
+      this.finishedId = null;
+      const next = this.chain.shift();
+      if (next) {
+        this.reactionId = next;
+        this.switchTo(next, "reaction");
+      } else {
         this.reactionId = null;
         this.switchTo(this.baseId, "return");
       }
+      // Ustawia wagi nowego przejścia od zera jeszcze w tej klatce (bez podwójnej wagi w odczycie i na ekranie).
+      this.mixer.update(0);
+      this.onFinished?.(finished);
     }
-    this.mixer.update(step);
     this.applyProcedural(step);
   }
 
@@ -236,7 +324,10 @@ export class NpcAnimator {
   }
 
   dispose(): void {
+    this.mixer.removeEventListener("finished", this.finishListener as never);
+    this.clearReaction();
     this.mixer.stopAllAction();
+    this.blend.clear();
     this.mixer.uncacheRoot(this.root);
   }
 }
