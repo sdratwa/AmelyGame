@@ -117,6 +117,8 @@ Narzędzia są w `devDependencies` (`@gltf-transform/*`, `meshoptimizer`, `sharp
 - https://poly.pizza/m/Ip2iXOq381, https://poly.pizza/m/5vO2YJsPEf, https://poly.pizza/m/Q3g8BKnXHA
 - https://quaternius.com/packs/universalbasecharacters.html, https://kaylousberg.itch.io/kaykit-adventurers
 
-## Skrzynia baśniowa (od autora, M1)
+## Skrzynia baśniowa (od autora, M1) - zastąpiona
+
+Zastąpiona modelem `chest.treasure` (skrzynia ze skarbem) i dodano trolla: patrz [modele-skrzynia-troll.md](modele-skrzynia-troll.md). Opis poniżej jest historyczny.
 
 Plik od autora (`assets/source/miasto_skrzynia_basniowa.glb`) jest docelowym modelem skrzyń w lesie. Potok `npm run assets:props` tworzy `public/props/chest.fairy.glb` i `props.json` (osobno od `public/models`, bo `assets:build` odtwarza ten katalog). Szczegóły analizy (pivot `Lid_Hinge`, kolory wierzchołków, skala 0,85) w [m1-c1-skrzynie-minimapa.md](m1-c1-skrzynie-minimapa.md). Kandydat Kenney `chest` z listy powyżej nie jest już potrzebny.

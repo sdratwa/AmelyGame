@@ -2,7 +2,9 @@
 
 Pierwsza część questa "Most do nieznanego" jest grywalna w normalnej grze: przyjęcie zadania, wejście do lasu, minimapa (`M`), trzy skrzynie, klawisz `E`, ekwipunek (`I`), piła i kilof, drewno i kamień, postęp w dzienniku (`J`), zapis. Nie ma jeszcze trolla, zagadek ani budowy mostu (kolejny etap).
 
-## Model skrzyni (GLB od autora)
+> Uwaga: model skrzyni z tego dokumentu (`chest.fairy`) został zastąpiony modelem `chest.treasure`; aktualny opis w [modele-skrzynia-troll.md](modele-skrzynia-troll.md). Logika, pozycje i interakcje poniżej pozostają aktualne.
+
+## Model skrzyni (GLB od autora, wersja historyczna)
 
 Źródło: `assets/source/miasto_skrzynia_basniowa.glb` (kopia pliku od autora, SHA-256 w manifeście). Wynik potoku: `public/props/chest.fairy.glb` + `public/props/props.json` (`npm run assets:props`, skrypt `scripts/assets/build-props.mjs`).
 

@@ -52,3 +52,7 @@ Overlay (`?debug=1`): FPS średni i 1% low, czas klatki, draw calls, trójkąty,
 ## Zasada
 
 Każda zmiana graficzna zawiera notatkę o wpływie na wydajność (draw calls, trójkąty, pamięć tekstur).
+
+## Modele skrzyni i trolla
+
+Troll: 1 skórka, 1 materiał, 3 tekstury 2048 (ok. 64 MiB GPU), 13299 trójkątów, 66 kości, 1 wywołanie rysowania (+1 w cieniach); aktualizowany tylko w zasięgu 140 m. Skrzynie: 3 wywołania rysowania (korpus, pokrywa, zamek), 9257 trójkątów na skrzynię. Szczegóły w [modele-skrzynia-troll.md](modele-skrzynia-troll.md). FPS w przeglądarce nie był mierzony przez agenta.

@@ -129,3 +129,4 @@
 - Ocena wizualna modeli (które kolory liści zostają, jakość LOD1, potrzeba billboardów) i progi profili jakości - V2.
 - Piła: brak zweryfikowanego kandydata CC0.
 - Przegląd drenażu życia pod kątem dzieci (zima: -1% co 5 s w nocy) - osobna propozycja; wartości na razie bez zmian.
+- Troll i skrzynia: finalne modele autora; idle trolla to poza z klipu chodu + ruch proceduralny (brak animacji Idle/Talk w pliku); minimalny patrol jako sama prezentacja do czasu T1. Do decyzji autora: dodatkowe animacje Idle/Talk, niższa rozdzielczość atlasu trolla na słabszym sprzęcie.

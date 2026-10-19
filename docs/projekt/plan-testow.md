@@ -114,3 +114,4 @@ Zrealizowane w `src/lib/game/world/*.test.ts`: determinizm i zróżnicowanie ter
 - `forest-view/props.test.ts`: animacja pokrywy (czas, krzywa, pivot, niezależność skrzyń, wczytanie bez animacji, odcinanie dystansem, 2 siatki), cząstki.
 - `forest-view/streaming.test.ts`: `setRemoved` (usuwanie i przywracanie instancji, także w dociąganych sektorach).
 - Nie ma automatycznego testu WebGL: wygląd, FPS i klawisze w przeglądarce sprawdza autor wg instrukcji w raporcie.
+- Modele skrzyni i trolla (struktura GLB, root motion, animator, patrol, adapter reakcji, zapis): patrz [modele-skrzynia-troll.md](modele-skrzynia-troll.md), sekcja Testy.
