@@ -1,20 +1,13 @@
-import fs from "node:fs";
-import path from "node:path";
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { beforeAll, describe, expect, it } from "vitest";
+import { parseWithoutTextures, publicDir, readJsonFile } from "@/lib/assets/glbTestkit";
 import { loadChestAsset, type ChestAsset } from "@/lib/assets/props";
 import { forestChestsOf, forestOf } from "@/lib/game/world/lookup";
 import { CHEST_DRAW_DISTANCE, CHEST_OPEN_SECONDS, ChestLayer, FxBurst, openEase } from "./props";
 
 const SEED = 2030;
-const DIR = path.join(process.cwd(), "public/props");
-const loader = new GLTFLoader();
-const readJson = async (url: string) => JSON.parse(fs.readFileSync(path.join(DIR, url.replace(/^\/props\//, "")), "utf8"));
-const readGlb = async (url: string) => {
-  const buf = fs.readFileSync(path.join(DIR, url.replace(/^\/props\//, "")));
-  return loader.parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, "");
-};
+const readJson = async (url: string) => readJsonFile(publicDir(url.replace(/^\//, "")));
+const readGlb = async (url: string) => parseWithoutTextures(publicDir(url.replace(/^\//, "")));
 
 let asset: ChestAsset;
 beforeAll(async () => {
@@ -52,7 +45,7 @@ describe("M1: animacja pokrywy skrzyni", () => {
     expect(CHEST_OPEN_SECONDS).toBeLessThanOrEqual(1);
   });
 
-  it("dwie siatki instancjonowane (korpus, pokrywy) = dwa wywołania rysowania dla wszystkich skrzyń", () => {
+  it("trzy siatki instancjonowane (korpus, zamek, pokrywy) = trzy wywołania rysowania dla wszystkich skrzyń", () => {
     const { layer, placements } = makeLayer();
     const p = placements[0];
     layer.update(0, { x: p.x, z: p.z });
@@ -60,7 +53,8 @@ describe("M1: animacja pokrywy skrzyni", () => {
     layer.group.traverse((o) => {
       if ((o as THREE.InstancedMesh).isInstancedMesh) meshes.push(o as THREE.InstancedMesh);
     });
-    expect(meshes).toHaveLength(2);
+    expect(meshes).toHaveLength(3);
+    expect(meshes.map((m) => m.name).sort()).toEqual(["chests:body", "chests:lid", "chests:lock"]);
     expect(layer.ids).toHaveLength(3);
     layer.dispose();
   });
@@ -94,6 +88,25 @@ describe("M1: animacja pokrywy skrzyni", () => {
     for (let i = 0; i < 120; i++) layer.update(1 / 60, { x: target.x, z: target.z });
     expect(lidAngleOf(layer, target.id)).toBeCloseTo(full, 4);
     expect(layer.openness(target.id)).toBe(1);
+    layer.dispose();
+  });
+
+  it("pokrywa nie odrywa się od korpusu: jej zawias w świecie zawsze leży w tym samym miejscu skrzyni, a zamek jedzie z korpusem", () => {
+    const { layer, placements } = makeLayer();
+    const target = placements[0];
+    layer.update(0, { x: target.x, z: target.z });
+    const expected = new THREE.Vector3(asset.hinge.x, asset.hinge.y, asset.hinge.z)
+      .multiplyScalar(asset.entry.worldScale)
+      .applyMatrix4(layer.bodyMatrix(target.id)!);
+    layer.setOpened((id) => id === target.id, true);
+    for (let i = 0; i < 80; i++) {
+      layer.update(1 / 60, { x: target.x, z: target.z });
+      const hinge = new THREE.Vector3().setFromMatrixPosition(layer.lidMatrix(target.id)!);
+      expect(hinge.distanceTo(expected)).toBeLessThan(1e-4);
+    }
+    const index = layer.ids.indexOf(target.id);
+    const lock = new THREE.Matrix4().fromArray(layer.lockMesh.instanceMatrix.array as Float32Array, index * 16);
+    expect(lock.equals(layer.bodyMatrix(target.id)!)).toBe(true);
     layer.dispose();
   });
 

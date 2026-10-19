@@ -32,13 +32,16 @@ type ChestSlot = {
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 /**
- * Warstwa skrzyń lasu: dwie siatki instancjonowane (korpus i pokrywy), czyli dwa wywołania rysowania dla wszystkich
- * skrzyń. Każda pokrywa ma własną macierz instancji: obrót wokół zawiasu (oś X w węźle Lid_Hinge) jest liczony
- * niezależnie, więc skrzynie otwierają się osobno. Stan otwarcia pochodzi z gry (`setOpened`), nie z tej klasy.
+ * Warstwa skrzyń lasu: trzy siatki instancjonowane (korpus, zamek i pokrywy), czyli trzy wywołania rysowania dla
+ * wszystkich skrzyń. Zamek dzieli macierz z korpusem (jest nieruchomy). Każda pokrywa ma własną macierz instancji:
+ * obrót wokół zawiasu (oś X w węźle Lid_Hinge) jest liczony niezależnie, więc skrzynie otwierają się osobno, a pokrywa
+ * jest zawsze złożona jako baza skrzyni * przesunięcie do zawiasu * obrót, czyli nie da się jej oderwać od korpusu.
+ * Stan otwarcia pochodzi z gry (`setOpened`), nie z tej klasy.
  */
 export class ChestLayer {
   readonly group = new THREE.Group();
   readonly bodyMesh: THREE.InstancedMesh;
+  readonly lockMesh: THREE.InstancedMesh;
   readonly lidMesh: THREE.InstancedMesh;
   private readonly slots: ChestSlot[];
   private readonly hingeMatrix: THREE.Matrix4;
@@ -68,11 +71,13 @@ export class ChestLayer {
       startedAt: 0,
     }));
     const n = Math.max(1, placements.length);
-    this.bodyMesh = new THREE.InstancedMesh(asset.body, asset.material, n);
-    this.lidMesh = new THREE.InstancedMesh(asset.lid, asset.material, n);
+    this.bodyMesh = new THREE.InstancedMesh(asset.body, asset.bodyMaterial, n);
+    this.lockMesh = new THREE.InstancedMesh(asset.lock, asset.lockMaterial, n);
+    this.lidMesh = new THREE.InstancedMesh(asset.lid, asset.lidMaterial, n);
     this.bodyMesh.name = "chests:body";
+    this.lockMesh.name = "chests:lock";
     this.lidMesh.name = "chests:lid";
-    for (const mesh of [this.bodyMesh, this.lidMesh]) {
+    for (const mesh of this.meshes) {
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       // Są tylko 3 skrzynie, a ich obwiednia (instancje rozrzucone po lesie) nie nadaje się do odcinania: o widoczności decyduje dystans.
       mesh.frustumCulled = false;
@@ -88,8 +93,12 @@ export class ChestLayer {
     return this.slots.map((s) => s.placement.id);
   }
 
+  private get meshes(): THREE.InstancedMesh[] {
+    return [this.bodyMesh, this.lockMesh, this.lidMesh];
+  }
+
   setShadows(cast: boolean, receive: boolean): void {
-    for (const mesh of [this.bodyMesh, this.lidMesh]) {
+    for (const mesh of this.meshes) {
       mesh.castShadow = cast;
       mesh.receiveShadow = receive;
     }
@@ -158,13 +167,14 @@ export class ChestLayer {
     this.visible.forEach((slotIndex, k) => {
       const slot = this.slots[slotIndex];
       this.bodyMesh.setMatrixAt(k, slot.base);
+      this.lockMesh.setMatrixAt(k, slot.base);
       lid.copy(slot.base).multiply(this.hingeMatrix).multiply(rot.makeRotationX(this.asset.openAngle * slot.open));
       this.lidMesh.setMatrixAt(k, lid);
     });
-    this.bodyMesh.count = this.visible.length;
-    this.lidMesh.count = this.visible.length;
-    this.bodyMesh.instanceMatrix.needsUpdate = true;
-    this.lidMesh.instanceMatrix.needsUpdate = true;
+    for (const mesh of this.meshes) {
+      mesh.count = this.visible.length;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   /** Liczba rysowanych skrzyń (do diagnostyki i testów). */
@@ -189,8 +199,7 @@ export class ChestLayer {
 
   dispose(): void {
     this.group.removeFromParent();
-    this.bodyMesh.dispose();
-    this.lidMesh.dispose();
+    for (const mesh of this.meshes) mesh.dispose();
     this.asset.dispose();
   }
 }

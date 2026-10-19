@@ -2,41 +2,80 @@
   "schemaVersion": 1,
   "props": [
     {
-      "id": "chest.fairy",
-      "file": "chest.fairy.glb",
-      "bytes": 461904,
-      "triangles": 7708,
+      "id": "chest.treasure",
+      "file": "chest.treasure.glb",
+      "bytes": 745664,
+      "triangles": 9257,
       "bodyNode": "Chest_Body",
       "hingeNode": "Lid_Hinge",
       "lidNode": "Chest_Lid",
+      "lockNode": "Chest_Lock",
       "hinge": {
-        "x": 0,
-        "y": 0.505,
-        "z": -0.365
+        "x": 0.001,
+        "y": 0.396,
+        "z": -0.354
       },
       "front": "+z",
       "openAxis": "x",
       "openAngleDeg": -105,
       "sourceBounds": {
         "min": [
-          -0.596,
+          -0.4994,
           0,
-          -0.446
+          -0.3762
         ],
         "max": [
-          0.596,
-          0.888,
-          0.4564
+          0.4994,
+          0.6801,
+          0.3762
         ]
       },
-      "worldScale": 0.85,
+      "worldScale": 1,
+      "textures": [
+        {
+          "node": "Chest_Body",
+          "sourceSize": [
+            4096,
+            4096
+          ],
+          "size": [
+            2048,
+            2048
+          ],
+          "bytes": 191144
+        },
+        {
+          "node": "Chest_Lock",
+          "sourceSize": [
+            512,
+            512
+          ],
+          "size": [
+            512,
+            512
+          ],
+          "bytes": 15382
+        },
+        {
+          "node": "Chest_Lid",
+          "sourceSize": [
+            2048,
+            2048
+          ],
+          "size": [
+            2048,
+            2048
+          ],
+          "bytes": 214208
+        }
+      ],
       "source": {
-        "file": "assets/source/miasto_skrzynia_basniowa.glb",
-        "sha256": "ebf543dc0488421118ed27c6c33db97fe4dc151ed665c80172ded7a05202a8bc",
-        "sourceMeshes": 22,
-        "sourceTriangles": 7708,
+        "file": "assets/source/treasure_chest_3d_model.glb",
+        "sha256": "21a1b0815248f56ffa6530fc31c0965a8ce7ba01215ed404631bf6daa44b3aae",
+        "sourceMeshes": 3,
+        "sourceTriangles": 9257,
         "author": "dostarczone przez autora projektu Miasto",
-        "note": "Źródło bez materiałów i normalnych: kolory wierzchołków (COLOR_0). Normalne liczone w potoku (próg załamania 35 stopni)."
+        "note": "Trzy siatki z teksturami koloru; pivot zawiasu wyliczony z geometrii pokrywy (tylna dolna krawędź), pokrywa przesunięta do układu zawiasu."
       }
     }
   ]
