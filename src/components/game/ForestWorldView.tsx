@@ -14,6 +14,11 @@ import { safeForestPose } from "@/lib/game/world/generators/v2";
 import { cn } from "@/lib/utils";
 import { FOREST_CONTROLS, isDiagnosticsShortcut, isGameLetterShortcut } from "@/lib/input/shortcuts";
 import { nearestCreature } from "@/lib/forest-view/diagnostics";
+import { getForestAudio } from "@/lib/audio/controller";
+import { nextClockTime } from "@/lib/game/systems/devClock";
+import { AudioControls } from "./AudioControls";
+import { AudioDiagnostics, type AudioSnapshot } from "./AudioDiagnostics";
+import { useForestAudio } from "./useForestAudio";
 import { ForestHand } from "./ForestHand";
 import { TrollTestDialog } from "./TrollTestDialog";
 import { Minimap } from "./Minimap";
@@ -61,7 +66,19 @@ export type ForestWorldViewProps = {
 
 const DEER_MODE_LABEL: Record<string, string> = { rest: "odpoczywa", stroll: "spaceruje", alert: "czujny (patrzy na gracza)", retreat: "odchodzi" };
 
-function DiagnosticsPanel({ stats, onRestartEncounter }: { stats: PanelStats; onRestartEncounter: () => void }) {
+function DiagnosticsPanel({
+  stats,
+  audio,
+  onRestartEncounter,
+  onSetHour,
+  onTestWolves,
+}: {
+  stats: PanelStats;
+  audio: AudioSnapshot | null;
+  onRestartEncounter: () => void;
+  onSetHour: (hour: number) => void;
+  onTestWolves: () => void;
+}) {
   const s = stats.stream;
   const nearest = nearestCreature(stats);
   return (
@@ -136,6 +153,7 @@ function DiagnosticsPanel({ stats, onRestartEncounter }: { stats: PanelStats; on
         </div>
       )}
       {stats.deerError && <div className="text-red-300">model jelenia: {stats.deerError}</div>}
+      <AudioDiagnostics snapshot={audio} onSetHour={onSetHour} onTestWolves={onTestWolves} />
     </div>
   );
 }
@@ -283,6 +301,11 @@ export function ForestWorldView({
   useGamePause(dispatch, "ui.panel", "ui.chest", windowOpen);
   useGamePause(dispatch, "ui.panel", "ui.troll_test", trollDialog);
   const frozen = suspended || windowOpen || trollDialog;
+  const npcDialog = trollDialog || gameState.dialog !== null;
+  const saveId = gameState.world?.saveId ?? null;
+  const getPose = useCallback(() => rendererRef.current?.getPose() ?? null, []);
+  useForestAudio({ elapsed: gameState.elapsed, saveId, dialog: npcDialog, frozen: frozen || npcDialog, getPose });
+  const [audioSnap, setAudioSnap] = useState<AudioSnapshot | null>(null);
   useEffect(() => {
     rendererRef.current?.setSuspended(frozen);
     const g = guard.current;
@@ -333,6 +356,23 @@ export function ForestWorldView({
     };
   }, [interactor]);
 
+  useEffect(() => {
+    if (!debug) return;
+    const audio = getForestAudio();
+    const read = () => setAudioSnap({ diag: audio.getDiagnostics(), at: performance.now() });
+    read();
+    const id = setInterval(read, 250);
+    return () => clearInterval(id);
+  }, [debug]);
+  const setClockHour = useCallback((hour: number) => {
+    const target = nextClockTime(stateRef.current.elapsed, hour);
+    getForestAudio().jumpClock(target);
+    dispatchRef.current({ type: "dev.setClock", elapsed: target });
+  }, []);
+  const testWolves = useCallback(() => {
+    getForestAudio().testWolves();
+  }, []);
+
   const debugRef = useRef(debug);
   useEffect(() => {
     debugRef.current = debug;
@@ -354,7 +394,6 @@ export function ForestWorldView({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [interactor]);
 
-  const getPose = useCallback(() => rendererRef.current?.getPose() ?? null, []);
   const toggleMinimap = useCallback(() => {
     setMinimap((on) => {
       const next = !on;
@@ -472,6 +511,7 @@ export function ForestWorldView({
             </button>
           ))}
         </div>
+        <AudioControls />
         {!loading && !error && <ControlsHelp />}
         {!loading && !error && process.env.NODE_ENV !== "production" && (
           <button
@@ -490,7 +530,9 @@ export function ForestWorldView({
             Diagnostyka
           </button>
         )}
-        {debug && stats && <DiagnosticsPanel stats={stats} onRestartEncounter={restartEncounter} />}
+        {debug && stats && (
+          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} />
+        )}
       </div>
 
       {!loading && !error && !locked && !suspended && !trollDialog && (
