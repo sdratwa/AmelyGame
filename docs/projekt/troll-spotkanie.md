@@ -22,7 +22,7 @@ Histereza i zwłoki: wejście w alert < 20 m po 0,3 s, wyjście > 22 m po 1,5 s;
 
 ### Raz na spotkanie
 
-Po `Surprised` spotkanie jest "rozbrojone": stanie przy trollu po dialogu (też minutę) nie otwiera okna ponownie. Uzbraja je ponownie dopiero oddalenie się o > 10 m na 0,5 s i ponowne zbliżenie < 5 m, albo świadoma rozmowa (E w zasięgu 4,5 m, tylko poza sekwencją), albo przycisk testowy "Powtórz spotkanie" (F4 przy włączonym F3).
+Po `Surprised` spotkanie jest "rozbrojone": stanie przy trollu po dialogu (też minutę) nie otwiera okna ponownie. Uzbraja je ponownie dopiero oddalenie się o > 10 m na 0,5 s i ponowne zbliżenie < 5 m, albo świadoma rozmowa (E w zasięgu 4,5 m, tylko poza sekwencją), albo przycisk testowy "Powtórz spotkanie" (F4 przy włączonym panelu diagnostycznym).
 
 ### Sekwencje nieprzerywalne
 
@@ -45,13 +45,13 @@ Po `Surprised` spotkanie jest "rozbrojone": stanie przy trollu po dialogu (też 
 - Esc zamyka okno bez wyboru (`dismissed`) i nie opuszcza lasu (istniejący strażnik Esc; po zamknięciu 0,7 s zwłoki). Kliknięcie poza oknem go nie zamyka. W oknie E i M nie działają.
 - Wyjście z lasu w trakcie animacji lub dialogu: odmontowanie widoku sprząta pauzę, a `renderer.dispose` wywołuje `TrollNpc.dispose` (mikser, nasłuch, zasoby); po tym nie przychodzi żadne zdarzenie.
 
-## Tryb deweloperski (F3)
+## Tryb deweloperski (O / F3)
 
 Sekcja "NPC troll": dystans do trolla, stan zachowania, klip (i stan animacji) z czasem i długością, wagi przejścia, dialog otwarty/zamknięty, liczba spotkań, "gotowy na zauważenie"/"rozbrojony", stan patrolu i pozycja, statystyki modelu. Przycisk "Powtórz spotkanie (F4)" uzbraja spotkanie bez resetowania gry (działa poza sekwencją).
 
 ## Instrukcja ręcznego testu w przeglądarce
 
-1. Uruchom grę (`npm run dev`, port 43217), rozpocznij nową grę (albo Kontynuuj) i wejdź do lasu z mapy miasta. Naciśnij F3 (diagnostyka). Troll stoi >= 25 m od punktu startu, 3,4 m od skrzyni ze schematem; jego pozycję i dystans podaje F3.
+1. Uruchom grę (`npm run dev`, port 43217), rozpocznij nową grę (albo Kontynuuj) i wejdź do lasu z mapy miasta. Naciśnij O (albo F3; w dev także przycisk "Diagnostyka"). Troll stoi >= 25 m od punktu startu, 3,4 m od skrzyni ze schematem; jego pozycję i dystans podaje F3.
 2. **Patrol (> 20 m)**: podejdź na ok. 25-30 m. Troll chodzi w promieniu ok. 2,6 m od kotwicy i robi postoje; w F3 stan `patrol`, animacja `Walk` w marszu i `Idle` na postoju. Stopy nie powinny ślizgać się po ziemi.
 3. **Alert (< 20 m)**: przekrocz 20 m. Troll łagodnie się zatrzymuje, `Walk -> Idle`, po chwili `Nervous`, potem znów `Idle` i powtórki. W F3 stan `alert`; przy jednoczesnym przejściu wagi pokazują dwa klipy sumujące się do 1. Odejdź poza 22 m: po krótkiej zwłoce wraca patrol.
 4. **Zauważenie (< 5 m)**: podejdź na < 5 m. Troll staje, obraca się całym ciałem ku tobie (bez skoku), potem `Surprised` raz do końca (ok. 4 s) i otwiera się okno z tekstem "Ho, ho! Kto ośmiela się zakłócać mój spokój? Myślisz, że potrafisz rozwiązać moją zagadkę?" z przyciskami PRAWIDŁOWY i ZŁY. Mysz zostaje zwolniona, zegar gry stoi, troll patrzy na ciebie w `Idle`.

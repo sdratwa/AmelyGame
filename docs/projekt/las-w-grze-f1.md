@@ -28,7 +28,7 @@ Las 300 x 300 m (generator v2) jest teraz lasem w normalnej grze. Nie ma drugieg
 - Domyślnie MIASTO_DEFAULT (bez zmian wobec prototypu).
 - Godzina lasu = `clock.hour + clock.minute / 60` z zegara gry (20 s realnych = 1 godzina gry); renderer ustawia słońce, mgłę i niebo przez `setHour`.
 - Jakość: MEDIUM domyślnie; Niska / Średnia / Wysoka w panelu, wybór zapamiętany w `localStorage` (`miasto.forest.quality`). Zmiana jakości restartuje strumień w tym samym miejscu.
-- `F3` pokazuje diagnostykę: FPS, sektory (załadowane/oczekujące), trójkąty, instancje, cache płytek.
+- `O` (albo `F3`) pokazuje diagnostykę: FPS, sektory (załadowane/oczekujące), trójkąty, instancje, cache płytek.
 - Gdy otwarty jest panel, dialog lub gracz nie żyje, sterowanie lasu jest zamrożone (`suspended`).
 
 ## Znane ograniczenia

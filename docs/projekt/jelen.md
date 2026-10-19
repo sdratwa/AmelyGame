@@ -6,7 +6,7 @@ Jeden jeleń w normalnej grze (las 3D po wejściu z miasta). To test, nie system
 
 1. Wejdź do lasu z miasta (start w punkcie wejścia, patrzysz na wschód).
 2. Idź prosto przed siebie, na wschód, ok. 21-29 m. Jeleń stoi na polanie (przykład dla seeda 1: x = -101, z = 2; wejście to x = -126, z = 0). Położenie zależy od seeda świata, ale jest stałe dla danego seeda.
-3. F3 pokazuje w sekcji "Jeleń" jego x/z, odległość od gracza i stan.
+3. Panel diagnostyczny (O albo F3) pokazuje w sekcji "Jeleń" jego x/z, odległość od gracza i stan.
 4. Po zbliżeniu się na mniej niż 10 m jeleń staje, patrzy na gracza, po chwili spokojnie odchodzi w bezpieczną stronę. Po oddaleniu wraca do spacerowania wokół polany.
 
 ## Zasób
@@ -41,7 +41,7 @@ Gdy brak bezpiecznej drogi, jeleń stoi i patrzy ("osaczony"). Każdy krok jest 
 
 `src/lib/forest-view/deer.ts`, `computePlacement`: wyłącznie z danych lasu (`forestOf`, `forestWalkOf`, `anchorsFromFeatures`) i strumienia `rngStream(seed, ...)`. Pierścienie 21-29 m od wejścia (poziomy łagodzenia aż do 15-36 m), co 5 stopni. Warunki: osiągalność BFS, wolna przestrzeń, nachylenie, >= 12 m od skrzyń, trolla i mostu. Wynik: odległość od środka polany, kierunek zbliżony do wschodu, widoczność z wejścia. Przetestowane 120 seedów (brak braku miejsca w testach pomiarowych: 48 seedów, 46 na poziomie 0). Brak zmian w generatorze, zapisie i wersji generatora.
 
-## F3
+## Panel diagnostyczny (O / F3)
 
 Sekcja "Jeleń" (`data-testid="deer-diagnostics"`): dystans, stan, klip/stan animacji i czas, mieszanie, prędkość, skala, wysokość, trójkąty, kości, x/z, odległość od wejścia i środka mapy, głowa (patrzy/yaw/pitch), liczba odejść. Błąd ładowania jest pokazany w linii błędu, a gra działa dalej.
 

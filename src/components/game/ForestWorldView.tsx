@@ -12,6 +12,8 @@ import { forestObject } from "@/lib/game/world/lookup";
 import { harvestOf } from "@/lib/game/world/harvest";
 import { safeForestPose } from "@/lib/game/world/generators/v2";
 import { cn } from "@/lib/utils";
+import { FOREST_CONTROLS, isDiagnosticsShortcut, isGameLetterShortcut } from "@/lib/input/shortcuts";
+import { nearestCreature } from "@/lib/forest-view/diagnostics";
 import { ForestHand } from "./ForestHand";
 import { TrollTestDialog } from "./TrollTestDialog";
 import { Minimap } from "./Minimap";
@@ -61,27 +63,28 @@ const DEER_MODE_LABEL: Record<string, string> = { rest: "odpoczywa", stroll: "sp
 
 function DiagnosticsPanel({ stats, onRestartEncounter }: { stats: PanelStats; onRestartEncounter: () => void }) {
   const s = stats.stream;
+  const nearest = nearestCreature(stats);
   return (
     <div data-testid="forest-diagnostics" className="pointer-events-none max-w-xs rounded-lg bg-black/60 p-2 font-mono text-[11px] leading-snug text-slate-100">
       <div>
         FPS {stats.fps.toFixed(0)} ({stats.frameMs.toFixed(1)} ms) · jakość {stats.quality}
       </div>
       <div>
-        poz. x {stats.position.x.toFixed(1)} z {stats.position.z.toFixed(1)}
-      </div>
-      {s && (
-        <>
-          <div>
-            sektor {s.center} · załadowane {s.resident}/{s.wanted} · w kolejce {s.queued}
-          </div>
-          <div>
-            instancje {stats.visibleInstances}/{s.instances} · cache płytek {s.cachedTiles}
-          </div>
-        </>
-      )}
-      <div>
         draw calls {stats.drawCalls} · trójkąty {(stats.triangles / 1000).toFixed(0)} tys.
       </div>
+      <div data-testid="diag-position">
+        sektor {s?.center ?? stats.sectorId} · poz. x {stats.position.x.toFixed(1)} y {stats.position.y.toFixed(1)} z {stats.position.z.toFixed(1)}
+      </div>
+      {s && (
+        <div>
+          załadowane {s.resident}/{s.wanted} · w kolejce {s.queued} · instancje {stats.visibleInstances}/{s.instances} · cache płytek {s.cachedTiles}
+        </div>
+      )}
+      <div data-testid="diag-nearest">
+        najbliższy NPC/zwierzę: {nearest ? `${nearest.name} ${nearest.distance.toFixed(1)} m` : "brak"}
+      </div>
+      {!stats.npc && !stats.npcError && <div data-testid="npc-diagnostics-empty">troll: niedostępny</div>}
+      {!stats.deer && !stats.deerError && <div data-testid="deer-diagnostics-empty">jeleń: niedostępny</div>}
       {stats.npc && (
         <div data-testid="npc-diagnostics" className="mt-1 border-t border-white/20 pt-1">
           <div>
@@ -133,6 +136,29 @@ function DiagnosticsPanel({ stats, onRestartEncounter }: { stats: PanelStats; on
         </div>
       )}
       {stats.deerError && <div className="text-red-300">model jelenia: {stats.deerError}</div>}
+    </div>
+  );
+}
+
+function ControlsHelp() {
+  return (
+    <div data-testid="controls-help" className="hidden max-w-[17rem] rounded-lg bg-black/45 px-3 py-2 text-xs text-white backdrop-blur sm:block">
+      <p className="mb-1 font-semibold">Sterowanie</p>
+      <ul className="space-y-0.5">
+        {FOREST_CONTROLS.map((c) => (
+          <li key={c.label} className="flex items-baseline gap-1.5">
+            <span className="flex shrink-0 gap-0.5">
+              {c.keys.map((k) => (
+                <kbd key={k} className="rounded bg-white/20 px-1 py-px text-[10px] font-semibold">
+                  {k}
+                </kbd>
+              ))}
+            </span>
+            <span className="text-slate-200">{c.label}</span>
+          </li>
+        ))}
+        <li className="pt-0.5 text-slate-300">Mysz – rozglądanie (kliknij w scenę).</li>
+      </ul>
     </div>
   );
 }
@@ -317,9 +343,8 @@ export function ForestWorldView({
   }, [suspended]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "e" && e.key !== "E") return;
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || suspendedRef.current || trollDialogRef.current || !ready.current) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (!isGameLetterShortcut(e, "e")) return;
+      if (suspendedRef.current || trollDialogRef.current || !ready.current) return;
       if (!interactor.press() && !rendererRef.current?.talkToNpc()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -351,7 +376,7 @@ export function ForestWorldView({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "F3") {
+      if (isDiagnosticsShortcut(e)) {
         e.preventDefault();
         setDebug((d) => !d);
         return;
@@ -361,8 +386,8 @@ export function ForestWorldView({
         restartEncounter();
         return;
       }
-      if ((e.key === "m" || e.key === "M") && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (!suspendedRef.current && !trollDialogRef.current && ready.current && !(e.target instanceof HTMLInputElement)) toggleMinimap();
+      if (isGameLetterShortcut(e, "m")) {
+        if (!suspendedRef.current && !trollDialogRef.current && ready.current) toggleMinimap();
         return;
       }
       if (e.key !== "Escape") return;
@@ -447,10 +472,23 @@ export function ForestWorldView({
             </button>
           ))}
         </div>
-        {!loading && !error && (
-          <p className="hidden max-w-[17rem] rounded-lg bg-black/45 px-3 py-2 text-xs text-white backdrop-blur sm:block">
-            WASD – chodzenie, Shift – bieg, mysz – rozglądanie, E – użyj / otwórz, I – ekwipunek, M – mapa, J – dziennik. Esc zwalnia mysz, F3 – diagnostyka.
-          </p>
+        {!loading && !error && <ControlsHelp />}
+        {!loading && !error && process.env.NODE_ENV !== "production" && (
+          <button
+            type="button"
+            data-testid="open-diagnostics"
+            aria-pressed={debug}
+            onClick={(e) => {
+              setDebug((d) => !d);
+              e.currentTarget.blur();
+            }}
+            className={cn(
+              "rounded-md px-2 py-1 text-xs font-medium backdrop-blur transition",
+              debug ? "bg-emerald-500 text-emerald-950" : "bg-black/45 text-slate-200 hover:bg-white/15",
+            )}
+          >
+            Diagnostyka
+          </button>
         )}
         {debug && stats && <DiagnosticsPanel stats={stats} onRestartEncounter={restartEncounter} />}
       </div>

@@ -144,3 +144,8 @@
 - Jeden jeleń w lesie jako test zwierzęcia (nie system fauny); szczegóły w [jelen.md](jelen.md). Prezentacja bez wpływu na silnik, zapis, generator i `MIASTO_DEFAULT`.
 - Położenie z danych lasu (21-29 m od wejścia), deterministyczne; zachowanie: spacer w promieniu 4,5 m, alert < 10 m, spokojne odejście bez galopu.
 - Do decyzji autora: wygląd i pochylenie w marszu, galop i Idle (potrzebne klipy), czy jeleń ma być w przyszłości w zapisie, rozszerzenie na inne zwierzęta.
+
+## Sterowanie dla macOS (19 października 2026)
+
+- Panel diagnostyczny otwiera `O`; `F3` zostaje jako skrót zapasowy (na MacBookach wymaga Fn albo uruchamia Mission Control). Przed zmianą sprawdzono, że `O` nie było używane w grze. Szczegóły: [sterowanie.md](sterowanie.md).
+- W trybie deweloperskim jest przycisk "Diagnostyka". Logika gry, animacje i quest bez zmian.

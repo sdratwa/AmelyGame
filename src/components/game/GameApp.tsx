@@ -39,6 +39,7 @@ import { QuestTracker } from "./quest/QuestTracker";
 import { useGamePause } from "./quest/useGamePause";
 import { ShopInterior } from "./ShopInterior";
 import { WorldMap } from "./WorldMap";
+import { isGameLetterShortcut } from "@/lib/input/shortcuts";
 
 const ForestWorldView = dynamic(() => import("./ForestWorldView").then((m) => m.ForestWorldView), {
   ssr: false,
@@ -239,9 +240,7 @@ export function GameApp() {
   useEffect(() => {
     if (!playing) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      const which = e.key === "j" || e.key === "J" ? "journal" : e.key === "i" || e.key === "I" ? "inventory" : null;
+      const which = isGameLetterShortcut(e, "j") ? "journal" : isGameLetterShortcut(e, "i") ? "inventory" : null;
       if (!which) return;
       setPanel((cur) => {
         if (cur === which) return null;
