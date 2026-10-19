@@ -40,7 +40,7 @@ export type ModelAsset = {
   fallback: boolean;
 };
 
-type GlbResult = { scene: THREE.Object3D };
+export type GlbResult = { scene: THREE.Object3D; animations?: THREE.AnimationClip[] };
 
 export type LibraryOptions = {
   baseUrl?: string;

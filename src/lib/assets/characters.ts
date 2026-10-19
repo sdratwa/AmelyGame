@@ -1,0 +1,152 @@
+import * as THREE from "three";
+import { createDefaultGlbLoader, type GlbResult } from "./library";
+
+/** Postacie (NPC) ładowane jako GLB ze szkieletem: osobny katalog i manifest, bo `assets:build` odtwarza `public/models`. */
+export type CharacterClipInfo = { name: string; channels: number; duration: number };
+
+export type CharacterEntry = {
+  id: string;
+  file: string;
+  bytes: number;
+  triangles: number;
+  vertices: number;
+  bones: number;
+  meshNode: string;
+  hipsBone: string;
+  clips: CharacterClipInfo[];
+  /** Wysokość postaci w pozie wiązania (jednostki modelu); skala do świata = targetHeight / sourceHeight. */
+  sourceHeight: number;
+  sourceBounds: { min: number[]; max: number[] };
+  targetHeight: number;
+  atlas: { size: number; padding: number; rowsUsed: number; textures: { name: string; bytes: number }[] };
+  optimisation: { before: { meshes: number; materials: number; textures: number }; after: { meshes: number; materials: number; textures: number } };
+  source: { file: string; sha256: string; bytes: number; author: string; note: string };
+};
+
+export type CharactersManifest = { schemaVersion: 1; characters: CharacterEntry[] };
+
+export class CharacterLoadError extends Error {
+  constructor(
+    readonly characterId: string,
+    message: string,
+    options?: { cause?: unknown },
+  ) {
+    super(`Postać ${characterId}: ${message}`, options);
+    this.name = "CharacterLoadError";
+  }
+}
+
+export const TROLL_ID = "troll.forest";
+/** Animacje wymagane od modelu trolla; brak którejkolwiek to błąd, a nie ciche udawanie ruchu. */
+export const TROLL_REQUIRED_CLIPS = ["walk", "angry_01"] as const;
+const DEFAULT_CHARACTERS_URL = "/characters";
+
+export type CharacterLoaderOptions = {
+  baseUrl?: string;
+  loadJson?: (url: string) => Promise<unknown>;
+  loadGlb?: (url: string) => Promise<GlbResult>;
+};
+
+export type TrollAsset = {
+  entry: CharacterEntry;
+  scene: THREE.Object3D;
+  skinned: THREE.SkinnedMesh;
+  /** Klipy dokładnie z pliku (przed usunięciem root motion). */
+  clips: THREE.AnimationClip[];
+  /** Skala modelu do świata (wysokość docelowa / wysokość w pozie wiązania). */
+  scale: number;
+  bones: number;
+  triangles: number;
+  dispose(): void;
+};
+
+const defaultJson = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  });
+
+function isEntry(raw: unknown): raw is CharacterEntry {
+  const e = raw as Partial<CharacterEntry> | null;
+  return !!e && typeof e.id === "string" && typeof e.file === "string" && typeof e.meshNode === "string" && typeof e.hipsBone === "string" && typeof e.sourceHeight === "number" && typeof e.targetHeight === "number" && Array.isArray(e.clips);
+}
+
+/** Nazwa kości po sanityzacji przez GLTFLoader (np. `mixamorig:Hips` -> `mixamorigHips`). */
+export const sceneNodeName = (name: string) => THREE.PropertyBinding.sanitizeNodeName(name);
+
+/**
+ * Wczytuje trolla przez wspólny GLTFLoader i sprawdza strukturę: jedna siatka ze skórą, oczekiwana liczba kości,
+ * kość bioder oraz klipy `walk` i `angry_01` (długości zgodne z manifestem).
+ */
+export async function loadTrollAsset(options: CharacterLoaderOptions = {}): Promise<TrollAsset> {
+  const base = options.baseUrl ?? DEFAULT_CHARACTERS_URL;
+  const loadJson = options.loadJson ?? defaultJson;
+  const loadGlb =
+    options.loadGlb ??
+    (() => {
+      const load = createDefaultGlbLoader();
+      return (url: string) => load(url);
+    })();
+  let manifest: CharactersManifest;
+  try {
+    manifest = (await loadJson(`${base}/characters.json`)) as CharactersManifest;
+  } catch (e) {
+    throw new CharacterLoadError(TROLL_ID, "nie udało się wczytać characters.json", { cause: e });
+  }
+  const entry = manifest?.characters?.find((c) => c.id === TROLL_ID);
+  if (!isEntry(entry)) throw new CharacterLoadError(TROLL_ID, "brak wpisu w characters.json");
+  let gltf: GlbResult;
+  try {
+    gltf = await loadGlb(`${base}/${entry.file}`);
+  } catch (e) {
+    throw new CharacterLoadError(TROLL_ID, `nie udało się wczytać ${entry.file}`, { cause: e });
+  }
+  const dispose = () => disposeScene(gltf.scene);
+  try {
+    const mesh = gltf.scene.getObjectByName(sceneNodeName(entry.meshNode)) as THREE.SkinnedMesh | undefined;
+    if (!mesh || !(mesh as THREE.SkinnedMesh).isSkinnedMesh) throw new CharacterLoadError(TROLL_ID, `brak siatki ze skórą ${entry.meshNode}`);
+    if (Array.isArray(mesh.material)) throw new CharacterLoadError(TROLL_ID, "siatka ma wiele materiałów (oczekiwano jednego)");
+    if (mesh.skeleton.bones.length !== entry.bones) {
+      throw new CharacterLoadError(TROLL_ID, `szkielet ma ${mesh.skeleton.bones.length} kości, manifest ${entry.bones}`);
+    }
+    if (!gltf.scene.getObjectByName(sceneNodeName(entry.hipsBone))) throw new CharacterLoadError(TROLL_ID, `brak kości ${entry.hipsBone}`);
+    for (const required of TROLL_REQUIRED_CLIPS) {
+      if (!(gltf.animations ?? []).some((c) => c.name === required)) throw new CharacterLoadError(TROLL_ID, `brak animacji ${required}`);
+    }
+    for (const info of entry.clips) {
+      const clip = (gltf.animations ?? []).find((c) => c.name === info.name);
+      if (!clip || Math.abs(clip.duration - info.duration) > 0.01) throw new CharacterLoadError(TROLL_ID, `animacja ${info.name} nie zgadza się z manifestem`);
+    }
+    const index = mesh.geometry.getIndex();
+    const triangles = (index ? index.count : mesh.geometry.getAttribute("position").count) / 3;
+    return {
+      entry,
+      scene: gltf.scene,
+      skinned: mesh,
+      clips: gltf.animations ?? [],
+      scale: entry.targetHeight / entry.sourceHeight,
+      bones: mesh.skeleton.bones.length,
+      triangles,
+      dispose,
+    };
+  } catch (e) {
+    dispose();
+    throw e;
+  }
+}
+
+/** Zwalnia geometrie, materiały, tekstury i szkielet sceny GLB. */
+export function disposeScene(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.geometry.dispose();
+    (mesh as THREE.SkinnedMesh).skeleton?.dispose();
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of materials) {
+      const std = m as THREE.MeshStandardMaterial;
+      for (const tex of [std.map, std.normalMap, std.metalnessMap, std.roughnessMap, std.aoMap, std.emissiveMap]) tex?.dispose();
+      m.dispose();
+    }
+  });
+}

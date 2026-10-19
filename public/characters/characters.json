@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "characters": [
+    {
+      "id": "troll.forest",
+      "file": "troll.forest.glb",
+      "bytes": 2209804,
+      "triangles": 13299,
+      "vertices": 12954,
+      "bones": 66,
+      "meshNode": "Troll_Body",
+      "hipsBone": "mixamorig:Hips",
+      "clips": [
+        {
+          "name": "walk",
+          "channels": 195,
+          "duration": 2.333
+        },
+        {
+          "name": "angry_01",
+          "channels": 195,
+          "duration": 3.5
+        }
+      ],
+      "sourceHeight": 0.949,
+      "sourceBounds": {
+        "min": [
+          -0.4995,
+          0,
+          -0.2289
+        ],
+        "max": [
+          0.4995,
+          0.949,
+          0.2289
+        ]
+      },
+      "targetHeight": 2.7,
+      "atlas": {
+        "size": 2048,
+        "padding": 8,
+        "rowsUsed": 1968,
+        "textures": [
+          {
+            "name": "Troll_basecolor",
+            "bytes": 686478
+          },
+          {
+            "name": "Troll_normal",
+            "bytes": 402472
+          },
+          {
+            "name": "Troll_metalrough",
+            "bytes": 175812
+          }
+        ]
+      },
+      "optimisation": {
+        "before": {
+          "meshes": 22,
+          "materials": 22,
+          "textures": 66
+        },
+        "after": {
+          "meshes": 1,
+          "materials": 1,
+          "textures": 3
+        }
+      },
+      "source": {
+        "file": "assets/source/friendly_forest_troll_3d_model.glb",
+        "sha256": "3a9bf924ccc7d9db8c971ee7f267a2ceaa03fe9e81a2df3ae91be52704a25cd2",
+        "bytes": 6228248,
+        "author": "dostarczone przez autora projektu Miasto",
+        "note": "Szkielet Mixamo (66 kości) i animacje walk, angry_01 bez zmian; brak animacji Idle i Talk."
+      }
+    }
+  ]
+}
