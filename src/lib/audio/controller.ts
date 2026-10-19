@@ -1,0 +1,901 @@
+import { gameHour, MidnightWatcher } from "./clock";
+import { FootstepScheduler, type FootstepEvent } from "./footsteps";
+import { AssetLoader } from "./loader";
+import {
+  AMBIENCE_DAY,
+  AMBIENCE_NIGHT,
+  FOOTSTEPS,
+  isAudioManifest,
+  MANIFEST_URL,
+  WOLVES,
+  type AudioManifest,
+} from "./manifest";
+import { ambientMix, birdActivity, phaseOf, type DayPhase } from "./mix";
+import { DEFAULT_AUDIO_SETTINGS, loadSettings, saveSettings, type AudioSettings, type StorageLike } from "./settings";
+import { SYNTH_STEP_VARIANTS, synthFootstep } from "./synth";
+import { BIRD_IDS, WildlifeScheduler, type BirdEvent } from "./wildlife";
+import { WolvesLedger } from "./wolvesLedger";
+
+/** Wysokość uszu gracza (m): punkt odniesienia dla wysokości źródeł. */
+const EAR_HEIGHT = 1.6;
+const TICK_MS = 200;
+const FADE_IN_TAU = 0.9;
+const MIX_TAU = 0.8;
+const MODE_TAU = 0.4;
+const LEAVE_MS = 700;
+const IDLE_RELEASE_MS = 90_000;
+const LOOKAHEAD_HOURS = 1.25;
+const DIALOG_AMBIENCE = 0.45;
+
+/** Stałe zdarzenia wilków: daleki odgłos z głębi lasu. */
+export const WOLVES_CONFIG = {
+  distance: [85, 115] as const,
+  height: 3,
+  gain: 1.5,
+  duck: 0.6,
+  panner: { ref: 40, rolloff: 0.6 },
+} as const;
+const BIRD_PANNER = { ref: 10, rolloff: 1.2 } as const;
+
+export type AudioMode = { dialog: boolean; frozen: boolean };
+export type ListenerPose = { x: number; z: number; yaw: number };
+
+export type EffectInfo = { label: string; kind: "bird" | "wolves" | "wolves-test"; at: number; distance: number; bearingDeg: number; rate: number };
+
+export type MidnightInfo = { midnight: number; result: string };
+
+export type AudioDiagnostics = {
+  active: boolean;
+  error: string | null;
+  contextState: string;
+  hour: number;
+  phase: DayPhase;
+  background: string;
+  dayGain: number;
+  nightGain: number;
+  dayLoaded: boolean;
+  nightLoaded: boolean;
+  activeEffects: number;
+  activeSteps: number;
+  lastEffect: EffectInfo | null;
+  wolvesLastMidnight: number | null;
+  lastMidnight: MidnightInfo | null;
+  footsteps: "próbki" | "syntetyczne (brak pliku)" | "-";
+  walking: boolean;
+  running: boolean;
+  mode: AudioMode;
+  muted: boolean;
+  loaded: string[];
+};
+
+type Voice = {
+  kind: "bird" | "wolves" | "step";
+  source: AudioBufferSourceNode;
+  nodes: AudioNode[];
+  done: boolean;
+};
+
+type Layer = {
+  id: string;
+  gain: GainNode;
+  source: AudioBufferSourceNode | null;
+  primed: boolean;
+  idleSince: number | null;
+};
+
+type Session = {
+  ctx: AudioContext;
+  saveId: string;
+  master: GainNode;
+  compressor: DynamicsCompressorNode;
+  ambienceVol: GainNode;
+  ambienceMode: GainNode;
+  duck: GainNode;
+  fade: GainNode;
+  effectsVol: GainNode;
+  layers: Record<"day" | "night", Layer>;
+  voices: Set<Voice>;
+  loader: AssetLoader | null;
+  watcher: MidnightWatcher;
+  birds: WildlifeScheduler;
+  steps: FootstepScheduler;
+  stepBuffer: AudioBuffer | null;
+  stepSegments: { start: number; end: number }[];
+  stepSynth: boolean;
+  hidden: boolean;
+  disposed: boolean;
+  timer: ReturnType<typeof setInterval> | null;
+  lastTick: number;
+  lastPose: { x: number; z: number; t: number } | null;
+  pose: ListenerPose | null;
+  elapsed: number;
+  hour: number;
+  naturalMidnights: Set<number>;
+  wolvesLoading: boolean;
+  cleanup: (() => void)[];
+};
+
+export type ControllerDeps = {
+  createContext?: () => AudioContext;
+  fetch?: typeof fetch;
+  rng?: () => number;
+  now?: () => number;
+  storage?: StorageLike | null;
+  canPlayType?: (type: string) => string;
+  document?: Pick<Document, "hidden" | "addEventListener" | "removeEventListener"> | null;
+  window?: Pick<Window, "addEventListener" | "removeEventListener"> | null;
+  manifestUrl?: string;
+};
+
+const GESTURE_EVENTS = ["pointerdown", "keydown", "touchend"] as const;
+
+function setParam(param: AudioParam, value: number, now: number, tau: number): void {
+  param.setTargetAtTime(value, now, tau);
+}
+
+function setPosition(node: PannerNode, x: number, y: number, z: number): void {
+  if (node.positionX) {
+    node.positionX.value = x;
+    node.positionY.value = y;
+    node.positionZ.value = z;
+  } else {
+    node.setPosition(x, y, z);
+  }
+}
+
+/**
+ * Jedyny kontroler dźwięku lasu: trzy warstwy (ambient, zwierzęta i zdarzenia, kroki) w jednym grafie Web Audio,
+ * jedna pętla czasowa, jedna kolejka wczytywania i jedno miejsce zwalniania zasobów.
+ * Losowość pochodzi z własnego generatora, nigdy z seeda świata ani z logiki questów.
+ */
+export class ForestAudioController {
+  private session: Session | null = null;
+  private readonly closing = new Set<{ session: Session; timer: ReturnType<typeof setTimeout> }>();
+  private settings: AudioSettings = { ...DEFAULT_AUDIO_SETTINGS };
+  private settingsLoaded = false;
+  private readonly subscribers = new Set<() => void>();
+  private manifest: AudioManifest | null = null;
+  private manifestLoading: Promise<AudioManifest> | null = null;
+  private mode: AudioMode = { dialog: false, frozen: false };
+  private error: string | null = null;
+  private lastEffect: EffectInfo | null = null;
+  private lastMidnight: MidnightInfo | null = null;
+  private lastWolvesSave: string | null = null;
+
+  constructor(private readonly deps: ControllerDeps = {}) {}
+
+  // --- zależności ---------------------------------------------------------------------------------------------
+
+  private get storage(): StorageLike | null {
+    if (this.deps.storage !== undefined) return this.deps.storage;
+    try {
+      return typeof window !== "undefined" ? window.localStorage : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private now(): number {
+    return (this.deps.now ?? (() => performance.now()))();
+  }
+
+  private rng(): number {
+    return (this.deps.rng ?? Math.random)();
+  }
+
+  private get doc() {
+    return this.deps.document !== undefined ? this.deps.document : typeof document !== "undefined" ? document : null;
+  }
+
+  private get win() {
+    return this.deps.window !== undefined ? this.deps.window : typeof window !== "undefined" ? window : null;
+  }
+
+  private ledger(): WolvesLedger {
+    return new WolvesLedger(this.storage);
+  }
+
+  // --- ustawienia ---------------------------------------------------------------------------------------------
+
+  getSettings(): AudioSettings {
+    if (!this.settingsLoaded) {
+      this.settings = loadSettings(this.storage);
+      this.settingsLoaded = true;
+    }
+    return this.settings;
+  }
+
+  updateSettings(patch: Partial<AudioSettings>): void {
+    const next = { ...this.getSettings(), ...patch };
+    const clean = {
+      master: Math.min(1, Math.max(0, next.master)),
+      ambience: Math.min(1, Math.max(0, next.ambience)),
+      effects: Math.min(1, Math.max(0, next.effects)),
+      muted: Boolean(next.muted),
+    };
+    this.settings = clean;
+    saveSettings(this.storage, clean);
+    this.applySettings();
+    for (const fn of this.subscribers) fn();
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.subscribers.add(listener);
+    return () => this.subscribers.delete(listener);
+  }
+
+  private applySettings(): void {
+    const s = this.session;
+    if (!s || s.disposed) return;
+    const t = s.ctx.currentTime;
+    const cfg = this.getSettings();
+    setParam(s.master.gain, cfg.muted ? 0 : cfg.master, t, 0.05);
+    setParam(s.ambienceVol.gain, cfg.ambience, t, 0.08);
+    setParam(s.effectsVol.gain, cfg.effects, t, 0.08);
+  }
+
+  // --- cykl życia -----------------------------------------------------------------------------------------------
+
+  get active(): boolean {
+    return this.session !== null && !this.session.disposed;
+  }
+
+  /** Wejście do lasu: tworzy kontekst audio (wywołuj z gestu użytkownika albo tuż po nim) i uruchamia pętlę czasu. */
+  enter(init: { elapsed: number; saveId: string | null }): void {
+    if (this.session && !this.session.disposed) {
+      this.session.watcher.rebase(init.elapsed);
+      this.session.elapsed = init.elapsed;
+      this.session.hour = gameHour(init.elapsed);
+      return;
+    }
+    let ctx: AudioContext;
+    try {
+      const factory = this.deps.createContext ?? (() => new AudioContext({ latencyHint: "interactive" }));
+      ctx = factory();
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Web Audio jest niedostępne";
+      return;
+    }
+    this.error = null;
+    const cfg = this.getSettings();
+    const t = ctx.currentTime;
+    const gain = (value: number) => {
+      const g = ctx.createGain();
+      g.gain.value = value;
+      return g;
+    };
+    const master = gain(cfg.muted ? 0 : cfg.master);
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -10;
+    compressor.ratio.value = 4;
+    const ambienceVol = gain(cfg.ambience);
+    const ambienceMode = gain(this.mode.dialog ? DIALOG_AMBIENCE : 1);
+    const duck = gain(1);
+    const fade = gain(0);
+    const effectsVol = gain(cfg.effects);
+    ambienceVol.connect(ambienceMode);
+    ambienceMode.connect(duck);
+    duck.connect(fade);
+    fade.connect(master);
+    effectsVol.connect(master);
+    master.connect(compressor);
+    compressor.connect(ctx.destination);
+    const layer = (id: string): Layer => {
+      const g = gain(0);
+      g.connect(ambienceVol);
+      return { id, gain: g, source: null, primed: false, idleSince: null };
+    };
+
+    const rng = () => this.rng();
+    const session: Session = {
+      ctx,
+      saveId: init.saveId ?? "local",
+      master,
+      compressor,
+      ambienceVol,
+      ambienceMode,
+      duck,
+      fade,
+      effectsVol,
+      layers: { day: layer(AMBIENCE_DAY), night: layer(AMBIENCE_NIGHT) },
+      voices: new Set(),
+      loader: null,
+      watcher: new MidnightWatcher(init.elapsed),
+      birds: new WildlifeScheduler(rng),
+      steps: new FootstepScheduler(rng, () => (session.stepBuffer ? Math.max(1, session.stepSegments.length) : 1)),
+      stepBuffer: null,
+      stepSegments: [],
+      stepSynth: false,
+      hidden: Boolean(this.doc?.hidden),
+      disposed: false,
+      timer: null,
+      lastTick: this.now(),
+      lastPose: null,
+      pose: null,
+      elapsed: init.elapsed,
+      hour: gameHour(init.elapsed),
+      naturalMidnights: new Set(),
+      wolvesLoading: false,
+      cleanup: [],
+    };
+    this.session = session;
+    setParam(fade.gain, 1, t, FADE_IN_TAU);
+
+    this.attachBrowserHooks(session);
+    session.timer = setInterval(() => this.tick(session), TICK_MS);
+    this.resume(session);
+    this.mount(session).catch(() => undefined);
+  }
+
+  /** Wyjście z lasu: szybkie wyciszenie, potem zatrzymanie źródeł, rozłączenie grafu i zamknięcie kontekstu. */
+  leave(): void {
+    const s = this.session;
+    if (!s) return;
+    this.session = null;
+    if (s.timer !== null) clearInterval(s.timer);
+    s.timer = null;
+    if (!s.disposed) setParam(s.fade.gain, 0, s.ctx.currentTime, 0.12);
+    const entry = {
+      session: s,
+      timer: setTimeout(() => {
+        this.closing.delete(entry);
+        this.disposeSession(s);
+      }, LEAVE_MS),
+    };
+    this.closing.add(entry);
+  }
+
+  /** Natychmiastowe zwolnienie wszystkiego (zamknięcie aplikacji, testy). */
+  dispose(): void {
+    const s = this.session;
+    this.session = null;
+    if (s) this.disposeSession(s);
+    for (const entry of this.closing) {
+      clearTimeout(entry.timer);
+      this.disposeSession(entry.session);
+    }
+    this.closing.clear();
+    this.subscribers.clear();
+  }
+
+  private disposeSession(s: Session): void {
+    if (s.disposed) return;
+    s.disposed = true;
+    if (s.timer !== null) clearInterval(s.timer);
+    s.timer = null;
+    for (const undo of s.cleanup) undo();
+    s.cleanup = [];
+    for (const voice of [...s.voices]) this.finishVoice(s, voice, true);
+    for (const layer of Object.values(s.layers)) {
+      this.stopLayer(layer);
+      layer.gain.disconnect();
+    }
+    s.loader?.dispose();
+    s.loader = null;
+    s.stepBuffer = null;
+    for (const node of [s.ambienceVol, s.ambienceMode, s.duck, s.fade, s.effectsVol, s.master, s.compressor]) node.disconnect();
+    s.ctx.close().catch(() => undefined);
+  }
+
+  // --- przeglądarka: autoplay i widoczność karty ------------------------------------------------------------------------
+
+  private attachBrowserHooks(s: Session): void {
+    const win = this.win;
+    if (win) {
+      const onGesture = () => {
+        if (s.disposed || s.hidden) return;
+        if (s.ctx.state === "suspended") this.resume(s);
+      };
+      for (const name of GESTURE_EVENTS) win.addEventListener(name, onGesture, { capture: true, passive: true });
+      s.cleanup.push(() => {
+        for (const name of GESTURE_EVENTS) win.removeEventListener(name, onGesture, { capture: true } as EventListenerOptions);
+      });
+    }
+    const doc = this.doc;
+    if (doc) {
+      const onVisibility = () => {
+        if (s.disposed) return;
+        s.hidden = Boolean(doc.hidden);
+        if (s.hidden) {
+          s.ctx.suspend().catch(() => undefined);
+          s.steps.reset();
+        } else {
+          s.lastTick = this.now();
+          s.lastPose = null;
+          this.resume(s);
+        }
+      };
+      doc.addEventListener("visibilitychange", onVisibility);
+      s.cleanup.push(() => doc.removeEventListener("visibilitychange", onVisibility));
+    }
+  }
+
+  private resume(s: Session): void {
+    if (s.disposed || s.hidden) return;
+    if (s.ctx.state === "running") return;
+    s.ctx.resume().catch(() => undefined);
+  }
+
+  private running(s: Session): boolean {
+    return !s.disposed && !s.hidden && s.ctx.state === "running";
+  }
+
+  // --- wczytywanie zasobów ----------------------------------------------------------------------------------------------
+
+  private loadManifest(): Promise<AudioManifest> {
+    if (this.manifest) return Promise.resolve(this.manifest);
+    this.manifestLoading ??= (async () => {
+      const doFetch = this.deps.fetch ?? fetch.bind(globalThis);
+      const response = await doFetch(this.deps.manifestUrl ?? MANIFEST_URL);
+      if (!response.ok) throw new Error(`Manifest audio: HTTP ${response.status}`);
+      const json: unknown = await response.json();
+      if (!isAudioManifest(json)) throw new Error("Manifest audio ma zły format");
+      this.manifest = json;
+      return json;
+    })().finally(() => {
+      this.manifestLoading = null;
+    });
+    return this.manifestLoading;
+  }
+
+  private async mount(s: Session): Promise<void> {
+    try {
+      const manifest = await this.loadManifest();
+      if (s.disposed) return;
+      const canPlay = this.deps.canPlayType ?? ((type: string) => (typeof Audio !== "undefined" ? new Audio().canPlayType(type) : ""));
+      s.loader = new AssetLoader(s.ctx, manifest, {
+        fetch: this.deps.fetch ?? fetch.bind(globalThis),
+        canPlay: (type) => canPlay(type) !== "",
+      });
+      this.prepareFootsteps(s, manifest);
+      this.updateAmbience(s);
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  private prepareFootsteps(s: Session, manifest: AudioManifest): void {
+    const entry = manifest.assets[FOOTSTEPS];
+    if (entry && s.loader) {
+      s.loader
+        .load(FOOTSTEPS)
+        .then((buffer) => {
+          if (s.disposed) return;
+          s.stepBuffer = buffer;
+          s.stepSegments = entry.steps?.segments.length ? entry.steps.segments : [{ start: 0, end: buffer.duration }];
+          s.stepSynth = false;
+        })
+        .catch(() => this.useSynthFootsteps(s));
+      return;
+    }
+    this.useSynthFootsteps(s);
+  }
+
+  private useSynthFootsteps(s: Session): void {
+    if (s.disposed || s.stepBuffer) return;
+    const rate = s.ctx.sampleRate;
+    const variants = Array.from({ length: SYNTH_STEP_VARIANTS }, () => synthFootstep(rate, () => this.rng()));
+    const length = variants.reduce((n, v) => n + v.length, 0);
+    const buffer = s.ctx.createBuffer(1, length, rate);
+    const data = buffer.getChannelData(0);
+    let at = 0;
+    const segments: { start: number; end: number }[] = [];
+    for (const v of variants) {
+      data.set(v, at);
+      segments.push({ start: at / rate, end: (at + v.length) / rate });
+      at += v.length;
+    }
+    s.stepBuffer = buffer;
+    s.stepSegments = segments;
+    s.stepSynth = true;
+  }
+
+  // --- zegar, tryb i pozycja -------------------------------------------------------------------------------------------
+
+  /**
+   * Czas gry. Wywołuj przy każdej zmianie `elapsed`. Naturalny upływ czasu może wywołać wilki o północy,
+   * a skok (zapowiedziany przez `jumpClock` albo duża zmiana) tylko przesuwa punkt odniesienia.
+   */
+  setClock(elapsed: number): void {
+    const s = this.session;
+    if (!s || s.disposed) return;
+    const step = s.watcher.advance(elapsed, this.now());
+    if (step.kind === "ignored") return;
+    s.elapsed = elapsed;
+    s.hour = gameHour(elapsed);
+    if (step.kind === "crossed") this.onMidnight(s, step.midnight);
+  }
+
+  /** Zapowiedź ręcznej zmiany czasu (panel deweloperski) na `target`: bez wilków za pominięte północe. */
+  jumpClock(target: number): void {
+    const s = this.session;
+    if (!s || s.disposed) return;
+    s.watcher.expectJump(target, this.now());
+  }
+
+  setMode(mode: AudioMode): void {
+    const changed = mode.dialog !== this.mode.dialog || mode.frozen !== this.mode.frozen;
+    this.mode = { ...mode };
+    const s = this.session;
+    if (!s || s.disposed || !changed) return;
+    setParam(s.ambienceMode.gain, mode.dialog ? DIALOG_AMBIENCE : 1, s.ctx.currentTime, MODE_TAU);
+    if (mode.dialog || mode.frozen) s.steps.reset();
+  }
+
+  /** Pozycja i kierunek gracza (z kamery). Ruch poziomy między próbkami steruje krokami. */
+  setPose(pose: ListenerPose): void {
+    const s = this.session;
+    if (!s || s.disposed) return;
+    const t = this.now();
+    const ctxTime = s.ctx.currentTime;
+    s.pose = pose;
+    const l = s.ctx.listener;
+    const fx = -Math.sin(pose.yaw);
+    const fz = -Math.cos(pose.yaw);
+    if (l.positionX) {
+      setParam(l.positionX, pose.x, ctxTime, 0.015);
+      setParam(l.positionY, EAR_HEIGHT, ctxTime, 0.015);
+      setParam(l.positionZ, pose.z, ctxTime, 0.015);
+      setParam(l.forwardX, fx, ctxTime, 0.02);
+      setParam(l.forwardY, 0, ctxTime, 0.02);
+      setParam(l.forwardZ, fz, ctxTime, 0.02);
+      l.upX.value = 0;
+      l.upY.value = 1;
+      l.upZ.value = 0;
+    } else {
+      l.setPosition(pose.x, EAR_HEIGHT, pose.z);
+      l.setOrientation(fx, 0, fz, 0, 1, 0);
+    }
+
+    const last = s.lastPose;
+    s.lastPose = { x: pose.x, z: pose.z, t };
+    if (!last) return;
+    const dt = (t - last.t) / 1000;
+    if (dt <= 0.001) return;
+    const frozen = this.mode.frozen || this.mode.dialog || !this.running(s);
+    const stale = dt > 0.6;
+    const distance = stale ? 0 : Math.hypot(pose.x - last.x, pose.z - last.z);
+    const events = s.steps.update({ distance, dt: stale ? 1 : dt, frozen });
+    for (const e of events) this.playStep(s, e);
+  }
+
+  // --- warstwa A: ambient -------------------------------------------------------------------------------------------
+
+  private layerNeeded(s: Session, which: "day" | "night"): { now: number; soon: number } {
+    return { now: ambientMix(s.hour)[which], soon: ambientMix(s.hour + LOOKAHEAD_HOURS)[which] };
+  }
+
+  private updateAmbience(s: Session): void {
+    const loader = s.loader;
+    if (!loader || s.disposed) return;
+    const t = s.ctx.currentTime;
+    const nowMs = this.now();
+    for (const which of ["day", "night"] as const) {
+      const layer = s.layers[which];
+      const need = this.layerNeeded(s, which);
+      const target = need.now;
+      const wanted = need.now > 0.001 || need.soon > 0.001;
+      if (wanted) {
+        layer.idleSince = null;
+        const buffer = loader.get(layer.id);
+        if (!buffer && !loader.isLoading(layer.id)) loader.load(layer.id).catch(() => undefined);
+        if (buffer && !layer.source) this.startLayer(s, layer, buffer, target);
+      } else if (layer.source) {
+        layer.idleSince ??= nowMs;
+        if (nowMs - layer.idleSince > IDLE_RELEASE_MS) {
+          this.stopLayer(layer);
+          loader.release(layer.id);
+          layer.idleSince = null;
+        }
+      }
+      if (layer.primed) setParam(layer.gain.gain, target, t, MIX_TAU);
+    }
+    this.maintainWolvesBuffer(s);
+    this.maintainBirdBuffers(s);
+  }
+
+  private startLayer(s: Session, layer: Layer, buffer: AudioBuffer, target: number): void {
+    const source = s.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(layer.gain);
+    layer.gain.gain.value = target;
+    layer.primed = true;
+    source.start(0, this.rng() * buffer.duration);
+    layer.source = source;
+  }
+
+  private stopLayer(layer: Layer): void {
+    const source = layer.source;
+    if (source) {
+      try {
+        source.stop();
+      } catch {
+        // źródło mogło już zostać zatrzymane
+      }
+      source.disconnect();
+    }
+    layer.source = null;
+    layer.primed = false;
+  }
+
+  // --- warstwa B: zwierzęta i zdarzenia ------------------------------------------------------------------------------
+
+  private maintainBirdBuffers(s: Session): void {
+    const loader = s.loader;
+    if (!loader) return;
+    const wanted = birdActivity(s.hour) > 0.03 || birdActivity(s.hour + LOOKAHEAD_HOURS) > 0.03;
+    for (const id of BIRD_IDS) {
+      if (wanted && loader.has(id) && !loader.get(id) && !loader.isLoading(id)) loader.load(id).catch(() => undefined);
+      if (!wanted && loader.get(id)) loader.release(id);
+    }
+  }
+
+  private maintainWolvesBuffer(s: Session): void {
+    const loader = s.loader;
+    if (!loader || !loader.has(WOLVES)) return;
+    const h = s.hour;
+    const near = h >= 22.75 || h < 0.5;
+    const playing = [...s.voices].some((v) => v.kind === "wolves");
+    if (near && !loader.get(WOLVES) && !loader.isLoading(WOLVES)) loader.load(WOLVES).catch(() => undefined);
+    if (!near && !playing && !s.wolvesLoading && loader.get(WOLVES)) loader.release(WOLVES);
+  }
+
+  private effectCount(s: Session): number {
+    let n = 0;
+    for (const v of s.voices) if (v.kind !== "step") n++;
+    return n;
+  }
+
+  private tick(s: Session): void {
+    if (s.disposed || s !== this.session) return;
+    const now = this.now();
+    const dt = Math.min(1, Math.max(0, (now - s.lastTick) / 1000));
+    s.lastTick = now;
+    if (s.hidden) return;
+    this.updateAmbience(s);
+    if (!this.running(s)) return;
+    const event = s.birds.tick(dt, { hour: s.hour, dialog: this.mode.dialog, activeEffects: this.effectCount(s) });
+    if (event) this.playBird(s, event);
+  }
+
+  private spatial(s: Session, bearing: number, distance: number, height: number) {
+    const pose = s.pose ?? { x: 0, z: 0, yaw: 0 };
+    return { x: pose.x + Math.cos(bearing) * distance, y: EAR_HEIGHT + height, z: pose.z + Math.sin(bearing) * distance };
+  }
+
+  private playBird(s: Session, e: BirdEvent): void {
+    const buffer = s.loader?.get(e.sound);
+    if (!buffer) return;
+    const voice = this.startSpatialVoice(s, "bird", buffer, {
+      gain: e.gain,
+      rate: e.rate,
+      bearing: e.bearing,
+      distance: e.distance,
+      height: e.height,
+      panner: BIRD_PANNER,
+    });
+    if (voice) this.recordEffect({ label: e.sound, kind: "bird", at: this.now(), distance: e.distance, bearingDeg: this.bearingDeg(s, e.bearing), rate: e.rate });
+  }
+
+  private bearingDeg(s: Session, bearing: number): number {
+    const yaw = s.pose?.yaw ?? 0;
+    // kąt względem kierunku patrzenia: 0 = przed graczem, dodatni = na prawo
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    const dx = Math.cos(bearing);
+    const dz = Math.sin(bearing);
+    return Math.round((Math.atan2(fx * dz - fz * dx, fx * dx + fz * dz) * 180) / Math.PI);
+  }
+
+  private startSpatialVoice(
+    s: Session,
+    kind: "bird" | "wolves",
+    buffer: AudioBuffer,
+    o: { gain: number; rate: number; bearing: number; distance: number; height: number; panner: { ref: number; rolloff: number } },
+  ): Voice | null {
+    const ctx = s.ctx;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = o.rate;
+    const env = ctx.createGain();
+    env.gain.value = o.gain;
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.value = Math.min(16000, Math.max(3000, 16000 - o.distance * 130));
+    const panner = ctx.createPanner();
+    panner.panningModel = "HRTF";
+    panner.distanceModel = "inverse";
+    panner.refDistance = o.panner.ref;
+    panner.rolloffFactor = o.panner.rolloff;
+    panner.maxDistance = 10000;
+    const p = this.spatial(s, o.bearing, o.distance, o.height);
+    setPosition(panner, p.x, p.y, p.z);
+    source.connect(env);
+    env.connect(lowpass);
+    lowpass.connect(panner);
+    panner.connect(s.effectsVol);
+    const voice: Voice = { kind, source, nodes: [env, lowpass, panner], done: false };
+    s.voices.add(voice);
+    source.onended = () => this.finishVoice(s, voice, false);
+    source.start();
+    return voice;
+  }
+
+  private finishVoice(s: Session, voice: Voice, stop: boolean): void {
+    if (voice.done) return;
+    voice.done = true;
+    voice.source.onended = null;
+    if (stop) {
+      try {
+        voice.source.stop();
+      } catch {
+        // już zatrzymane
+      }
+    }
+    voice.source.disconnect();
+    for (const node of voice.nodes) node.disconnect();
+    s.voices.delete(voice);
+    if (voice.kind === "wolves" && !s.disposed && ![...s.voices].some((v) => v.kind === "wolves")) {
+      setParam(s.duck.gain, 1, s.ctx.currentTime, 1.2);
+    }
+  }
+
+  private recordEffect(info: EffectInfo): void {
+    this.lastEffect = info;
+  }
+
+  // --- wilki ---------------------------------------------------------------------------------------------------------
+
+  private onMidnight(s: Session, midnight: number): void {
+    if (s.naturalMidnights.has(midnight)) return;
+    s.naturalMidnights.add(midnight);
+    if (this.ledger().played(s.saveId, midnight)) {
+      this.lastMidnight = { midnight, result: "wilki już były tej nocy (zapis)" };
+      return;
+    }
+    if (!this.running(s)) {
+      this.lastMidnight = { midnight, result: "pominięte: dźwięk zablokowany albo karta w tle" };
+      return;
+    }
+    this.lastMidnight = { midnight, result: "odtwarzanie" };
+    this.playWolves(s, "natural", midnight).catch(() => {
+      this.lastMidnight = { midnight, result: "błąd wczytania nagrania" };
+    });
+  }
+
+  /** Ręczny test wilków: nie zapisuje północy, nie rusza harmonogramu ptaków ani zegara. */
+  testWolves(): boolean {
+    const s = this.session;
+    if (!s || s.disposed || !this.running(s)) return false;
+    if ([...s.voices].some((v) => v.kind === "wolves")) return false;
+    this.playWolves(s, "test", null).catch(() => undefined);
+    return true;
+  }
+
+  private async playWolves(s: Session, kind: "natural" | "test", midnight: number | null): Promise<void> {
+    const loader = s.loader;
+    if (!loader || !loader.has(WOLVES)) throw new Error("Brak nagrania wilków");
+    s.wolvesLoading = true;
+    let buffer: AudioBuffer;
+    try {
+      buffer = await loader.load(WOLVES);
+    } finally {
+      s.wolvesLoading = false;
+    }
+    if (s.disposed || s !== this.session) return;
+    if (!this.running(s)) {
+      if (midnight !== null) this.lastMidnight = { midnight, result: "pominięte: dźwięk zablokowany albo karta w tle" };
+      return;
+    }
+    const [d0, d1] = WOLVES_CONFIG.distance;
+    const bearing = this.rng() * Math.PI * 2;
+    const distance = d0 + (d1 - d0) * this.rng();
+    const voice = this.startSpatialVoice(s, "wolves", buffer, {
+      gain: WOLVES_CONFIG.gain,
+      rate: 1,
+      bearing,
+      distance,
+      height: WOLVES_CONFIG.height,
+      panner: WOLVES_CONFIG.panner,
+    });
+    if (!voice) return;
+    setParam(s.duck.gain, WOLVES_CONFIG.duck, s.ctx.currentTime, 0.5);
+    this.recordEffect({
+      label: kind === "natural" ? "wilki (północ)" : "wilki (test)",
+      kind: kind === "natural" ? "wolves" : "wolves-test",
+      at: this.now(),
+      distance,
+      bearingDeg: this.bearingDeg(s, bearing),
+      rate: 1,
+    });
+    if (kind === "natural" && midnight !== null) {
+      this.ledger().record(s.saveId, midnight);
+      this.lastWolvesSave = s.saveId;
+      this.lastMidnight = { midnight, result: "odtworzone" };
+    }
+  }
+
+  // --- warstwa C: kroki ---------------------------------------------------------------------------------------------
+
+  private playStep(s: Session, e: FootstepEvent): void {
+    const buffer = s.stepBuffer;
+    if (!buffer || s.disposed) return;
+    let steps = 0;
+    for (const v of s.voices) if (v.kind === "step") steps++;
+    if (steps >= s.steps.config.maxVoices) return;
+    const seg = s.stepSegments[Math.min(e.variant, s.stepSegments.length - 1)] ?? { start: 0, end: buffer.duration };
+    const ctx = s.ctx;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = e.rate;
+    const env = ctx.createGain();
+    env.gain.value = e.gain;
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.value = e.lowpass;
+    source.connect(env);
+    env.connect(lowpass);
+    lowpass.connect(s.effectsVol);
+    const voice: Voice = { kind: "step", source, nodes: [env, lowpass], done: false };
+    s.voices.add(voice);
+    source.onended = () => this.finishVoice(s, voice, false);
+    source.start(0, seg.start, Math.max(0.05, seg.end - seg.start));
+  }
+
+  // --- diagnostyka ---------------------------------------------------------------------------------------------------
+
+  getDiagnostics(): AudioDiagnostics {
+    const s = this.session;
+    const hour = s ? s.hour : 0;
+    const mix = ambientMix(hour);
+    const dayGain = s ? s.layers.day.gain.gain.value : 0;
+    const nightGain = s ? s.layers.night.gain.gain.value : 0;
+    let background = "-";
+    if (s) {
+      const d = dayGain > 0.02;
+      const n = nightGain > 0.02;
+      background = d && n ? `dzień + noc (crossfade, ${mix.phase})` : d ? "dzień (birds-in-forest-loop-1239)" : n ? "noc (forest-at-night-1224)" : "cisza (ładowanie)";
+    }
+    let effects = 0;
+    let steps = 0;
+    if (s) {
+      for (const v of s.voices) {
+        if (v.kind === "step") steps++;
+        else effects++;
+      }
+    }
+    const saveId = s?.saveId ?? this.lastWolvesSave;
+    return {
+      active: this.active,
+      error: this.error,
+      contextState: s ? (s.hidden ? "wstrzymany (karta w tle)" : s.ctx.state) : "-",
+      hour,
+      phase: phaseOf(hour),
+      background,
+      dayGain,
+      nightGain,
+      dayLoaded: Boolean(s?.layers.day.source),
+      nightLoaded: Boolean(s?.layers.night.source),
+      activeEffects: effects,
+      activeSteps: steps,
+      lastEffect: this.lastEffect,
+      wolvesLastMidnight: saveId ? this.ledger().last(saveId) : null,
+      lastMidnight: this.lastMidnight,
+      footsteps: !s || !s.stepBuffer ? "-" : s.stepSynth ? "syntetyczne (brak pliku)" : "próbki",
+      walking: Boolean(s?.steps.walking),
+      running: Boolean(s?.steps.running),
+      mode: this.mode,
+      muted: this.getSettings().muted,
+      loaded: s?.loader?.loaded() ?? [],
+    };
+  }
+}
+
+let shared: ForestAudioController | null = null;
+
+/** Jedyna instancja kontrolera w aplikacji. */
+export function getForestAudio(): ForestAudioController {
+  shared ??= new ForestAudioController();
+  return shared;
+}
