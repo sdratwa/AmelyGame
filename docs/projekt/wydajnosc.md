@@ -55,4 +55,4 @@ Każda zmiana graficzna zawiera notatkę o wpływie na wydajność (draw calls, 
 
 ## Modele skrzyni i trolla
 
-Troll: 1 skórka, 1 materiał, 3 tekstury 2048 (ok. 64 MiB GPU), 13299 trójkątów, 66 kości, 1 wywołanie rysowania (+1 w cieniach); aktualizowany tylko w zasięgu 140 m. Skrzynie: 3 wywołania rysowania (korpus, pokrywa, zamek), 9257 trójkątów na skrzynię. Szczegóły w [modele-skrzynia-troll.md](modele-skrzynia-troll.md). FPS w przeglądarce nie był mierzony przez agenta.
+Troll (animowany, 7 klipów): 1 skórka, 1 materiał, 3 tekstury 2048 (ok. 64 MiB GPU), 13299 trójkątów, 65 kości, 1 wywołanie rysowania (+1 w cieniach); aktualizowany tylko w zasięgu 140 m. Koszt CPU na klatkę: jeden mikser z co najwyżej dwoma aktywnymi klipami (przejścia 0,3 s; nieaktywne akcje są zatrzymane), teren pod stopami próbkowany w 25 punktach, maszyna spotkania i patrol są O(1); w czasie dialogu troll jest aktualizowany mimo wstrzymanego sterowania. Skrzynie: 3 wywołania rysowania (korpus, pokrywa, zamek), 9257 trójkątów na skrzynię. Szczegóły w [modele-skrzynia-troll.md](modele-skrzynia-troll.md). FPS w przeglądarce nie był mierzony przez agenta.

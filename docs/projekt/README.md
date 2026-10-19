@@ -41,9 +41,10 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 
 - UI1 (tablica ogłoszeń, dziennik J, tracker): zrobione; quest można przyjąć, śledzić i zapisać w normalnej grze.
 - F1 (las 3D w grze): zrobione, czeka na ocenę autora w przeglądarce; patrz [las-w-grze-f1.md](las-w-grze-f1.md).
-- M1 + C1 (minimapa, skrzynie, E, ekwipunek, zbieranie): zrobione, czeka na ocenę autora w przeglądarce; patrz [m1-c1-skrzynie-minimapa.md](m1-c1-skrzynie-minimapa.md). T1 (troll), R1 (most) nie rozpoczęte.
+- M1 + C1 (minimapa, skrzynie, E, ekwipunek, zbieranie): zrobione, czeka na ocenę autora w przeglądarce; patrz [m1-c1-skrzynie-minimapa.md](m1-c1-skrzynie-minimapa.md). T1 (troll), R1 (most) nie rozpoczęte. Animowany troll z testowym dialogiem (bez zagadek): zrobiony, czeka na ocenę autora w przeglądarce; patrol [troll-spotkanie.md](troll-spotkanie.md).
 
 - [modele-skrzynia-troll.md](modele-skrzynia-troll.md): finalne modele skrzyni i trolla, animacje, koszt renderowania.
+- [troll-spotkanie.md](troll-spotkanie.md): animowany troll (7 klipów), maszyna spotkania (patrol, alert, zauważenie, dialog), testowe okno PRAWIDŁOWY/ZŁY, F3, instrukcja testu w przeglądarce.
 
 ## Kolejność etapów
 

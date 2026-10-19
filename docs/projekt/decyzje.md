@@ -129,4 +129,13 @@
 - Ocena wizualna modeli (które kolory liści zostają, jakość LOD1, potrzeba billboardów) i progi profili jakości - V2.
 - Piła: brak zweryfikowanego kandydata CC0.
 - Przegląd drenażu życia pod kątem dzieci (zima: -1% co 5 s w nocy) - osobna propozycja; wartości na razie bez zmian.
-- Troll i skrzynia: finalne modele autora; idle trolla to poza z klipu chodu + ruch proceduralny (brak animacji Idle/Talk w pliku); minimalny patrol jako sama prezentacja do czasu T1. Do decyzji autora: dodatkowe animacje Idle/Talk, niższa rozdzielczość atlasu trolla na słabszym sprzęcie.
+- Troll i skrzynia: finalne modele autora; troll ma od 19 października animowany plik (7 klipów, w tym Idle) z testowym spotkaniem i dialogiem (bez zagadek); patrol jest prezentacją do czasu T1. Do decyzji autora: klip Talk, niższa rozdzielczość atlasu trolla na słabszym sprzęcie, czy E ma prowadzić do testowego okna, czy do prawdziwego dialogu T1 (przy T1).
+
+## Animowany troll i testowe spotkanie (19 października 2026)
+
+- Nowy plik autora `forest_troll_animated.glb` (Blender + Mixamo, 7 klipów w miejscu) zastępuje poprzedni model trolla w grze; stary oryginał zostaje w `assets/source`. Skala wysokości 2,7 m jak dotąd; kotwica W1b, generator lasu i `MIASTO_DEFAULT` bez zmian.
+- Zachowanie wobec gracza wyłącznie z odległości: alert < 20 m (wyjście > 22 m, zwłoki 0,3 s i 1,5 s), zauważenie < 5 m (obrót całego ciała, `Surprised` raz, potem okno); nowe spotkanie dopiero po oddaleniu o > 10 m i zbliżeniu, E z bliska albo F4 (dev).
+- Okno testowe (PRAWIDŁOWY -> `Happy` + `Dance`, ZŁY -> `Angry`) nie zmienia stanu gry, zapisu ani questa: jedynym wejściem do zachowania trolla jest `resolveDialog`, które przejmie prawdziwy system T1.
+- Konfiskata, teleport gracza i blokada do następnego dnia po ZŁY nie istnieją w tym teście (to rzecz T1 i wymaga osobnej decyzji).
+- Animator liczy wagi przejść sam (suma 1), zamiast `crossFadeFrom` miksera, bo przerwane przejście dawało sumę > 1 (skok pozy).
+

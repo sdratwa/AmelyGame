@@ -29,6 +29,10 @@ Otwarcie raz; osobne odebranie; pełny ekwipunek zostawia przedmiot w skrzyni; b
 
 Troll zabiera wszystko poza telefonem (także narzędzia); przedmioty w depozycie z pełnym stanem; po poprawnej odpowiedzi wraca cały depozyt; brak slotów nie gubi przedmiotów (reszta u trolla); wielokrotne odbieranie nie duplikuje; zapis i odczyt zachowują depozyt; blokady (następny dzień, 1 godzina) działają po zapisie i odczycie z poprawnym pozostałym czasem; odrodzenie nie usuwa depozytu; konfrontacja atomowa; po pierwszej konfrontacji tylko zagadki; porażka nie blokuje ukończenia questa; pauza podczas dialogu nie przesuwa blokad.
 
+## Troll: spotkanie z graczem (animacje i testowy dialog)
+
+Progi 20 m (alert) i 5 m (zauważenie) oraz histereza 22 m ze zwłokami; brak alertu przy chwiejnej odległości; Nervous tylko w spoczynku i cyklicznie; jedno `Surprised` na spotkanie od początku do końca, dialog dopiero na zdarzenie końca klipu; płynny obrót bez teleportu (limity prędkości i przyspieszenia kątowego); `Happy -> Dance` i `Angry` bez przerwania przy zmianach odległości; po sekwencji alert albo patrol, bez pętli dialogu; Esc bez reakcji; nowe spotkanie po oddaleniu, E albo restarcie; suma wag animacji = 1 w każdej klatce; stopy na terenie; troll nie opuszcza obszaru patrolu ani nie wchodzi w skrzynię; wyjście z lasu w trakcie animacji sprząta mikser i nasłuch; wyniki dialogu nie zmieniają SaveV2 ani stanu questa i moduły trolla nie importują silnika. Pliki: `npc/encounter.test.ts`, `npc/troll.encounter.test.ts`, `npc/isolation.test.ts`, `npc/animator.test.ts`, `npc/patrol.test.ts`; opis w [troll-spotkanie.md](troll-spotkanie.md). Okno React i pauza: test ręczny (brak środowiska DOM).
+
 ## Zagadki
 
 Min. 10 zagadek; walidacja w silniku; liczba jako odpowiedź (normalizacja); stabilny wybór w ramach próby; poprawna/błędna odpowiedź.
