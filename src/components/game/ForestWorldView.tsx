@@ -13,8 +13,10 @@ import { harvestOf } from "@/lib/game/world/harvest";
 import { safeForestPose } from "@/lib/game/world/generators/v2";
 import { cn } from "@/lib/utils";
 import { ForestHand } from "./ForestHand";
+import { TrollTestDialog } from "./TrollTestDialog";
 import { Minimap } from "./Minimap";
 import { useGamePause } from "./quest/useGamePause";
+import type { DialogOutcome } from "@/lib/npc/encounter";
 
 const MINIMAP_KEY = "miasto.forest.minimap";
 const POLL_MS = 100;
@@ -55,7 +57,7 @@ export type ForestWorldViewProps = {
   onLoadingChange: (loading: boolean) => void;
 };
 
-function DiagnosticsPanel({ stats }: { stats: PanelStats }) {
+function DiagnosticsPanel({ stats, onRestartEncounter }: { stats: PanelStats; onRestartEncounter: () => void }) {
   const s = stats.stream;
   return (
     <div data-testid="forest-diagnostics" className="pointer-events-none max-w-xs rounded-lg bg-black/60 p-2 font-mono text-[11px] leading-snug text-slate-100">
@@ -79,8 +81,31 @@ function DiagnosticsPanel({ stats }: { stats: PanelStats }) {
         draw calls {stats.drawCalls} · trójkąty {(stats.triangles / 1000).toFixed(0)} tys.
       </div>
       {stats.npc && (
-        <div>
-          troll {stats.npc.visible ? stats.npc.state : "daleko"} · patrol {stats.npc.patrol} ({stats.npc.routePoints} pkt) · x {stats.npc.x.toFixed(1)} z {stats.npc.z.toFixed(1)}
+        <div data-testid="npc-diagnostics" className="mt-1 border-t border-white/20 pt-1">
+          <div>
+            NPC troll · {stats.npc.visible ? `dystans ${stats.npc.distance.toFixed(1)} m` : "daleko (ukryty)"} · stan {stats.npc.behavior}
+          </div>
+          <div>
+            animacja {stats.npc.clip} ({stats.npc.state}) {stats.npc.clipTime.toFixed(1)}/{stats.npc.clipDuration.toFixed(1)} s
+          </div>
+          <div>przejście {stats.npc.blend || "-"}</div>
+          <div>
+            dialog {stats.npc.dialogActive ? "otwarty" : "zamknięty"} · spotkania {stats.npc.encounters} · {stats.npc.armed ? "gotowy na zauważenie" : "rozbrojony"}
+          </div>
+          <div>
+            patrol {stats.npc.patrol} ({stats.npc.routePoints} pkt) · x {stats.npc.x.toFixed(1)} z {stats.npc.z.toFixed(1)}
+          </div>
+          <div>
+            model {stats.npc.bones} kości · {(stats.npc.triangles / 1000).toFixed(1)} tys. trójkątów · {stats.npc.materials} materiał
+          </div>
+          <button
+            type="button"
+            data-testid="npc-restart"
+            onClick={onRestartEncounter}
+            className="pointer-events-auto mt-1 rounded bg-emerald-500 px-2 py-0.5 text-[11px] font-semibold text-emerald-950 hover:bg-emerald-400"
+          >
+            Powtórz spotkanie (F4)
+          </button>
         </div>
       )}
       {stats.npcError && <div className="text-red-300">model trolla: {stats.npcError}</div>}
@@ -115,6 +140,9 @@ export function ForestWorldView({
   const [stats, setStats] = useState<PanelStats | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
   const [debug, setDebug] = useState(false);
+  const [trollDialog, setTrollDialog] = useState(false);
+  const trollDialogRef = useRef(false);
+  const [talkable, setTalkable] = useState(false);
   const [pose] = useState(() => safeForestPose(seed, startPose, bridgeBuilt));
   const initial = useRef({ pose, quality, hour, bridgeBuilt, opened: openedChestIds(gameState), harvested: gameState.harvested });
   const stateRef = useRef(gameState);
@@ -169,6 +197,10 @@ export function ForestWorldView({
     }
     rendererRef.current = renderer;
     ready.current = false;
+    renderer.onNpcDialog(() => {
+      trollDialogRef.current = true;
+      setTrollDialog(true);
+    });
     const report = () => {
       const p = renderer.getPose();
       if (p && ready.current) callbacks.current.onPose(p);
@@ -178,6 +210,8 @@ export function ForestWorldView({
       clearInterval(id);
       report();
       rendererRef.current = null;
+      renderer.onNpcDialog(null);
+      trollDialogRef.current = false;
       renderer.dispose();
     };
   }, [seed]);
@@ -197,7 +231,8 @@ export function ForestWorldView({
 
   const windowOpen = snap.window !== null;
   useGamePause(dispatch, "ui.panel", "ui.chest", windowOpen);
-  const frozen = suspended || windowOpen;
+  useGamePause(dispatch, "ui.panel", "ui.troll_test", trollDialog);
+  const frozen = suspended || windowOpen || trollDialog;
   useEffect(() => {
     rendererRef.current?.setSuspended(frozen);
     const g = guard.current;
@@ -205,8 +240,19 @@ export function ForestWorldView({
     g.suspended = frozen;
   }, [frozen]);
   useEffect(() => {
-    if (windowOpen) document.exitPointerLock?.();
-  }, [windowOpen]);
+    if (windowOpen || trollDialog) document.exitPointerLock?.();
+  }, [windowOpen, trollDialog]);
+
+  const resolveTrollDialog = useCallback((outcome: DialogOutcome) => {
+    if (!trollDialogRef.current) return;
+    trollDialogRef.current = false;
+    setTrollDialog(false);
+    rendererRef.current?.resolveNpcDialog(outcome);
+  }, []);
+  const restartEncounter = useCallback(() => {
+    if (trollDialogRef.current) return;
+    rendererRef.current?.restartNpcEncounter();
+  }, []);
 
   const openedKey = openedChestIds(gameState).join("|");
   useEffect(() => {
@@ -229,6 +275,7 @@ export function ForestWorldView({
     const id = setInterval(() => {
       if (!ready.current) return;
       setSnap(interactor.poll());
+      setTalkable(!trollDialogRef.current && (rendererRef.current?.canTalkToNpc ?? false));
     }, POLL_MS);
     return () => {
       clearInterval(id);
@@ -236,6 +283,10 @@ export function ForestWorldView({
     };
   }, [interactor]);
 
+  const debugRef = useRef(debug);
+  useEffect(() => {
+    debugRef.current = debug;
+  }, [debug]);
   const suspendedRef = useRef(suspended);
   useEffect(() => {
     suspendedRef.current = suspended;
@@ -243,9 +294,9 @@ export function ForestWorldView({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "e" && e.key !== "E") return;
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || suspendedRef.current || !ready.current) return;
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || suspendedRef.current || trollDialogRef.current || !ready.current) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (!interactor.press()) return;
+      if (!interactor.press() && !rendererRef.current?.talkToNpc()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       setSnap(interactor.snapshot);
@@ -281,8 +332,13 @@ export function ForestWorldView({
         setDebug((d) => !d);
         return;
       }
+      if (e.key === "F4" && debugRef.current) {
+        e.preventDefault();
+        restartEncounter();
+        return;
+      }
       if ((e.key === "m" || e.key === "M") && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (!suspendedRef.current && ready.current && !(e.target instanceof HTMLInputElement)) toggleMinimap();
+        if (!suspendedRef.current && !trollDialogRef.current && ready.current && !(e.target instanceof HTMLInputElement)) toggleMinimap();
         return;
       }
       if (e.key !== "Escape") return;
@@ -294,7 +350,7 @@ export function ForestWorldView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggleMinimap]);
+  }, [toggleMinimap, restartEncounter]);
 
   const error = fatal ?? stats?.error ?? null;
   const percent = Math.round((stats?.loadProgress ?? 0) * 100);
@@ -313,6 +369,15 @@ export function ForestWorldView({
           )}
           aria-hidden
         />
+      )}
+
+      {!loading && !error && talkable && !snap.prompt && !windowOpen && !trollDialog && (
+        <div className="pointer-events-none absolute inset-x-0 top-[58%] z-10 flex justify-center px-4">
+          <p data-testid="troll-talk-prompt" className="flex items-center gap-2 rounded-full bg-amber-100/90 px-4 py-2 text-sm font-semibold text-amber-950 shadow-xl backdrop-blur">
+            <kbd className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-100">E</kbd>
+            Porozmawiaj z trollem (test)
+          </p>
+        </div>
       )}
 
       {!loading && !error && snap.prompt && !windowOpen && (
@@ -363,10 +428,10 @@ export function ForestWorldView({
             WASD – chodzenie, Shift – bieg, mysz – rozglądanie, E – użyj / otwórz, I – ekwipunek, M – mapa, J – dziennik. Esc zwalnia mysz, F3 – diagnostyka.
           </p>
         )}
-        {debug && stats && <DiagnosticsPanel stats={stats} />}
+        {debug && stats && <DiagnosticsPanel stats={stats} onRestartEncounter={restartEncounter} />}
       </div>
 
-      {!loading && !error && !locked && !suspended && (
+      {!loading && !error && !locked && !suspended && !trollDialog && (
         <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center">
           <p data-testid="forest-click-hint" className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white backdrop-blur">
             Kliknij w scenę, aby sterować myszą
@@ -435,6 +500,8 @@ export function ForestWorldView({
           </div>
         </DialogContent>
       </Dialog>
+
+      <TrollTestDialog open={trollDialog} onOutcome={resolveTrollDialog} />
     </section>
   );
 }

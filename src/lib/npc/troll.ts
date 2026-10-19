@@ -102,6 +102,53 @@ export type TrollNpcOptions = {
 
 export type PatrolMode = "run" | "stop" | "face";
 
+/** Czynności zlecane przez maszynę spotkania: ruch patrolu, obrót i animacje trolla. */
+class TrollBody implements EncounterBody {
+  constructor(
+    private readonly patrol: Patroller,
+    private readonly animator: NpcAnimator,
+    private readonly setPatrolMode: (mode: PatrolMode) => void,
+    private readonly playerOf: () => Point | null,
+  ) {}
+
+  runPatrol(): void {
+    this.setPatrolMode("run");
+  }
+
+  stopPatrol(face: boolean): void {
+    this.setPatrolMode(face ? "face" : "stop");
+  }
+
+  get atRest(): boolean {
+    return this.patrol.speed < 1e-3 && !this.patrol.moving;
+  }
+
+  get yawError(): number {
+    const p = this.playerOf();
+    return p ? Math.abs(wrapAngle(Math.atan2(p.x - this.patrol.x, p.z - this.patrol.z) - this.patrol.yaw)) : 0;
+  }
+
+  get locked(): boolean {
+    return this.animator.locked;
+  }
+
+  get reacting(): boolean {
+    return this.animator.isReacting;
+  }
+
+  setBase(state: "walk" | "idle"): void {
+    this.animator.setBase(state);
+  }
+
+  play(state: string, then?: readonly string[]): boolean {
+    return this.animator.trigger(state, { then });
+  }
+
+  cancelReaction(): boolean {
+    return this.animator.cancel();
+  }
+}
+
 /**
  * Troll w lesie: warstwa prezentacji. Pozycję i kierunek wyznacza patrol (`Patroller`), animacje odtwarza `NpcAnimator`
  * (klipy chodzą w miejscu, więc nie ma podwójnego przesuwania), a zachowanie wobec gracza prowadzi `TrollEncounter`
@@ -185,33 +232,9 @@ export class TrollNpc {
   }
 
   private body(): EncounterBody {
-    const npc = this;
-    return {
-      runPatrol: () => {
-        npc.patrolMode = "run";
-      },
-      stopPatrol: (face) => {
-        npc.patrolMode = face ? "face" : "stop";
-      },
-      get atRest() {
-        return npc.patrol.speed < 1e-3 && !npc.patrol.moving;
-      },
-      get yawError() {
-        const p = npc.player;
-        return p ? Math.abs(wrapAngle(Math.atan2(p.x - npc.patrol.x, p.z - npc.patrol.z) - npc.patrol.yaw)) : 0;
-      },
-      get locked() {
-        return npc.animator.locked;
-      },
-      get reacting() {
-        return npc.animator.isReacting;
-      },
-      setBase: (state) => {
-        npc.animator.setBase(state);
-      },
-      play: (state, then) => npc.animator.trigger(state, { then }),
-      cancelReaction: () => npc.animator.cancel(),
-    };
+    return new TrollBody(this.patrol, this.animator, (mode) => {
+      this.patrolMode = mode;
+    }, () => this.player);
   }
 
   setShadows(cast: boolean, receive: boolean): void {

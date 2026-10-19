@@ -116,6 +116,10 @@ export class NpcLayer {
     return this.visible && this.troll.encounter.requestTalk();
   }
 
+  get dialogActive(): boolean {
+    return this.troll.encounter.dialogActive;
+  }
+
   get canTalk(): boolean {
     return this.visible && this.troll.encounter.canTalk;
   }

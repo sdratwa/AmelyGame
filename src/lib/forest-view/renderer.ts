@@ -13,6 +13,7 @@ import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PaletteStore, g
 import { GrassLab, sanitizeLab, type LabOptions } from "./grassLab";
 import { ForestInstancer, type InstancerStats } from "./instancer";
 import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOverrides } from "./profiles";
+import type { DialogOutcome } from "@/lib/npc/encounter";
 import { NpcLayer, type NpcStats } from "./npc";
 import { ChestLayer, FxBurst, type BurstKind } from "./props";
 import { STREAM_RADIUS } from "./stream";
@@ -221,6 +222,7 @@ export class ForestRenderer {
   private chestLayer: ChestLayer | null = null;
   private npcLayer: NpcLayer | null = null;
   private npcError: string | null = null;
+  private npcDialogListener: (() => void) | null = null;
   private fx: FxBurst | null = null;
   private openedChests = new Set<string>();
   private harvestedIds = new Set<string>();
@@ -391,6 +393,35 @@ export class ForestRenderer {
     return this.npcLayer?.react(npc, kind) ?? false;
   }
 
+  /**
+   * Odbiorca prośby o dialog z trollem (po animacji Surprised). Zapamiętany także przed końcem ładowania lasu i podpinany do
+   * każdej nowej warstwy NPC; `null` wyłącza. Dialog testowy dziś, prawdziwy T1 później: ten sam punkt wejścia.
+   */
+  onNpcDialog(listener: (() => void) | null): void {
+    this.npcDialogListener = listener;
+    this.npcLayer?.onDialog(listener);
+  }
+
+  /** Wynik dialogu z trollem: steruje wyłącznie animacją i zachowaniem trolla, nigdy stanem gry. */
+  resolveNpcDialog(outcome: DialogOutcome): boolean {
+    return this.npcLayer?.resolveDialog(outcome) ?? false;
+  }
+
+  /** Testowe ponowienie spotkania z trollem bez resetowania gry. */
+  restartNpcEncounter(): boolean {
+    return this.npcLayer?.restartEncounter() ?? false;
+  }
+
+  /** Świadoma rozmowa (E) z trollem z bliska; false, gdy jest za daleko albo trwa sekwencja spotkania. */
+  talkToNpc(): boolean {
+    return this.npcLayer?.requestTalk() ?? false;
+  }
+
+  /** Czy E może teraz zacząć rozmowę z trollem (do podpowiedzi). */
+  get canTalkToNpc(): boolean {
+    return this.npcLayer?.canTalk ?? false;
+  }
+
   /** Krótki efekt cząstek (drzazgi, odłamki) w danym punkcie świata. */
   burst(kind: BurstKind, x: number, y: number, z: number): void {
     this.fx?.spawn(kind, x, y, z);
@@ -490,6 +521,7 @@ export class ForestRenderer {
 
   dispose(): void {
     this.disposed = true;
+    this.npcDialogListener = null;
     this.unmountLab();
     cancelAnimationFrame(this.raf);
     for (const fn of this.cleanup) fn();
@@ -678,6 +710,7 @@ export class ForestRenderer {
         const shadows = this.shadowsOn();
         try {
           const npc = new NpcLayer(trollAsset, { forest, walk, seed: opts.seed, castShadow: shadows, receiveShadow: shadows });
+          npc.onDialog(this.npcDialogListener);
           this.npcLayer = npc;
           this.scene.add(npc.group);
         } catch (e) {
@@ -1083,7 +1116,8 @@ export class ForestRenderer {
       this.updateInstances(time);
       this.updateSun();
       this.chestLayer?.update(dt, s);
-      if (!this.suspended) this.npcLayer?.update(dt, s);
+      // Troll żyje także w trakcie własnego dialogu (stoi w Idle i patrzy na gracza), choć sterowanie graczem jest wstrzymane.
+      if (!this.suspended || this.npcLayer?.dialogActive) this.npcLayer?.update(dt, s);
       this.fx?.update(dt);
     }
     this.skyUniforms.uSunDir.value.set(...this.atmosphere.sunDir);
