@@ -149,3 +149,10 @@
 
 - Panel diagnostyczny otwiera `O`; `F3` zostaje jako skrót zapasowy (na MacBookach wymaga Fn albo uruchamia Mission Control). Przed zmianą sprawdzono, że `O` nie było używane w grze. Szczegóły: [sterowanie.md](sterowanie.md).
 - W trybie deweloperskim jest przycisk "Diagnostyka". Logika gry, animacje i quest bez zmian.
+
+## Audio lasu F1 (19 października 2026)
+
+- Jeden kontroler audio (Web Audio) z trzema warstwami: ambient, zwierzęta i zdarzenia, kroki; nagrania Mixkit zachowane jako źródła w `assets/source/audio/`, do gry Opus + AAC z `npm run assets:audio`. Szczegóły: [audio-las.md](audio-las.md).
+- Wilki o północy: trigger z przekroczenia północy przez zegar gry (numer północy, nie `hour === 0`), jedno odtworzenie na dobę, bez zaległości po skokach czasu; ostatnia północ zapamiętana w `localStorage` per `saveId`, **bez zmian w SaveV2**.
+- Dodana komenda deweloperska `dev.setClock` (przesunięcie zegara do przodu z panelu O / F3); nie zmienia wartości zegara ani innych danych.
+- Brak pliku kroków (2429): do czasu dostarczenia gra używa syntetycznego zastępnika, oznaczonego w diagnostyce. Do decyzji autora: poziomy głośności, siła wilków, czy dodać wskaźnik dźwięku do HUD.
