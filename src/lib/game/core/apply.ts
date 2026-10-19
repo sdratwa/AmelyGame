@@ -27,6 +27,7 @@ import {
   startLoading,
   worldReady,
 } from "../systems/session";
+import { devSetClock } from "../systems/devClock";
 import { tick } from "../systems/vitals";
 import type { GameEvent } from "./events";
 import { addPause, clearPauseOwner, pauseReasons, removePause } from "./pause";
@@ -70,7 +71,8 @@ export type Command =
   | { type: "clearToast"; id: number }
   | { type: "pause.add"; reason: string; owner: string }
   | { type: "pause.remove"; reason: string; owner: string }
-  | { type: "pause.clearOwner"; owner: string };
+  | { type: "pause.clearOwner"; owner: string }
+  | { type: "dev.setClock"; elapsed: number };
 
 /** Nazwa zachowana dla zgodności ze starszym kodem. */
 export type Action = Command;
@@ -139,6 +141,8 @@ function execute(state: GameState, command: Command): CommandResult {
       return removePause(state, { reason: command.reason, owner: command.owner });
     case "pause.clearOwner":
       return clearPauseOwner(state, command.owner);
+    case "dev.setClock":
+      return devSetClock(state, command.elapsed);
     default:
       return unchanged(state);
   }
