@@ -156,3 +156,9 @@
 - Wilki o północy: trigger z przekroczenia północy przez zegar gry (numer północy, nie `hour === 0`), jedno odtworzenie na dobę, bez zaległości po skokach czasu; ostatnia północ zapamiętana w `localStorage` per `saveId`, **bez zmian w SaveV2**.
 - Dodana komenda deweloperska `dev.setClock` (przesunięcie zegara do przodu z panelu O / F3); nie zmienia wartości zegara ani innych danych.
 - Brak pliku kroków (2429): do czasu dostarczenia gra używa syntetycznego zastępnika, oznaczonego w diagnostyce. Do decyzji autora: poziomy głośności, siła wilków, czy dodać wskaźnik dźwięku do HUD.
+
+## Matowe materiały trolla (19 października 2026)
+
+- Przyczyną połysku jest mapa MR z pliku (chropowatość ok. 0,3 na ponad 90% powierzchni), a migotania w oczach chropowatość 0 i ostry wał normalnych w oczach, oświetlone jedynym światłem kierunkowym (księżyc nocą). Metaliczność (B ≈ 0), emissive i mapa środowiska nie są przyczyną. Szczegóły: [troll-materialy.md](troll-materialy.md).
+- Poprawka jest lokalna dla trolla (`prepareTrollMaterials`, klon materiału z wypieczoną mapą chropowatości), bez zmiany GLB, geometrii, animacji i oświetlenia lasu; oryginał dostępny przełącznikiem w panelu dev.
+- Do decyzji autora: wartości chropowatości po obejrzeniu w grze oraz czy zrobić dokładną maskę klas w pipeline `assets:troll` (zmienia plik GLB).

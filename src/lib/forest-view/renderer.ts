@@ -16,6 +16,7 @@ import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOver
 import type { DialogOutcome } from "@/lib/npc/encounter";
 import { DeerLayer, type DeerStats } from "./deer";
 import { NpcLayer, type NpcStats } from "./npc";
+import type { TrollMaterialMode } from "@/lib/npc/trollMaterials";
 import { ChestLayer, FxBurst, type BurstKind } from "./props";
 import { STREAM_RADIUS } from "./stream";
 import { forestModelIds, StreamedForest, type StreamStats } from "./streaming";
@@ -226,6 +227,7 @@ export class ForestRenderer {
   private streamOptions: StreamOptions | null = null;
   private chestLayer: ChestLayer | null = null;
   private npcLayer: NpcLayer | null = null;
+  private npcMaterialMode: TrollMaterialMode = "matte";
   private npcError: string | null = null;
   private deerLayer: DeerLayer | null = null;
   private deerError: string | null = null;
@@ -412,6 +414,16 @@ export class ForestRenderer {
   /** Wynik dialogu z trollem: steruje wyłącznie animacją i zachowaniem trolla, nigdy stanem gry. */
   resolveNpcDialog(outcome: DialogOutcome): boolean {
     return this.npcLayer?.resolveDialog(outcome) ?? false;
+  }
+
+  /** Materiał trolla do porównania w panelu dev (matowy po korekcie albo oryginalny z pliku); zapamiętany także dla kolejnej warstwy NPC. */
+  setNpcMaterialMode(mode: TrollMaterialMode): void {
+    this.npcMaterialMode = mode;
+    this.npcLayer?.setMaterialMode(mode);
+  }
+
+  get npcMaterial(): TrollMaterialMode {
+    return this.npcMaterialMode;
   }
 
   /** Testowe ponowienie spotkania z trollem bez resetowania gry. */
@@ -730,7 +742,7 @@ export class ForestRenderer {
       if (trollAsset) {
         const shadows = this.shadowsOn();
         try {
-          const npc = new NpcLayer(trollAsset, { forest, walk, seed: opts.seed, castShadow: shadows, receiveShadow: shadows });
+          const npc = new NpcLayer(trollAsset, { forest, walk, seed: opts.seed, castShadow: shadows, receiveShadow: shadows, materialMode: this.npcMaterialMode });
           npc.onDialog(this.npcDialogListener);
           this.npcLayer = npc;
           this.scene.add(npc.group);

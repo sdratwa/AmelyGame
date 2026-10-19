@@ -47,6 +47,7 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 
 - [jelen.md](jelen.md): animowany jeleń w lesie (pierwszy zwierzak): zasób, animacje, głowa, zachowanie, położenie, F3, wydajność.
 - [modele-skrzynia-troll.md](modele-skrzynia-troll.md): finalne modele skrzyni i trolla, animacje, koszt renderowania.
+- [troll-materialy.md](troll-materialy.md): matowe materiały trolla (przyczyna połysku i migotania oczu, klasy powierzchni, przełącznik ORIGINAL/MATTE w panelu O).
 - [troll-spotkanie.md](troll-spotkanie.md): animowany troll (7 klipów), maszyna spotkania (patrol, alert, zauważenie, dialog), testowe okno PRAWIDŁOWY/ZŁY, F3, instrukcja testu w przeglądarce.
 
 ## Kolejność etapów

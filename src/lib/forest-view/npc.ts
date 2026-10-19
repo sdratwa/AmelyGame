@@ -7,6 +7,7 @@ import type { WalkWorld } from "@/lib/game/world/walk";
 import type { Blocker } from "@/lib/npc/patrol";
 import type { DialogOutcome } from "@/lib/npc/encounter";
 import { TrollNpc, type TrollReaction } from "@/lib/npc/troll";
+import { prepareTrollMaterials, type TrollMaterialMode, type TrollMaterialReport, type TrollMaterials } from "@/lib/npc/trollMaterials";
 
 /** Troll dalej niż to od gracza nie jest aktualizowany ani rysowany (animacja szkieletowa kosztuje, a pod nim nie ma gruntu). */
 export const NPC_DRAW_DISTANCE = 140;
@@ -38,6 +39,12 @@ export type NpcStats = {
   triangles: number;
   bones: number;
   materials: number;
+  /** Wariant materiału na modelu (przełącznik w panelu dev) i jego parametry; `null`, gdy korekta się nie udała. */
+  materialMode: TrollMaterialMode;
+  materialReport: TrollMaterialReport | null;
+  /** Czas przygotowania korekty (ms) i ewentualny powód trybu zapasowego (jednolita chropowatość zamiast mapy). */
+  materialBakeMs: number;
+  materialFallback: string | null;
 };
 
 /** Miejsce trolla: kotwica W1b i punkt, ku któremu patrzy (pilnowana skrzynia). */
@@ -57,10 +64,12 @@ export class NpcLayer {
   private visible = true;
   private viewerDistance = Infinity;
   private readonly asset: TrollAsset;
+  private materials: TrollMaterials | null = null;
+  materialError: string | null = null;
 
   constructor(
     asset: TrollAsset,
-    options: { forest: ForestWorld; walk: WalkWorld; seed: number; castShadow: boolean; receiveShadow: boolean },
+    options: { forest: ForestWorld; walk: WalkWorld; seed: number; castShadow: boolean; receiveShadow: boolean; materialMode?: TrollMaterialMode },
   ) {
     this.asset = asset;
     const place = trollPlacement(options.forest);
@@ -76,6 +85,21 @@ export class NpcLayer {
     });
     this.group.name = "npcs";
     this.group.add(this.troll.group);
+    try {
+      this.materials = prepareTrollMaterials(asset, { mode: options.materialMode ?? "matte" });
+    } catch (e) {
+      this.materialError = e instanceof Error ? e.message : String(e);
+      console.error(e);
+    }
+  }
+
+  get materialMode(): TrollMaterialMode {
+    return this.materials?.mode ?? "original";
+  }
+
+  /** Przełącza materiał trolla (matowy lub oryginalny z pliku); tylko prezentacja. */
+  setMaterialMode(mode: TrollMaterialMode): void {
+    this.materials?.setMode(mode);
   }
 
   setShadows(cast: boolean, receive: boolean): void {
@@ -153,10 +177,16 @@ export class NpcLayer {
       triangles: this.asset.triangles,
       bones: this.asset.bones,
       materials: 1,
+      materialMode: this.materialMode,
+      materialReport: this.materials?.report() ?? null,
+      materialBakeMs: this.materials?.bakeMs ?? 0,
+      materialFallback: this.materials?.fallbackReason ?? this.materialError,
     };
   }
 
   dispose(): void {
+    this.materials?.dispose();
+    this.materials = null;
     this.troll.dispose();
     this.group.removeFromParent();
   }

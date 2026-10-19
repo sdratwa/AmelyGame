@@ -21,9 +21,11 @@ import { AudioDiagnostics, type AudioSnapshot } from "./AudioDiagnostics";
 import { useForestAudio } from "./useForestAudio";
 import { ForestHand } from "./ForestHand";
 import { TrollTestDialog } from "./TrollTestDialog";
+import { TrollMaterialDiagnostics } from "./TrollMaterialDiagnostics";
 import { Minimap } from "./Minimap";
 import { useGamePause } from "./quest/useGamePause";
 import type { DialogOutcome } from "@/lib/npc/encounter";
+import type { TrollMaterialMode } from "@/lib/npc/trollMaterials";
 
 const MINIMAP_KEY = "miasto.forest.minimap";
 const POLL_MS = 100;
@@ -72,12 +74,14 @@ function DiagnosticsPanel({
   onRestartEncounter,
   onSetHour,
   onTestWolves,
+  onSetTrollMaterial,
 }: {
   stats: PanelStats;
   audio: AudioSnapshot | null;
   onRestartEncounter: () => void;
   onSetHour: (hour: number) => void;
   onTestWolves: () => void;
+  onSetTrollMaterial: (mode: TrollMaterialMode) => void;
 }) {
   const s = stats.stream;
   const nearest = nearestCreature(stats);
@@ -128,6 +132,7 @@ function DiagnosticsPanel({
           >
             Powtórz spotkanie (F4)
           </button>
+          <TrollMaterialDiagnostics npc={stats.npc} onSetMode={onSetTrollMaterial} />
         </div>
       )}
       {stats.npcError && <div className="text-red-300">model trolla: {stats.npcError}</div>}
@@ -321,6 +326,9 @@ export function ForestWorldView({
     trollDialogRef.current = false;
     setTrollDialog(false);
     rendererRef.current?.resolveNpcDialog(outcome);
+  }, []);
+  const setTrollMaterial = useCallback((mode: TrollMaterialMode) => {
+    rendererRef.current?.setNpcMaterialMode(mode);
   }, []);
   const restartEncounter = useCallback(() => {
     if (trollDialogRef.current) return;
@@ -531,7 +539,7 @@ export function ForestWorldView({
           </button>
         )}
         {debug && stats && (
-          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} />
+          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} />
         )}
       </div>
 
