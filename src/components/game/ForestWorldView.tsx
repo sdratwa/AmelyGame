@@ -57,6 +57,8 @@ export type ForestWorldViewProps = {
   onLoadingChange: (loading: boolean) => void;
 };
 
+const DEER_MODE_LABEL: Record<string, string> = { rest: "odpoczywa", stroll: "spaceruje", alert: "czujny (patrzy na gracza)", retreat: "odchodzi" };
+
 function DiagnosticsPanel({ stats, onRestartEncounter }: { stats: PanelStats; onRestartEncounter: () => void }) {
   const s = stats.stream;
   return (
@@ -109,6 +111,28 @@ function DiagnosticsPanel({ stats, onRestartEncounter }: { stats: PanelStats; on
         </div>
       )}
       {stats.npcError && <div className="text-red-300">model trolla: {stats.npcError}</div>}
+      {stats.deer && (
+        <div data-testid="deer-diagnostics" className="mt-1 border-t border-white/20 pt-1">
+          <div>
+            Jeleń · {stats.deer.visible ? `dystans ${stats.deer.distance.toFixed(1)} m` : "daleko (ukryty)"} · {DEER_MODE_LABEL[stats.deer.behavior] ?? stats.deer.behavior}
+            {stats.deer.cornered ? " (w kącie)" : ""}
+          </div>
+          <div>
+            animacja {stats.deer.clip} ({stats.deer.state}) {stats.deer.clipTime.toFixed(1)}/{stats.deer.clipDuration.toFixed(1)} s
+          </div>
+          <div>przejście {stats.deer.blend || "-"} · prędkość {stats.deer.speed.toFixed(2)} m/s</div>
+          <div>
+            skala {stats.deer.scale.toFixed(2)} (wysokość {stats.deer.height.toFixed(1)} m) · {(stats.deer.triangles / 1000).toFixed(1)} tys. trójkątów · {stats.deer.bones} kości
+          </div>
+          <div>
+            x {stats.deer.x.toFixed(1)} z {stats.deer.z.toFixed(1)} · polana {stats.deer.homeFromStart.toFixed(0)} m od wejścia · od środka {stats.deer.homeDistance.toFixed(1)} m
+          </div>
+          <div>
+            głowa {stats.deer.watching ? "patrzy na gracza" : "rozgląda się"} · yaw {((stats.deer.lookYaw * 180) / Math.PI).toFixed(0)}° pitch {((stats.deer.lookPitch * 180) / Math.PI).toFixed(0)}° · odejścia {stats.deer.retreats}
+          </div>
+        </div>
+      )}
+      {stats.deerError && <div className="text-red-300">model jelenia: {stats.deerError}</div>}
     </div>
   );
 }

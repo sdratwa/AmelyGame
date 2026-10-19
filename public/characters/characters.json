@@ -101,6 +101,82 @@
         "author": "dostarczone przez autora projektu Miasto",
         "note": "Szkielet Mixamo (65 kości w skórze) i 7 animacji (Walk, Idle, Nervous, Surprised, Happy, Dance, Angry) bez zmian; Walk jest w miejscu (bez root motion)."
       }
+    },
+    {
+      "id": "deer.forest",
+      "file": "deer.forest.glb",
+      "bytes": 933620,
+      "triangles": 19798,
+      "vertices": 12286,
+      "bones": 41,
+      "meshNode": "Deer_Body",
+      "hipsBone": "tripoRoot",
+      "clips": [
+        {
+          "name": "preset:quadruped:walk",
+          "channels": 123,
+          "duration": 2.583
+        }
+      ],
+      "sourceHeight": 1.0000003,
+      "sourceBounds": {
+        "min": [
+          -0.3769532,
+          -2e-7,
+          -0.1712342
+        ],
+        "max": [
+          0.3769533,
+          1.0000002,
+          0.1712341
+        ]
+      },
+      "targetHeight": 1.8,
+      "forward": "-x",
+      "head": {
+        "bone": "tripoHead_0",
+        "yawDeg": -83,
+        "pitchDeg": -12
+      },
+      "feet": [
+        "tripo0_Left_Limb_4",
+        "tripo0_Right_Limb_4",
+        "tripo1_Left_Limb_4",
+        "tripo1_Right_Limb_4"
+      ],
+      "textures": [
+        {
+          "name": "Deer_normal",
+          "size": [
+            1024,
+            1024
+          ],
+          "bytes": 27268
+        },
+        {
+          "name": "Deer_basecolor",
+          "size": [
+            1024,
+            1024
+          ],
+          "bytes": 46138
+        },
+        {
+          "name": "Deer_rm",
+          "size": [
+            1024,
+            1024
+          ],
+          "bytes": 44990
+        }
+      ],
+      "source": {
+        "file": "assets/source/deer_cartoon_3d_model.glb",
+        "sha256": "2ab01484070eebf8345a12742755fd7f2b6dfc8cc8e0e7da7274a57c3835d906",
+        "bytes": 1233548,
+        "author": "dostarczone przez autora projektu Miasto",
+        "note": "Szkielet 41 kości i jedna animacja preset:quadruped:walk (w miejscu, bez Idle) bez zmian; głowa obrócona o ok. 90° względem ciała (korekta w grze); oryginalna nazwa siatki tripo_node_ddfeaa52-348a-473b-af49-526e3c8838fe."
+      }
     }
   ]
 }

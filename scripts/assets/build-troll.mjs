@@ -271,5 +271,7 @@ const entry = {
     note: "Szkielet Mixamo (65 kości w skórze) i 7 animacji (Walk, Idle, Nervous, Surprised, Happy, Dance, Angry) bez zmian; Walk jest w miejscu (bez root motion).",
   },
 };
-fs.writeFileSync(manifestPath, JSON.stringify({ schemaVersion: 1, characters: [entry] }, null, 2) + "\n");
+const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) : { schemaVersion: 1, characters: [] };
+manifest.characters = [entry, ...manifest.characters.filter((c) => c.id !== entry.id)];
+fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 console.log(`${entry.id}: ${glb.length} B, ${checkTris} trójkątów, atlas ${ATLAS}² (użyte wiersze ${usedRows}), klipy ${JSON.stringify(entry.clips)}, wysokość źródła ${entry.sourceHeight}`);

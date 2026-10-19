@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
-import { loadTrollAsset, type TrollAsset } from "@/lib/assets/characters";
+import { loadDeerAsset, loadTrollAsset, type DeerAsset, type TrollAsset } from "@/lib/assets/characters";
 import { loadChestAsset } from "@/lib/assets/props";
 import { forestChestsOf, forestOf, forestWalkOf, syncHarvestedColliders } from "@/lib/game/world/lookup";
 import { BRIDGE_FLAG } from "@/lib/game/world/generators/v2";
@@ -14,6 +14,7 @@ import { GrassLab, sanitizeLab, type LabOptions } from "./grassLab";
 import { ForestInstancer, type InstancerStats } from "./instancer";
 import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOverrides } from "./profiles";
 import type { DialogOutcome } from "@/lib/npc/encounter";
+import { DeerLayer, type DeerStats } from "./deer";
 import { NpcLayer, type NpcStats } from "./npc";
 import { ChestLayer, FxBurst, type BurstKind } from "./props";
 import { STREAM_RADIUS } from "./stream";
@@ -60,6 +61,10 @@ export type PanelStats = {
   npc?: NpcStats | null;
   /** Błąd wczytania modelu NPC (gra działa dalej bez niego). */
   npcError?: string | null;
+  /** Jeleń (prezentacja): zachowanie, animacja i model; null, gdy model się nie wczytał albo nie jesteśmy w lesie. */
+  deer?: DeerStats | null;
+  /** Błąd wczytania modelu jelenia (gra działa dalej bez niego). */
+  deerError?: string | null;
 };
 
 export type BenchmarkReport = {
@@ -222,6 +227,8 @@ export class ForestRenderer {
   private chestLayer: ChestLayer | null = null;
   private npcLayer: NpcLayer | null = null;
   private npcError: string | null = null;
+  private deerLayer: DeerLayer | null = null;
+  private deerError: string | null = null;
   private npcDialogListener: (() => void) | null = null;
   private fx: FxBurst | null = null;
   private openedChests = new Set<string>();
@@ -619,6 +626,11 @@ export class ForestRenderer {
       this.npcLayer.dispose();
       this.npcLayer = null;
     }
+    if (this.deerLayer) {
+      this.scene.remove(this.deerLayer.group);
+      this.deerLayer.dispose();
+      this.deerLayer = null;
+    }
     if (this.fx) {
       this.fx.dispose();
       this.fx = null;
@@ -677,9 +689,18 @@ export class ForestRenderer {
         this.npcError = e instanceof Error ? e.message : String(e);
         console.error(e);
       }
+      let deerAsset: DeerAsset | null = null;
+      this.deerError = null;
+      try {
+        deerAsset = await loadDeerAsset();
+      } catch (e) {
+        this.deerError = e instanceof Error ? e.message : String(e);
+        console.error(e);
+      }
       if (gen !== this.generation || this.disposed) {
         chestAsset?.dispose();
         trollAsset?.dispose();
+        deerAsset?.dispose();
         instancer.dispose();
         await library.dispose();
         return;
@@ -717,6 +738,18 @@ export class ForestRenderer {
           this.npcError = e instanceof Error ? e.message : String(e);
           console.error(e);
           trollAsset.dispose();
+        }
+      }
+      if (deerAsset) {
+        const shadows = this.shadowsOn();
+        try {
+          const fauna = new DeerLayer(deerAsset, { forest, walk, seed: opts.seed, castShadow: shadows, receiveShadow: shadows });
+          this.deerLayer = fauna;
+          this.scene.add(fauna.group);
+        } catch (e) {
+          this.deerError = e instanceof Error ? e.message : String(e);
+          console.error(e);
+          deerAsset.dispose();
         }
       }
       const fx = new FxBurst();
@@ -937,6 +970,7 @@ export class ForestRenderer {
     this.sun.castShadow = shadows;
     this.chestLayer?.setShadows(shadows, shadows);
     this.npcLayer?.setShadows(shadows, shadows);
+    this.deerLayer?.setShadows(shadows, shadows);
     const sc = this.sun.shadow.camera;
     const d = p.shadows.distance;
     sc.left = -d;
@@ -1107,7 +1141,7 @@ export class ForestRenderer {
         ctl.teleport(pose.x, pose.z, pose.yaw);
         ctl.state.pitch = pose.pitch;
       } else if (!this.loading && !this.suspended) {
-        ctl.blockers = this.npcLayer?.blockers() ?? [];
+        ctl.blockers = [...(this.npcLayer?.blockers() ?? []), ...(this.deerLayer?.blockers() ?? [])];
         ctl.update(dt, this.moveInput());
       }
       const s = ctl.state;
@@ -1118,6 +1152,7 @@ export class ForestRenderer {
       this.chestLayer?.update(dt, s);
       // Troll żyje także w trakcie własnego dialogu (stoi w Idle i patrzy na gracza), choć sterowanie graczem jest wstrzymane.
       if (!this.suspended || this.npcLayer?.dialogActive) this.npcLayer?.update(dt, s);
+      if (!this.suspended) this.deerLayer?.update(dt, s);
       this.fx?.update(dt);
     }
     this.skyUniforms.uSunDir.value.set(...this.atmosphere.sunDir);
@@ -1281,6 +1316,8 @@ export class ForestRenderer {
       loadProgress: this.loadProgress,
       npc: this.npcLayer?.stats() ?? null,
       npcError: this.npcError,
+      deer: this.deerLayer?.stats() ?? null,
+      deerError: this.deerError,
     });
   }
 }

@@ -4,11 +4,11 @@ import sharp from "sharp";
 import * as THREE from "three";
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadTestTroll } from "@/lib/npc/testkit";
-import { CharacterLoadError, loadTrollAsset, sceneNodeName, TROLL_ID, TROLL_REQUIRED_CLIPS, type CharactersManifest, type TrollAsset } from "./characters";
+import { CharacterLoadError, loadTrollAsset, sceneNodeName, TROLL_ID, TROLL_REQUIRED_CLIPS, type CharactersManifest, type TrollAsset, type TrollEntry } from "./characters";
 import { parseWithoutTextures, publicDir, readGlbDocument, readJsonFile } from "./glbTestkit";
 
 const manifest = () => readJsonFile(publicDir("characters/characters.json")) as CharactersManifest;
-const entry = () => manifest().characters.find((c) => c.id === TROLL_ID)!;
+const entry = () => manifest().characters.find((c) => c.id === TROLL_ID)! as TrollEntry;
 const approxTextureBytes = (sizes: number[][]) => sizes.reduce((n, [w, h]) => n + w * h * 4 * (4 / 3), 0);
 
 let asset: TrollAsset;
