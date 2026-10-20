@@ -11,3 +11,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Projekt "Miasto"
 
 Trwałe reguły projektu są w `.cursor/rules/` (wizja gry, architektura, świat i zapis, zasoby 3D i wydajność, testy). Dokumentacja projektowa etapu 1 jest w `docs/projekt/` (zacznij od `README.md`). Pracuj etapami i zatrzymuj się do zatwierdzenia po każdym większym etapie.
+
+**Zakaz testów w przeglądarce:** nie uruchamiaj przeglądarki ani subagentów `computerUse` i nie wykonuj testów GUI. Wygląd, dźwięk i FPS ocenia wyłącznie autor; agent uruchamia tylko Vitest, lint, typecheck i build (reguła `miasto-wizja.mdc`).

@@ -12,4 +12,4 @@ alwaysApply: false
 - Zapis: testy round-trip, migracji i uszkodzonych danych; blokady czasowe testuj po zapisie i odczycie.
 - Ekwipunek, depozyty i skrzynie: testuj zachowanie sumy ilości, brak duplikacji i brak utraty przy pełnym ekwipunku.
 - Przed zakończeniem etapu uruchom: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
-- Weryfikacja wizualna scen 3D odbywa się po stronie autora (overlay `?debug=1`); agent nie uruchamia przeglądarki ani subagentów testowych, o ile autor nie zdecyduje inaczej.
+- ZAKAZ testów w przeglądarce (patrz `miasto-wizja.mdc`): weryfikacja wizualna i dźwiękowa odbywa się po stronie autora (overlay `?debug=1`, panel O / F3); agent nie uruchamia przeglądarki, serwera deweloperskiego do oglądania ani subagentów `computerUse`/testowych, o ile autor w bieżącej wiadomości wprost nie zdecyduje inaczej.
