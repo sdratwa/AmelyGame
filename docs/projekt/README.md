@@ -13,7 +13,7 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 - [quest-bridge-01.md](quest-bridge-01.md) - quest "Most do nieznanego".
 - [las-w-grze-f1.md](las-w-grze-f1.md) - F1: las 3D w normalnej grze (streaming sektorów, globalne kolizje, jakość, ograniczenia).
 - [m1-c1-skrzynie-minimapa.md](m1-c1-skrzynie-minimapa.md) - M1 + C1: model skrzyni GLB, skrzynie w lesie, klawisz E, ekwipunek (I), pozyskiwanie drewna i kamienia, minimapa (M), zapis.
-- [audio-las.md](audio-las.md) - AUDIO F1: ambient dzień/noc z crossfade, losowe ptaki 3D, wilki o północy, kroki, kontroler, ustawienia, panel AUDIO, potok `npm run assets:audio`, ograniczenia.
+- [audio-las.md](audio-las.md) - AUDIO F1: ambient dzień/noc z crossfade, losowe ptaki 3D, wilki o północy, kroki gracza i trolla (FOOTSTEPS V2), kontroler, ustawienia, panel AUDIO, potok `npm run assets:audio`, ograniczenia.
 - [sterowanie.md](sterowanie.md) - sterowanie w lesie (macOS i Windows), skróty, panel diagnostyczny, zasady przechwytywania klawiszy.
 - [plan-testow.md](plan-testow.md) - testy mechanik, generatora, zapisu.
 - [zasoby-3d.md](zasoby-3d.md) - modele 3D po V1: pakiet i licencja, wybrane modele, potok optymalizacji, manifest, ładowanie w R3F, ograniczenia.

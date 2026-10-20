@@ -3,7 +3,7 @@ import { SECONDS_PER_DAY, SECONDS_PER_GAME_HOUR } from "@/lib/game/core/constant
 import { FIRST_MIDNIGHT } from "./clock";
 import { ForestAudioController, WOLVES_CONFIG } from "./controller";
 import type { AudioManifest } from "./manifest";
-import { FakeContext, FakeGain, FakePanner, FakeSource, FakeTarget, fakeFetch, MemoryStorage, mulberry32, TEST_MANIFEST } from "./testkit";
+import { FakeContext, FakeFilter, FakeGain, FakePanner, FakeSource, FakeTarget, fakeFetch, MemoryStorage, mulberry32, TEST_MANIFEST } from "./testkit";
 
 const H = SECONDS_PER_GAME_HOUR;
 /** Czas gry (s) dla godziny zegara pierwszej doby (06:00 = 0). */
@@ -64,7 +64,7 @@ async function play(r: Rig, seconds: number, startElapsed: number, opts: { pose?
 const sources = (c: FakeContext) => c.sources;
 const loops = (c: FakeContext) => sources(c).filter((s) => s.loop);
 const voices = (c: FakeContext, id: string) => sources(c).filter((s) => s.buffer?.id === id);
-const activeVoices = (c: FakeContext) => sources(c).filter((s) => !s.loop && s.buffer?.id !== "synth" && !s.stopped);
+const activeVoices = (c: FakeContext) => sources(c).filter((s) => !s.loop && !s.buffer?.id.startsWith("footsteps.") && !s.stopped);
 const wolves = (c: FakeContext) => voices(c, "event.wolves");
 
 function layerGains(r: Rig) {
@@ -197,7 +197,7 @@ describe("ForestAudioController: ptaki", () => {
     expect(birds.length).toBeGreaterThan(20);
     expect(maxConcurrent).toBeLessThanOrEqual(2);
     expect(new Set(birds.map((s) => s.buffer?.id))).toEqual(new Set(["bird.cockatoo", "bird.jungle", "bird.screech"]));
-    const panners = c.nodes.filter((n): n is FakePanner => n instanceof FakePanner);
+    const panners = c.nodes.filter((n): n is FakePanner => n instanceof FakePanner).slice(1);
     expect(panners.length).toBe(birds.length);
     const sides = new Set<string>();
     for (const p of panners) {
@@ -448,84 +448,100 @@ describe("ForestAudioController: wilki o północy", () => {
   });
 });
 
-describe("ForestAudioController: kroki", () => {
-  const steps = (c: FakeContext) => sources(c).filter((s) => (s.buffer?.id === "synth" || s.buffer?.id === "footsteps.leaves") && !s.loop);
+describe("ForestAudioController: kroki gracza", () => {
+  const isStep = (s: FakeSource) => !s.loop && Boolean(s.buffer?.id.startsWith("footsteps.light."));
+  const steps = (c: FakeContext) => sources(c).filter(isStep);
+  const stepIds = (c: FakeContext) => steps(c).map((s) => s.buffer?.id ?? "");
 
+  /** Ruch klatka po klatce jak w pętli gry: `playerMotion(przesunięcie, dt, x, z)`; zakończone głosy są zwalniane jak po odtworzeniu. */
   async function walkFor(r: Rig, speed: number, seconds: number, startX = 0) {
     let x = startX;
-    for (let t = 0; t < seconds; t += 0.05) {
-      x += speed * 0.05;
-      r.audio.setPose({ x, z: 0, yaw: 0 });
-      await flush(50);
-      for (const s of steps(r.ctxs[0])) if (!s.stopped) s.finish();
+    const dt = 1 / 60;
+    for (let t = 0; t < seconds; t += dt) {
+      x += speed * dt;
+      r.audio.playerMotion(speed * dt, dt, x, 0);
+      for (const s of steps(r.ctxs[0])) if (s.started && !s.stopped && r.audio.getDiagnostics().activeSteps >= 2) s.finish();
     }
+    await flush(0);
     return x;
   }
 
-  async function started(mode?: { dialog: boolean; frozen: boolean }) {
-    const r = rig();
-    if (mode) r.audio.setMode(mode);
+  async function started(opts: { mode?: { dialog: boolean; frozen: boolean }; seed?: number } = {}) {
+    const r = rig({ seed: opts.seed });
+    if (opts.mode) r.audio.setMode(opts.mode);
     r.audio.enter({ elapsed: at(12), saveId: "s" });
     r.audio.setPose({ x: 0, z: 0, yaw: 0 });
     await flush(500);
     return r;
   }
 
-  it("używa syntetycznego zastępnika, gdy nie ma pliku kroków, i oznacza to w diagnostyce", async () => {
+  it("wczytuje cztery próbki raz na sesję i dzieli je między gracza i trolla", async () => {
     const r = await started();
-    expect(r.audio.getDiagnostics().footsteps).toBe("syntetyczne (brak pliku)");
-    r.audio.dispose();
-  });
-
-  it("używa segmentów z manifestu, gdy plik kroków istnieje", async () => {
-    const manifest: AudioManifest = {
-      ...TEST_MANIFEST,
-      assets: {
-        ...TEST_MANIFEST.assets,
-        "footsteps.leaves": {
-          id: "footsteps.leaves",
-          role: "footsteps",
-          channels: 1,
-          loop: false,
-          seconds: 3,
-          frames: 144000,
-          files: [{ url: "/audio/footsteps.leaves.ogg", type: 'audio/ogg; codecs="opus"', bytes: 1 }],
-          steps: { kind: "sequence", segments: [{ start: 0.1, end: 0.4 }, { start: 1, end: 1.3 }, { start: 2, end: 2.25 }] },
-        },
-      },
-    };
-    const r = rig({ manifest });
-    r.audio.enter({ elapsed: at(12), saveId: "s" });
-    r.audio.setPose({ x: 0, z: 0, yaw: 0 });
-    await flush(500);
-    expect(r.audio.getDiagnostics().footsteps).toBe("próbki");
-    await walkFor(r, 3.2, 3);
-    const played = voices(r.ctxs[0], "footsteps.leaves");
-    expect(played.length).toBeGreaterThan(3);
-    for (const s of played) {
-      const seg = [{ start: 0.1, end: 0.4 }, { start: 1, end: 1.3 }, { start: 2, end: 2.25 }].find((x) => x.start === s.started?.offset);
-      expect(seg).toBeTruthy();
-      expect(s.started?.duration).toBeCloseTo(seg!.end - seg!.start, 5);
+    const diag = r.audio.getDiagnostics().steps;
+    expect(diag.ready).toBe(true);
+    expect(diag.loaded).toBe(4);
+    expect(diag.total).toBe(4);
+    await walkFor(r, 3.2, 4);
+    for (let i = 0; i < 8; i++) {
+      r.audio.npcStep(5, 0, (i % 2) as 0 | 1);
+      for (const s of steps(r.ctxs[0])) if (s.started && !s.stopped) s.finish();
     }
-    expect(new Set(played.map((s) => s.started?.offset)).size).toBeGreaterThan(1);
+    expect(r.ctxs[0].decoded.filter((d) => d.startsWith("footsteps.light.")).length).toBe(4);
+    const byId = new Map<string, unknown>();
+    for (const s of steps(r.ctxs[0])) {
+      const id = s.buffer!.id;
+      if (byId.has(id)) expect(byId.get(id)).toBe(s.buffer);
+      byId.set(id, s.buffer);
+    }
+    expect(r.fetched.filter((u) => u.includes("footsteps.light.1")).length).toBe(1);
     r.audio.dispose();
   });
 
-  it("kroki są zsynchronizowane z ruchem: chód, bieg, stanie i obrót", async () => {
+  it("w ruchu używa wszystkich czterech próbek, nigdy tej samej dwa razy z rzędu, a pierwsza próbka zależy od losowania", async () => {
+    const firsts = new Set<string>();
+    for (let seed = 1; seed <= 12; seed++) {
+      const r = await started({ seed });
+      await walkFor(r, 3.2, 25);
+      const ids = stepIds(r.ctxs[0]);
+      expect(ids.length).toBeGreaterThan(40);
+      expect(new Set(ids).size).toBe(4);
+      for (let i = 1; i < ids.length; i++) expect(ids[i]).not.toBe(ids[i - 1]);
+      firsts.add(ids[0]);
+      r.audio.dispose();
+    }
+    expect(firsts.size).toBeGreaterThan(1);
+  });
+
+  it("zmienność kroku gracza: tempo 0,96-1,04 i różne głośności", async () => {
+    const r = await started();
+    await walkFor(r, 3.2, 30);
+    const list = steps(r.ctxs[0]);
+    const rates = list.map((s) => s.playbackRate.value);
+    expect(Math.min(...rates)).toBeGreaterThanOrEqual(0.96);
+    expect(Math.max(...rates)).toBeLessThanOrEqual(1.04);
+    const gains = list.map((s) => (s.history[0] as FakeGain).gain.value);
+    expect(new Set(gains.map((g) => g.toFixed(3))).size).toBeGreaterThan(10);
+    r.audio.dispose();
+  });
+
+  it("kroki są zsynchronizowane z ruchem: chód, bieg (częściej), stanie i obrót kamery", async () => {
     const r = await started();
     await walkFor(r, 3.2, 5);
     const walking = steps(r.ctxs[0]).length;
     expect(walking).toBeGreaterThanOrEqual(10);
     expect(walking).toBeLessThanOrEqual(14);
+    expect(r.audio.getDiagnostics().walking).toBe(true);
+    expect(r.audio.getDiagnostics().steps.player.perSecond).toBeGreaterThan(1.5);
 
     const run = await started();
     await walkFor(run, 5.6, 5);
     expect(steps(run.ctxs[0]).length).toBeGreaterThan(walking);
+    expect(run.audio.getDiagnostics().running).toBe(true);
 
     const before = steps(r.ctxs[0]).length;
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 300; i++) {
       r.audio.setPose({ x: 16, z: 0, yaw: i * 0.2 });
-      await flush(50);
+      r.audio.playerMotion(0, 1 / 60, 16, 0);
     }
     expect(steps(r.ctxs[0]).length).toBe(before);
     expect(r.audio.getDiagnostics().walking).toBe(false);
@@ -533,12 +549,30 @@ describe("ForestAudioController: kroki", () => {
     run.audio.dispose();
   });
 
-  it("zatrzymuje kroki w dialogu i przy blokadzie ruchu", async () => {
+  it("samo ustawianie pozycji słuchacza (setPose) nie tworzy kroków", async () => {
+    const r = await started();
+    for (let i = 0; i < 300; i++) r.audio.setPose({ x: i * 0.2, z: 0, yaw: 0 });
+    expect(steps(r.ctxs[0])).toHaveLength(0);
+    r.audio.dispose();
+  });
+
+  it("napieranie na przeszkodę (brak przesunięcia) od razu zatrzymuje kroki", async () => {
+    const r = await started();
+    const x = await walkFor(r, 3.2, 3);
+    const before = steps(r.ctxs[0]).length;
+    const dt = 1 / 60;
+    for (let i = 0; i < 300; i++) r.audio.playerMotion(0.001, dt, x, 0);
+    expect(steps(r.ctxs[0]).length).toBe(before);
+    expect(r.audio.getDiagnostics().walking).toBe(false);
+    r.audio.dispose();
+  });
+
+  it("zatrzymuje kroki w dialogu i przy blokadzie ruchu, a potem wznawia", async () => {
     for (const mode of [
       { dialog: true, frozen: true },
       { dialog: false, frozen: true },
     ]) {
-      const r = await started(mode);
+      const r = await started({ mode });
       await walkFor(r, 3.2, 5);
       expect(steps(r.ctxs[0])).toHaveLength(0);
       r.audio.setMode({ dialog: false, frozen: false });
@@ -548,12 +582,315 @@ describe("ForestAudioController: kroki", () => {
     }
   });
 
-  it("nie odtwarza kroków, gdy karta jest w tle", async () => {
+  it("nie odtwarza kroków, gdy karta jest w tle albo dźwięk jest zablokowany", async () => {
     const r = await started();
     r.doc.hidden = true;
     r.doc.emit("visibilitychange");
     await walkFor(r, 3.2, 3);
     expect(steps(r.ctxs[0])).toHaveLength(0);
+    r.audio.dispose();
+
+    const blocked = rig({ resumeAllowed: false });
+    blocked.audio.enter({ elapsed: at(12), saveId: "s" });
+    blocked.audio.setPose({ x: 0, z: 0, yaw: 0 });
+    await flush(500);
+    await walkFor(blocked, 3.2, 3);
+    expect(steps(blocked.ctxs[0])).toHaveLength(0);
+    blocked.audio.dispose();
+  });
+
+  it("poza lasem (brak sesji) ruch nie robi nic, także po wyjściu", async () => {
+    const idle = rig();
+    expect(() => idle.audio.playerMotion(0.05, 0.016, 0, 0)).not.toThrow();
+    expect(() => idle.audio.npcStep(1, 1, 0)).not.toThrow();
+    const r = await started();
+    r.audio.leave();
+    expect(() => r.audio.playerMotion(0.05, 0.016, 1, 0)).not.toThrow();
+    await flush(2000);
+    expect(steps(r.ctxs[0])).toHaveLength(0);
+  });
+
+  it("ogranicza liczbę równoczesnych głosów kroków gracza", async () => {
+    const r = await started();
+    const dt = 1 / 60;
+    let x = 0;
+    for (let i = 0; i < 600; i++) {
+      x += 0.1;
+      r.audio.playerMotion(0.1, dt, x, 0);
+    }
+    expect(r.audio.getDiagnostics().activeSteps).toBeLessThanOrEqual(3);
+    r.audio.dispose();
+  });
+
+  it("rozpoznaje nawierzchnię z resolvera świata przy każdym kroku i podaje ją w diagnostyce", async () => {
+    const r = await started();
+    let calls = 0;
+    r.audio.setSurfaceResolver(() => {
+      calls++;
+      return "path";
+    });
+    await walkFor(r, 3.2, 4);
+    const count = steps(r.ctxs[0]).length;
+    expect(r.audio.getDiagnostics().steps.player.surface).toBe("path");
+    expect(r.audio.getDiagnostics().steps.player.surfaceLabel).toBe("ziemna ścieżka");
+    expect(calls).toBeGreaterThanOrEqual(count);
+    expect(calls).toBeLessThan(count + 10);
+    r.audio.setSurfaceResolver((x) => (x > 0 ? "rock" : "litter"));
+    const before = steps(r.ctxs[0]).length;
+    await walkFor(r, 3.2, 2, 20);
+    expect(steps(r.ctxs[0]).length).toBeGreaterThan(before);
+    expect(r.audio.getDiagnostics().steps.player.surface).toBe("rock");
+    r.audio.dispose();
+  });
+
+  it("głośności PLAYER/NPC FOOTSTEPS (dev) sterują osobnymi szynami i mieszczą się w 0-2", async () => {
+    const r = await started();
+    const buses = () => r.ctxs[0].nodes.filter((n): n is FakeGain => n instanceof FakeGain && [...n.connections].some((c) => c === (r.ctxs[0].nodes.find((x) => x instanceof FakeGain && x.gain.value === r.audio.getSettings().effects) as FakeGain | undefined)));
+    expect(buses().length).toBeGreaterThanOrEqual(2);
+    r.audio.setStepVolumes({ player: 0.5 });
+    expect(r.audio.getStepVolumes()).toEqual({ player: 0.5, npc: 1 });
+    r.audio.setStepVolumes({ npc: 9, player: -3 });
+    expect(r.audio.getStepVolumes()).toEqual({ player: 0, npc: 2 });
+    const diag = r.audio.getDiagnostics().steps.volumes;
+    expect(diag).toEqual({ player: 0, npc: 2 });
+    r.audio.setStepVolumes({ player: 0 });
+    await walkFor(r, 3.2, 2);
+    r.audio.dispose();
+  });
+
+  it("wyciszenie i głośność efektów obejmują kroki, a ustawienia deweloperskie nie trafiają do zapisu", async () => {
+    const r = await started();
+    r.audio.setStepVolumes({ player: 1.5, npc: 0.3 });
+    expect(r.storage.getItem("miasto.audio.settings.v1") ?? "").not.toMatch(/footstep|player|npc/i);
+    r.audio.updateSettings({ muted: true });
+    const ctx = r.ctxs[0];
+    const master = ctx.nodes.find((n) => n instanceof FakeGain && [...n.connections].some((c) => c.kind === "compressor")) as FakeGain;
+    expect(master.gain.target).toBe(0);
+    r.audio.dispose();
+  });
+
+  it("odsłuch gra cztery próbki po kolei i nie dubluje się w trakcie", async () => {
+    const r = await started();
+    expect(r.audio.previewSteps("player")).toBe(true);
+    expect(r.audio.previewSteps("player")).toBe(false);
+    expect(r.audio.getDiagnostics().steps.previewing).toBe(true);
+    await flush(4 * 750);
+    expect(stepIds(r.ctxs[0])).toEqual(["footsteps.light.1", "footsteps.light.2", "footsteps.light.3", "footsteps.light.4"]);
+    expect(r.audio.getDiagnostics().steps.previewing).toBe(false);
+    expect(r.audio.getDiagnostics().steps.player.last).toBe(4);
+    r.audio.dispose();
+  });
+
+  it("wyjście z lasu w trakcie odsłuchu czyści timery i nie gra po zamknięciu", async () => {
+    const r = await started();
+    r.audio.previewSteps("npc");
+    r.audio.leave();
+    await flush(5000);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(steps(r.ctxs[0]).length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("ForestAudioController: kroki trolla (3D)", () => {
+  const isStep = (s: FakeSource) => !s.loop && Boolean(s.buffer?.id.startsWith("footsteps.light."));
+  const steps = (c: FakeContext) => sources(c).filter(isStep);
+
+  async function started(opts: { seed?: number; pose?: { x: number; z: number; yaw: number } } = {}) {
+    const r = rig({ seed: opts.seed });
+    r.audio.enter({ elapsed: at(12), saveId: "s" });
+    r.audio.setPose(opts.pose ?? { x: 0, z: 0, yaw: 0 });
+    await flush(500);
+    return r;
+  }
+
+  const npcPanner = (r: Rig) => r.ctxs[0].nodes.find((n) => n.kind === "panner") as FakePanner;
+
+  /** Skuteczna amplituda z modelu `inverse` Web Audio, który ustawiliśmy na PannerNode, razem z wzmocnieniem głosu. */
+  function effective(r: Rig, source: FakeSource): number {
+    const env = source.history[0] as FakeGain;
+    const p = npcPanner(r);
+    const l = r.ctxs[0].listener;
+    const d = Math.max(Math.hypot(p.position.x - l.positionX.value, p.position.y - l.positionY.value, p.position.z - l.positionZ.value), p.refDistance);
+    const inverse = p.refDistance / (p.refDistance + p.rolloffFactor * (d - p.refDistance));
+    return env.gain.value * inverse;
+  }
+
+  it("źródłem dźwięku jest pozycja trolla w świecie, nie gracza ani kamery", async () => {
+    const r = await started({ pose: { x: 10, z: 20, yaw: 0.7 } });
+    r.audio.npcStep(14, 26, 0);
+    expect(steps(r.ctxs[0])).toHaveLength(1);
+    const p = npcPanner(r);
+    expect(p.position.x).toBeCloseTo(14);
+    expect(p.position.z).toBeCloseTo(26);
+    expect(p.panningModel).toBe("HRTF");
+    expect(p.distanceModel).toBe("inverse");
+    const d = r.audio.getDiagnostics().steps.npc;
+    expect(d.lastDistance).toBeCloseTo(Math.hypot(4, 6), 1);
+    expect(d.emitterActive).toBe(true);
+    await flush(2000);
+    expect(r.audio.getDiagnostics().steps.npc.emitterActive).toBe(false);
+    r.audio.dispose();
+  });
+
+  it("troll ma własną szynę, własny filtr i cięższe tempo próbek (0,90-0,98), a gracz osobną szynę", async () => {
+    const r = await started();
+    for (let i = 0; i < 20; i++) {
+      r.audio.npcStep(4, 0, (i % 2) as 0 | 1);
+      for (const s of steps(r.ctxs[0])) if (s.started && !s.stopped) s.finish();
+    }
+    for (const s of steps(r.ctxs[0])) {
+      expect(s.playbackRate.value).toBeGreaterThanOrEqual(0.9);
+      expect(s.playbackRate.value).toBeLessThanOrEqual(0.98);
+    }
+    const env = steps(r.ctxs[0])[0].history[0] as FakeGain;
+    expect(env.history[0].kind).toBe("biquad");
+    expect((env.history[0] as FakeFilter).type).toBe("lowshelf");
+    r.audio.dispose();
+  });
+
+  it("losowanie próbek trolla jest niezależne od gracza: kroki gracza nie zmieniają kolejności trolla", async () => {
+    const troll = async (withPlayer: boolean) => {
+      const r = await started({ seed: 8 });
+      const ids: string[] = [];
+      let x = 0;
+      for (let i = 0; i < 30; i++) {
+        if (withPlayer) {
+          for (let k = 0; k < 40; k++) {
+            x += 0.1;
+            r.audio.playerMotion(0.1, 1 / 60, x, 0);
+            for (const s of steps(r.ctxs[0])) if (s.started && !s.stopped) s.finish();
+          }
+        }
+        const before = steps(r.ctxs[0]).length;
+        r.audio.npcStep(5, 0, (i % 2) as 0 | 1);
+        const added = steps(r.ctxs[0]).slice(before);
+        ids.push(added.map((s) => s.buffer!.id).join(","));
+        for (const s of steps(r.ctxs[0])) if (s.started && !s.stopped) s.finish();
+      }
+      r.audio.dispose();
+      return ids;
+    };
+    const alone = await troll(false);
+    const mixed = await troll(true);
+    expect(mixed).toEqual(alone);
+    expect(new Set(alone).size).toBe(4);
+    for (let i = 1; i < alone.length; i++) expect(alone[i]).not.toBe(alone[i - 1]);
+  });
+
+  it("głośność maleje z odległością: 0-3 m czysto, 3-10 m stopniowo, 10-25 m słabiej, >30-40 m prawie wcale, poza zasięgiem brak źródeł", async () => {
+    const r = await started({ seed: 4 });
+    const level = (distance: number) => {
+      const before = steps(r.ctxs[0]).length;
+      const samples: number[] = [];
+      for (let i = 0; i < 12; i++) {
+        r.audio.npcStep(distance, 0, (i % 2) as 0 | 1);
+        const added = steps(r.ctxs[0]).slice(before);
+        for (const s of added) if (!s.stopped) s.finish();
+        if (added.length) samples.push(effective(r, added[added.length - 1]));
+      }
+      return samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
+    };
+    const near = level(1);
+    const l2 = level(2);
+    const l3 = level(3);
+    const l6 = level(6);
+    const l10 = level(10);
+    const l25 = level(25);
+    const l35 = level(35);
+    expect(near).toBeGreaterThan(0);
+    expect(Math.abs(near - l2) / near).toBeLessThan(0.1);
+    expect(l6).toBeLessThan(l3);
+    expect(l10).toBeLessThan(l6);
+    expect(l25).toBeLessThan(l10 * 0.6);
+    expect(l35).toBeLessThan(near * 0.05);
+    const before = steps(r.ctxs[0]).length;
+    r.audio.npcStep(50, 0, 0);
+    r.audio.npcStep(41, 0, 1);
+    expect(steps(r.ctxs[0]).length).toBe(before);
+    expect(r.audio.getDiagnostics().steps.npc.culled).toBe(2);
+    r.audio.dispose();
+  });
+
+  it("kierunek podąża za obrotem kamery: lewo, prawo, tył i przód", async () => {
+    const r = await started();
+    const bearing = (x: number, z: number) => {
+      r.audio.npcStep(x, z, 0);
+      for (const s of steps(r.ctxs[0])) if (s.started && !s.stopped) s.finish();
+      return r.audio.getDiagnostics().steps.npc.lastBearingDeg;
+    };
+    expect(bearing(0, -8)).toBe(0);
+    expect(bearing(8, 0)).toBe(90);
+    expect(bearing(-8, 0)).toBe(-90);
+    expect(Math.abs(bearing(0, 8) ?? 0)).toBe(180);
+    r.audio.setPose({ x: 0, z: 0, yaw: Math.PI / 2 });
+    expect(bearing(-8, 0)).toBe(0);
+    expect(bearing(0, -8)).toBe(90);
+    const l = r.ctxs[0].listener;
+    expect(l.forwardX.value).toBeCloseTo(-1);
+    expect(l.forwardZ.value).toBeCloseTo(0);
+    r.audio.dispose();
+  });
+
+  it("pozycja emitera podąża za trollem, a ruch gracza nie przesuwa źródła", async () => {
+    const r = await started();
+    r.audio.npcStep(6, 3, 0);
+    for (const s of steps(r.ctxs[0])) s.finish();
+    r.audio.setPose({ x: 3, z: 3, yaw: 1 });
+    expect(npcPanner(r).position.x).toBeCloseTo(6);
+    r.audio.npcStep(8, 5, 1);
+    expect(npcPanner(r).position.x).toBeCloseTo(8);
+    expect(npcPanner(r).position.z).toBeCloseTo(5);
+    r.audio.dispose();
+  });
+
+  it("w dialogu, przy blokadzie ruchu i w tle troll nie wydaje kroków", async () => {
+    const r = await started();
+    r.audio.setMode({ dialog: true, frozen: true });
+    r.audio.npcStep(4, 0, 0);
+    r.audio.setMode({ dialog: false, frozen: true });
+    r.audio.npcStep(4, 0, 0);
+    r.audio.setMode({ dialog: false, frozen: false });
+    r.doc.hidden = true;
+    r.doc.emit("visibilitychange");
+    r.audio.npcStep(4, 0, 0);
+    expect(steps(r.ctxs[0])).toHaveLength(0);
+    r.doc.hidden = false;
+    r.doc.emit("visibilitychange");
+    r.audio.npcStep(4, 0, 0);
+    expect(steps(r.ctxs[0])).toHaveLength(1);
+    r.audio.dispose();
+  });
+
+  it("limit równoczesnych głosów trolla", async () => {
+    const r = await started();
+    for (let i = 0; i < 20; i++) r.audio.npcStep(4, 0, (i % 2) as 0 | 1);
+    expect(steps(r.ctxs[0]).length).toBeLessThanOrEqual(3);
+    r.audio.dispose();
+  });
+
+  it("kroki trolla nie wpływają na harmonogram ptaków, zegar ani ambient", async () => {
+    const r = await started();
+    const before = r.audio.getDiagnostics();
+    for (let i = 0; i < 10; i++) {
+      r.audio.npcStep(4, 0, (i % 2) as 0 | 1);
+      for (const s of steps(r.ctxs[0])) if (s.started && !s.stopped) s.finish();
+    }
+    const after = r.audio.getDiagnostics();
+    expect(after.activeEffects).toBe(before.activeEffects);
+    expect(after.hour).toBe(before.hour);
+    expect(after.dayGain).toBe(before.dayGain);
+    expect(after.lastEffect).toEqual(before.lastEffect);
+    expect(after.steps.npc.count).toBe(10);
+    r.audio.dispose();
+  });
+
+  it("odsłuch trolla gra cztery próbki przestrzennie 6 m przed graczem", async () => {
+    const r = await started({ pose: { x: 5, z: 5, yaw: 0 } });
+    expect(r.audio.previewSteps("npc")).toBe(true);
+    await flush(4 * 750);
+    expect(steps(r.ctxs[0]).map((s) => s.buffer!.id)).toEqual(["footsteps.light.1", "footsteps.light.2", "footsteps.light.3", "footsteps.light.4"]);
+    expect(npcPanner(r).position.z).toBeCloseTo(-1);
+    expect(r.audio.getDiagnostics().steps.npc.last).toBe(4);
     r.audio.dispose();
   });
 });
@@ -639,6 +976,8 @@ describe("ForestAudioController: autoplay, karta w tle, zasoby", () => {
       elapsed += 0.02;
       r.audio.setClock(elapsed);
       r.audio.setPose({ x: i * 0.05, z: 0, yaw: 0 });
+      r.audio.playerMotion(0.05, 0.02, i * 0.05, 0);
+      if (i % 25 === 0) r.audio.npcStep(i * 0.05 + 4, 0, 0);
       await flush(100);
     }
     const c = r.ctxs[0];
@@ -740,7 +1079,7 @@ describe("ForestAudioController: autoplay, karta w tle, zasoby", () => {
     const original = ctx.decodeAudioData.bind(ctx);
     let calls = 0;
     ctx.decodeAudioData = async (data: ArrayBuffer) => {
-      if (calls++ === 0) throw new Error("nie dekoduję");
+      if (new TextDecoder().decode(data).startsWith("ambience.day") && calls++ === 0) throw new Error("nie dekoduję");
       return original(data);
     };
     const fetched: string[] = [];

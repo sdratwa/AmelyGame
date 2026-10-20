@@ -30,12 +30,15 @@ export class FakeParam {
 
 export class FakeNode {
   connections = new Set<FakeNode>();
+  /** Wszystkie węzły, do których kiedykolwiek podłączono ten węzeł (nie czyszczone przez `disconnect`). */
+  history: FakeNode[] = [];
   disconnected = false;
   constructor(readonly kind: string, readonly ctx: FakeContext) {
     ctx.nodes.push(this);
   }
   connect(dest: FakeNode) {
     this.connections.add(dest);
+    this.history.push(dest);
     return dest;
   }
   disconnect() {
@@ -54,6 +57,7 @@ export class FakeGain extends FakeNode {
 export class FakeFilter extends FakeNode {
   type = "lowpass";
   frequency = new FakeParam(350);
+  gain = new FakeParam(0);
   constructor(ctx: FakeContext) {
     super("biquad", ctx);
   }
@@ -201,6 +205,10 @@ export const TEST_MANIFEST: AudioManifest = {
         ["bird.jungle", "bird", 1, false, 1.5],
         ["bird.screech", "bird", 1, false, 2],
         ["event.wolves", "event", 1, false, 9.7],
+        ["footsteps.light.1", "footsteps", 1, false, 0.5],
+        ["footsteps.light.2", "footsteps", 1, false, 0.5],
+        ["footsteps.light.3", "footsteps", 1, false, 0.5],
+        ["footsteps.light.4", "footsteps", 1, false, 0.5],
       ] as const
     ).map(([id, role, channels, loop, seconds]) => [
       id,

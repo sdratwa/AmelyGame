@@ -15,6 +15,9 @@ import { ForestInstancer, type InstancerStats } from "./instancer";
 import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOverrides } from "./profiles";
 import type { DialogOutcome } from "@/lib/npc/encounter";
 import { DeerLayer, type DeerStats } from "./deer";
+import type { StepSink } from "@/lib/audio/controller";
+import type { ForestWorld } from "@/lib/game/world/generators/v2/forest";
+import { surfaceFromWorld, type SurfaceId } from "@/lib/audio/surfaces";
 import { NpcLayer, type NpcStats } from "./npc";
 import type { TrollMaterialMode } from "@/lib/npc/trollMaterials";
 import { ChestLayer, FxBurst, type BurstKind } from "./props";
@@ -122,6 +125,8 @@ export type RendererOptions = {
 /** Limity czasu pracy streamingu na klatkę (ms): w trakcie ładowania ekran jest zasłonięty, w grze liczy się płynność. */
 const LOADING_BUDGET_MS = 28;
 const STREAM_BUDGET_MS = 4;
+/** Klatka dłuższa niż to (zacięcie) nie wnosi drogi do kroków gracza: prędkość z takiej klatki byłaby niewiarygodna. */
+const MAX_STEP_FRAME_DT = 0.1;
 
 const toLinear = (c: Rgb) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
 
@@ -232,6 +237,8 @@ export class ForestRenderer {
   private deerLayer: DeerLayer | null = null;
   private deerError: string | null = null;
   private npcDialogListener: (() => void) | null = null;
+  private stepSink: StepSink | null = null;
+  private stepForest: ForestWorld | null = null;
   private fx: FxBurst | null = null;
   private openedChests = new Set<string>();
   private harvestedIds = new Set<string>();
@@ -411,6 +418,21 @@ export class ForestRenderer {
     this.npcLayer?.onDialog(listener);
   }
 
+  /**
+   * Odbiorca zdarzeń kroków (kontroler audio): gracz co klatkę z faktycznie przebytą drogą, troll przy kontakcie stopy z animacji Walk.
+   * Zapamiętany także przed końcem ładowania lasu i podpinany do każdej nowej warstwy NPC; `null` wyłącza.
+   */
+  setStepSink(sink: StepSink | null): void {
+    this.stepSink = sink;
+    this.npcLayer?.onStep(sink ? (step) => sink.npcStep(step.x, step.z, step.foot) : null);
+  }
+
+  /** Nawierzchnia pod punktem z danych świata (bez raycastów); wołana tylko przy kroku, nie co klatkę. */
+  surfaceAt(x: number, z: number): SurfaceId {
+    const forest = this.stepForest;
+    return forest ? surfaceFromWorld(forest.surfaceAt(x, z)) : "litter";
+  }
+
   /** Wynik dialogu z trollem: steruje wyłącznie animacją i zachowaniem trolla, nigdy stanem gry. */
   resolveNpcDialog(outcome: DialogOutcome): boolean {
     return this.npcLayer?.resolveDialog(outcome) ?? false;
@@ -541,6 +563,8 @@ export class ForestRenderer {
   dispose(): void {
     this.disposed = true;
     this.npcDialogListener = null;
+    this.stepSink = null;
+    this.stepForest = null;
     this.unmountLab();
     cancelAnimationFrame(this.raf);
     for (const fn of this.cleanup) fn();
@@ -633,8 +657,10 @@ export class ForestRenderer {
       this.chestLayer.dispose();
       this.chestLayer = null;
     }
+    this.stepForest = null;
     if (this.npcLayer) {
       this.scene.remove(this.npcLayer.group);
+      this.npcLayer.onStep(null);
       this.npcLayer.dispose();
       this.npcLayer = null;
     }
@@ -672,6 +698,7 @@ export class ForestRenderer {
       const walk = forestWalkOf(opts.seed);
       await tick();
       if (gen !== this.generation || this.disposed) return;
+      this.stepForest = forest;
       const library = new AssetLibrary({
         profile: this.profile.assets,
         onError: (e) => {
@@ -744,6 +771,8 @@ export class ForestRenderer {
         try {
           const npc = new NpcLayer(trollAsset, { forest, walk, seed: opts.seed, castShadow: shadows, receiveShadow: shadows, materialMode: this.npcMaterialMode });
           npc.onDialog(this.npcDialogListener);
+          const sink = this.stepSink;
+          if (sink) npc.onStep((step) => sink.npcStep(step.x, step.z, step.foot));
           this.npcLayer = npc;
           this.scene.add(npc.group);
         } catch (e) {
@@ -1154,7 +1183,13 @@ export class ForestRenderer {
         ctl.state.pitch = pose.pitch;
       } else if (!this.loading && !this.suspended) {
         ctl.blockers = [...(this.npcLayer?.blockers() ?? []), ...(this.deerLayer?.blockers() ?? [])];
+        const px = ctl.state.x;
+        const pz = ctl.state.z;
         ctl.update(dt, this.moveInput());
+        const walked = dt > MAX_STEP_FRAME_DT ? 0 : Math.hypot(ctl.state.x - px, ctl.state.z - pz);
+        this.stepSink?.playerMotion(walked, Math.min(dt, MAX_STEP_FRAME_DT), ctl.state.x, ctl.state.z);
+      } else {
+        this.stepSink?.playerMotion(0, Math.min(dt, MAX_STEP_FRAME_DT), ctl.state.x, ctl.state.z);
       }
       const s = ctl.state;
       this.camera.position.set(s.x, s.eyeY, s.z);

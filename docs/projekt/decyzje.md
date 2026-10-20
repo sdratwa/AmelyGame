@@ -155,7 +155,15 @@
 - Jeden kontroler audio (Web Audio) z trzema warstwami: ambient, zwierzęta i zdarzenia, kroki; nagrania Mixkit zachowane jako źródła w `assets/source/audio/`, do gry Opus + AAC z `npm run assets:audio`. Szczegóły: [audio-las.md](audio-las.md).
 - Wilki o północy: trigger z przekroczenia północy przez zegar gry (numer północy, nie `hour === 0`), jedno odtworzenie na dobę, bez zaległości po skokach czasu; ostatnia północ zapamiętana w `localStorage` per `saveId`, **bez zmian w SaveV2**.
 - Dodana komenda deweloperska `dev.setClock` (przesunięcie zegara do przodu z panelu O / F3); nie zmienia wartości zegara ani innych danych.
-- Brak pliku kroków (2429): do czasu dostarczenia gra używa syntetycznego zastępnika, oznaczonego w diagnostyce. Do decyzji autora: poziomy głośności, siła wilków, czy dodać wskaźnik dźwięku do HUD.
+- Kroki: patrz sekcja "Kroki V2" niżej (zastąpiła plik 2429 i syntetyczny zastępnik). Do decyzji autora: poziomy głośności, siła wilków, czy dodać wskaźnik dźwięku do HUD.
+
+## Kroki V2 (19 października 2026)
+
+- Kroki gracza i trolla z czterech nagrań dostarczonych przez autora (`assets/source/audio/footsteps/`), rozszerzenie istniejącego kontrolera audio (bez drugiego silnika). Usunięto syntetyczny zastępnik (`synth.ts`, `onsets.ts`) i wpis `footsteps.leaves`; pozostałe nagrania i ustawienia bez zmian.
+- Krok gracza z akumulatora przebytej drogi (renderer podaje faktyczne przesunięcie po kolizjach), krok trolla z kontaktu stopy w animacji Walk (kontakty wyliczone z kostek klipu); losowanie workiem bez powtórki pod rząd, osobno dla gracza i trolla; poziomy próbek wyrównane stałą poprawką do wspólnego RMS (bez kompresji).
+- Troll: osobna szyna głośności i jeden `PannerNode` HRTF (`inverse`, ref 3 m, rolloff 1,2, odcięcie 40 m); suwaki PLAYER/NPC FOOTSTEPS tylko w trybie dev, bez zapisu. Nawierzchnie: gotowa struktura profili, wykrywanie ścieżki i trawy z danych świata; skały i most niewykrywane.
+- Zmiany poza audio ograniczone do zdarzenia kroku: `NpcLayer.onStep`/`TrollNpc.setStepListener`, odczyt wagi animacji (`weightOf`), hook w pętli klatek renderera (`setStepSink`). Model, animacje, logika NPC, generator, zapis, `MIASTO_DEFAULT` i wartości życia/zegara bez zmian.
+- Do decyzji autora: poziomy `STEP_LEVELS` po odsłuchu, czy zamówić osobne nagrania (ścieżka, trawa, skała, most, ciężki krok trolla), czy rozpoznawać skały i most w świecie.
 
 ## Matowe materiały trolla (19 października 2026)
 

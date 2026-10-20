@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AUDIO_SETTINGS_KEY, DEFAULT_AUDIO_SETTINGS, loadSettings, sanitizeSettings, saveSettings } from "./settings";
 import { WolvesLedger, WOLVES_KEY } from "./wolvesLedger";
-import { synthFootstep, SYNTH_STEP_VARIANTS } from "./synth";
-import { MemoryStorage, mulberry32 } from "./testkit";
+import { MemoryStorage } from "./testkit";
 
 describe("ustawienia audio", () => {
   it("domyślne, zapis i odczyt", () => {
@@ -50,24 +49,5 @@ describe("WolvesLedger", () => {
     st.setItem(WOLVES_KEY, "###");
     expect(new WolvesLedger(st).last("a")).toBeNull();
     expect(() => new WolvesLedger(null).record("a", 1)).not.toThrow();
-  });
-});
-
-describe("syntetyczne kroki", () => {
-  it("są skończone, cichsze od pełnej skali i różne między wariantami", () => {
-    const rng = mulberry32(1);
-    const variants = Array.from({ length: SYNTH_STEP_VARIANTS }, () => synthFootstep(48000, rng));
-    for (const v of variants) {
-      expect(v.length).toBeGreaterThan(48000 * 0.2);
-      let peak = 0;
-      for (const x of v) {
-        expect(Number.isFinite(x)).toBe(true);
-        peak = Math.max(peak, Math.abs(x));
-      }
-      expect(peak).toBeGreaterThan(0.3);
-      expect(peak).toBeLessThanOrEqual(0.8);
-      expect(Math.abs(v[v.length - 1])).toBeLessThan(0.01);
-    }
-    expect(variants[0]).not.toEqual(variants[1]);
   });
 });

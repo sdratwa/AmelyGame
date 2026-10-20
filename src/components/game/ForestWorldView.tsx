@@ -75,6 +75,8 @@ function DiagnosticsPanel({
   onSetHour,
   onTestWolves,
   onSetTrollMaterial,
+  onPreviewSteps,
+  onSetStepVolume,
 }: {
   stats: PanelStats;
   audio: AudioSnapshot | null;
@@ -82,6 +84,8 @@ function DiagnosticsPanel({
   onSetHour: (hour: number) => void;
   onTestWolves: () => void;
   onSetTrollMaterial: (mode: TrollMaterialMode) => void;
+  onPreviewSteps: (owner: "player" | "npc") => void;
+  onSetStepVolume: (owner: "player" | "npc", value: number) => void;
 }) {
   const s = stats.stream;
   const nearest = nearestCreature(stats);
@@ -158,7 +162,14 @@ function DiagnosticsPanel({
         </div>
       )}
       {stats.deerError && <div className="text-red-300">model jelenia: {stats.deerError}</div>}
-      <AudioDiagnostics snapshot={audio} onSetHour={onSetHour} onTestWolves={onTestWolves} />
+      <AudioDiagnostics
+        snapshot={audio}
+        onSetHour={onSetHour}
+        onTestWolves={onTestWolves}
+        troll={stats.npc ? { state: stats.npc.state, stepping: stats.npc.stepping, distance: stats.npc.distance, visible: stats.npc.visible } : null}
+        onPreviewSteps={onPreviewSteps}
+        onSetStepVolume={onSetStepVolume}
+      />
     </div>
   );
 }
@@ -274,6 +285,9 @@ export function ForestWorldView({
       trollDialogRef.current = true;
       setTrollDialog(true);
     });
+    const audio = getForestAudio();
+    renderer.setStepSink(audio);
+    audio.setSurfaceResolver((x, z) => renderer.surfaceAt(x, z));
     const report = () => {
       const p = renderer.getPose();
       if (p && ready.current) callbacks.current.onPose(p);
@@ -284,6 +298,8 @@ export function ForestWorldView({
       report();
       rendererRef.current = null;
       renderer.onNpcDialog(null);
+      renderer.setStepSink(null);
+      audio.setSurfaceResolver(null);
       trollDialogRef.current = false;
       renderer.dispose();
     };
@@ -379,6 +395,12 @@ export function ForestWorldView({
   }, []);
   const testWolves = useCallback(() => {
     getForestAudio().testWolves();
+  }, []);
+  const previewSteps = useCallback((owner: "player" | "npc") => {
+    getForestAudio().previewSteps(owner);
+  }, []);
+  const setStepVolume = useCallback((owner: "player" | "npc", value: number) => {
+    getForestAudio().setStepVolumes({ [owner]: value });
   }, []);
 
   const debugRef = useRef(debug);
@@ -539,7 +561,7 @@ export function ForestWorldView({
           </button>
         )}
         {debug && stats && (
-          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} />
+          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} onPreviewSteps={previewSteps} onSetStepVolume={setStepVolume} />
         )}
       </div>
 

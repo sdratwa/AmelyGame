@@ -1,10 +1,20 @@
 import { gameHour, MidnightWatcher } from "./clock";
-import { FootstepScheduler, type FootstepEvent } from "./footsteps";
+import {
+  FootstepScheduler,
+  NPC_STEP_SOUND,
+  NPC_VARIATION,
+  PLAYER_STRIDE,
+  PLAYER_VARIATION,
+  StepVoicing,
+  npcStepAttenuationDb,
+  npcStepFade,
+  npcStepLowpass,
+  type StepEvent,
+} from "./footsteps";
 import { AssetLoader } from "./loader";
 import {
   AMBIENCE_DAY,
   AMBIENCE_NIGHT,
-  FOOTSTEPS,
   isAudioManifest,
   MANIFEST_URL,
   WOLVES,
@@ -12,7 +22,9 @@ import {
 } from "./manifest";
 import { ambientMix, birdActivity, phaseOf, type DayPhase } from "./mix";
 import { DEFAULT_AUDIO_SETTINGS, loadSettings, saveSettings, type AudioSettings, type StorageLike } from "./settings";
-import { SYNTH_STEP_VARIANTS, synthFootstep } from "./synth";
+import { forkRng } from "./shuffleBag";
+import { relativeBearingDeg } from "./spatial";
+import { DEFAULT_SURFACE, FOOTSTEP_POOLS, SURFACE_PROFILES, type SurfaceId } from "./surfaces";
 import { BIRD_IDS, WildlifeScheduler, type BirdEvent } from "./wildlife";
 import { WolvesLedger } from "./wolvesLedger";
 
@@ -37,12 +49,41 @@ export const WOLVES_CONFIG = {
 } as const;
 const BIRD_PANNER = { ref: 10, rolloff: 1.2 } as const;
 
+/**
+ * Poziomy bazowe kroków (mnożnik głośności po wyrównaniu próbek do wspólnego RMS -32,8 dBFS i szczytu <= -6 dBFS). Do strojenia
+ * po odsłuchu; suwaki PLAYER/NPC FOOTSTEPS w panelu diagnostycznym mnożą te wartości (0-2).
+ */
+export const STEP_LEVELS = { player: 1.3, npc: 1.6 } as const;
+const PLAYER_MAX_VOICES = 3;
+const STEP_RATE_WINDOW = 5;
+const EMITTER_ACTIVE_MS = 1200;
+const PREVIEW_GAP_MS = 750;
+const PREVIEW_DISTANCE = 6;
+
+export type StepVolumes = { player: number; npc: number };
+export type SurfaceResolver = (x: number, z: number) => SurfaceId;
+/** Zdarzenia ruchu z pętli gry (renderer): kroki gracza i trolla bez stanu Reacta i bez własnych timerów. */
+export type StepSink = {
+  playerMotion(distance: number, dt: number, x: number, z: number): void;
+  npcStep(x: number, z: number, foot: 0 | 1): void;
+};
+
 export type AudioMode = { dialog: boolean; frozen: boolean };
 export type ListenerPose = { x: number; z: number; yaw: number };
 
 export type EffectInfo = { label: string; kind: "bird" | "wolves" | "wolves-test"; at: number; distance: number; bearingDeg: number; rate: number };
 
 export type MidnightInfo = { midnight: number; result: string };
+
+export type StepDiagnostics = {
+  ready: boolean;
+  loaded: number;
+  total: number;
+  player: { last: number | null; count: number; perSecond: number; surface: SurfaceId | null; surfaceLabel: string };
+  npc: { last: number | null; count: number; emitterActive: boolean; lastDistance: number | null; lastAttenuationDb: number | null; lastBearingDeg: number | null; lastFoot: "L" | "P" | null; culled: number };
+  volumes: StepVolumes;
+  previewing: boolean;
+};
 
 export type AudioDiagnostics = {
   active: boolean;
@@ -60,7 +101,7 @@ export type AudioDiagnostics = {
   lastEffect: EffectInfo | null;
   wolvesLastMidnight: number | null;
   lastMidnight: MidnightInfo | null;
-  footsteps: "próbki" | "syntetyczne (brak pliku)" | "-";
+  steps: StepDiagnostics;
   walking: boolean;
   running: boolean;
   mode: AudioMode;
@@ -69,10 +110,45 @@ export type AudioDiagnostics = {
 };
 
 type Voice = {
-  kind: "bird" | "wolves" | "step";
+  kind: "bird" | "wolves" | "step" | "npcstep";
   source: AudioBufferSourceNode;
   nodes: AudioNode[];
   done: boolean;
+};
+
+type StepPool = { ids: string[]; buffers: AudioBuffer[] };
+
+type StepsState = {
+  buffers: Map<string, AudioBuffer>;
+  pools: Map<string, StepPool>;
+  ready: boolean;
+  player: {
+    scheduler: FootstepScheduler;
+    voicing: StepVoicing;
+    bus: GainNode;
+    voices: number;
+    last: number | null;
+    count: number;
+    surface: SurfaceId | null;
+    times: number[];
+  };
+  npc: {
+    voicing: StepVoicing;
+    bus: GainNode;
+    heavy: BiquadFilterNode;
+    lowpass: BiquadFilterNode;
+    panner: PannerNode;
+    voices: number;
+    last: number | null;
+    count: number;
+    lastAt: number;
+    lastDistance: number | null;
+    lastAttenuationDb: number | null;
+    lastBearingDeg: number | null;
+    lastFoot: "L" | "P" | null;
+    culled: number;
+  };
+  preview: { timers: ReturnType<typeof setTimeout>[] };
 };
 
 type Layer = {
@@ -98,15 +174,11 @@ type Session = {
   loader: AssetLoader | null;
   watcher: MidnightWatcher;
   birds: WildlifeScheduler;
-  steps: FootstepScheduler;
-  stepBuffer: AudioBuffer | null;
-  stepSegments: { start: number; end: number }[];
-  stepSynth: boolean;
+  steps: StepsState;
   hidden: boolean;
   disposed: boolean;
   timer: ReturnType<typeof setInterval> | null;
   lastTick: number;
-  lastPose: { x: number; z: number; t: number } | null;
   pose: ListenerPose | null;
   elapsed: number;
   hour: number;
@@ -128,6 +200,11 @@ export type ControllerDeps = {
 };
 
 const GESTURE_EVENTS = ["pointerdown", "keydown", "touchend"] as const;
+
+function sampleNumber(id: string | undefined): number | null {
+  const n = Number(id?.split(".").pop());
+  return Number.isFinite(n) ? n : null;
+}
 
 function setParam(param: AudioParam, value: number, now: number, tau: number): void {
   param.setTargetAtTime(value, now, tau);
@@ -161,6 +238,8 @@ export class ForestAudioController {
   private lastEffect: EffectInfo | null = null;
   private lastMidnight: MidnightInfo | null = null;
   private lastWolvesSave: string | null = null;
+  private stepVolumes: StepVolumes = { player: 1, npc: 1 };
+  private surfaceResolver: SurfaceResolver | null = null;
 
   constructor(private readonly deps: ControllerDeps = {}) {}
 
@@ -302,15 +381,11 @@ export class ForestAudioController {
       loader: null,
       watcher: new MidnightWatcher(init.elapsed),
       birds: new WildlifeScheduler(rng),
-      steps: new FootstepScheduler(rng, () => (session.stepBuffer ? Math.max(1, session.stepSegments.length) : 1)),
-      stepBuffer: null,
-      stepSegments: [],
-      stepSynth: false,
+      steps: this.createSteps(ctx, effectsVol),
       hidden: Boolean(this.doc?.hidden),
       disposed: false,
       timer: null,
       lastTick: this.now(),
-      lastPose: null,
       pose: null,
       elapsed: init.elapsed,
       hour: gameHour(init.elapsed),
@@ -372,7 +447,7 @@ export class ForestAudioController {
     }
     s.loader?.dispose();
     s.loader = null;
-    s.stepBuffer = null;
+    this.disposeSteps(s);
     for (const node of [s.ambienceVol, s.ambienceMode, s.duck, s.fade, s.effectsVol, s.master, s.compressor]) node.disconnect();
     s.ctx.close().catch(() => undefined);
   }
@@ -398,10 +473,9 @@ export class ForestAudioController {
         s.hidden = Boolean(doc.hidden);
         if (s.hidden) {
           s.ctx.suspend().catch(() => undefined);
-          s.steps.reset();
+          s.steps.player.scheduler.reset();
         } else {
           s.lastTick = this.now();
-          s.lastPose = null;
           this.resume(s);
         }
       };
@@ -454,40 +528,104 @@ export class ForestAudioController {
     }
   }
 
+  /** Cztery próbki kroków dekodowane raz na sesję; gracz i troll dzielą te same `AudioBuffer`y. */
   private prepareFootsteps(s: Session, manifest: AudioManifest): void {
-    const entry = manifest.assets[FOOTSTEPS];
-    if (entry && s.loader) {
-      s.loader
-        .load(FOOTSTEPS)
-        .then((buffer) => {
-          if (s.disposed) return;
-          s.stepBuffer = buffer;
-          s.stepSegments = entry.steps?.segments.length ? entry.steps.segments : [{ start: 0, end: buffer.duration }];
-          s.stepSynth = false;
-        })
-        .catch(() => this.useSynthFootsteps(s));
-      return;
+    const loader = s.loader;
+    if (!loader) return;
+    for (const ids of Object.values(FOOTSTEP_POOLS)) {
+      for (const id of ids) {
+        if (!(id in manifest.assets)) continue;
+        loader
+          .load(id)
+          .then((buffer) => {
+            if (s.disposed) return;
+            s.steps.buffers.set(id, buffer);
+            this.rebuildStepPools(s);
+          })
+          .catch(() => undefined);
+      }
     }
-    this.useSynthFootsteps(s);
   }
 
-  private useSynthFootsteps(s: Session): void {
-    if (s.disposed || s.stepBuffer) return;
-    const rate = s.ctx.sampleRate;
-    const variants = Array.from({ length: SYNTH_STEP_VARIANTS }, () => synthFootstep(rate, () => this.rng()));
-    const length = variants.reduce((n, v) => n + v.length, 0);
-    const buffer = s.ctx.createBuffer(1, length, rate);
-    const data = buffer.getChannelData(0);
-    let at = 0;
-    const segments: { start: number; end: number }[] = [];
-    for (const v of variants) {
-      data.set(v, at);
-      segments.push({ start: at / rate, end: (at + v.length) / rate });
-      at += v.length;
+  private rebuildStepPools(s: Session): void {
+    const steps = s.steps;
+    steps.pools.clear();
+    for (const [key, ids] of Object.entries(FOOTSTEP_POOLS)) {
+      const have = ids.filter((id) => steps.buffers.has(id));
+      steps.pools.set(key, { ids: have, buffers: have.map((id) => steps.buffers.get(id) as AudioBuffer) });
     }
-    s.stepBuffer = buffer;
-    s.stepSegments = segments;
-    s.stepSynth = true;
+    steps.ready = [...steps.pools.values()].every((p) => p.buffers.length > 0);
+  }
+
+  private createSteps(ctx: AudioContext, effectsVol: GainNode): StepsState {
+    const gain = (value: number) => {
+      const g = ctx.createGain();
+      g.gain.value = value;
+      return g;
+    };
+    const volumes = this.stepVolumes;
+    const playerBus = gain(STEP_LEVELS.player * volumes.player);
+    playerBus.connect(effectsVol);
+    const npcBus = gain(STEP_LEVELS.npc * volumes.npc);
+    const heavy = ctx.createBiquadFilter();
+    heavy.type = "lowshelf";
+    heavy.frequency.value = NPC_STEP_SOUND.heavyShelf.frequency;
+    heavy.gain.value = NPC_STEP_SOUND.heavyShelf.gainDb;
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.value = NPC_STEP_SOUND.lowpass.base;
+    const panner = ctx.createPanner();
+    panner.panningModel = "HRTF";
+    panner.distanceModel = "inverse";
+    panner.refDistance = NPC_STEP_SOUND.refDistance;
+    panner.rolloffFactor = NPC_STEP_SOUND.rolloff;
+    panner.maxDistance = 10000;
+    heavy.connect(lowpass);
+    lowpass.connect(panner);
+    panner.connect(npcBus);
+    npcBus.connect(effectsVol);
+    const base = () => this.rng();
+    return {
+      buffers: new Map(),
+      pools: new Map(),
+      ready: false,
+      player: {
+        scheduler: new FootstepScheduler(PLAYER_STRIDE),
+        voicing: new StepVoicing(forkRng(base), PLAYER_VARIATION),
+        bus: playerBus,
+        voices: 0,
+        last: null,
+        count: 0,
+        surface: null,
+        times: [],
+      },
+      npc: {
+        voicing: new StepVoicing(forkRng(base), NPC_VARIATION),
+        bus: npcBus,
+        heavy,
+        lowpass,
+        panner,
+        voices: 0,
+        last: null,
+        count: 0,
+        lastAt: -Infinity,
+        lastDistance: null,
+        lastAttenuationDb: null,
+        lastBearingDeg: null,
+        lastFoot: null,
+        culled: 0,
+      },
+      preview: { timers: [] },
+    };
+  }
+
+  private disposeSteps(s: Session): void {
+    const st = s.steps;
+    this.cancelPreview(st);
+    st.buffers.clear();
+    st.pools.clear();
+    st.ready = false;
+    for (const node of [st.player.bus, st.npc.heavy, st.npc.lowpass, st.npc.panner, st.npc.bus]) node.disconnect();
   }
 
   // --- zegar, tryb i pozycja -------------------------------------------------------------------------------------------
@@ -519,14 +657,13 @@ export class ForestAudioController {
     const s = this.session;
     if (!s || s.disposed || !changed) return;
     setParam(s.ambienceMode.gain, mode.dialog ? DIALOG_AMBIENCE : 1, s.ctx.currentTime, MODE_TAU);
-    if (mode.dialog || mode.frozen) s.steps.reset();
+    if (mode.dialog || mode.frozen) s.steps.player.scheduler.reset();
   }
 
-  /** Pozycja i kierunek gracza (z kamery). Ruch poziomy między próbkami steruje krokami. */
+  /** Pozycja i kierunek gracza (z kamery): ustawia tylko odbiornik dźwięku 3D. Kroki idą osobno przez `playerMotion`. */
   setPose(pose: ListenerPose): void {
     const s = this.session;
     if (!s || s.disposed) return;
-    const t = this.now();
     const ctxTime = s.ctx.currentTime;
     s.pose = pose;
     const l = s.ctx.listener;
@@ -546,17 +683,6 @@ export class ForestAudioController {
       l.setPosition(pose.x, EAR_HEIGHT, pose.z);
       l.setOrientation(fx, 0, fz, 0, 1, 0);
     }
-
-    const last = s.lastPose;
-    s.lastPose = { x: pose.x, z: pose.z, t };
-    if (!last) return;
-    const dt = (t - last.t) / 1000;
-    if (dt <= 0.001) return;
-    const frozen = this.mode.frozen || this.mode.dialog || !this.running(s);
-    const stale = dt > 0.6;
-    const distance = stale ? 0 : Math.hypot(pose.x - last.x, pose.z - last.z);
-    const events = s.steps.update({ distance, dt: stale ? 1 : dt, frozen });
-    for (const e of events) this.playStep(s, e);
   }
 
   // --- warstwa A: ambient -------------------------------------------------------------------------------------------
@@ -643,7 +769,7 @@ export class ForestAudioController {
 
   private effectCount(s: Session): number {
     let n = 0;
-    for (const v of s.voices) if (v.kind !== "step") n++;
+    for (const v of s.voices) if (v.kind === "bird" || v.kind === "wolves") n++;
     return n;
   }
 
@@ -736,6 +862,8 @@ export class ForestAudioController {
     voice.source.disconnect();
     for (const node of voice.nodes) node.disconnect();
     s.voices.delete(voice);
+    if (voice.kind === "step") s.steps.player.voices--;
+    else if (voice.kind === "npcstep") s.steps.npc.voices--;
     if (voice.kind === "wolves" && !s.disposed && ![...s.voices].some((v) => v.kind === "wolves")) {
       setParam(s.duck.gain, 1, s.ctx.currentTime, 1.2);
     }
@@ -818,32 +946,200 @@ export class ForestAudioController {
 
   // --- warstwa C: kroki ---------------------------------------------------------------------------------------------
 
-  private playStep(s: Session, e: FootstepEvent): void {
-    const buffer = s.stepBuffer;
-    if (!buffer || s.disposed) return;
-    let steps = 0;
-    for (const v of s.voices) if (v.kind === "step") steps++;
-    if (steps >= s.steps.config.maxVoices) return;
-    const seg = s.stepSegments[Math.min(e.variant, s.stepSegments.length - 1)] ?? { start: 0, end: buffer.duration };
+  setSurfaceResolver(resolver: SurfaceResolver | null): void {
+    this.surfaceResolver = resolver;
+  }
+
+  /** Głośności kroków (tylko panel deweloperski, bez zapisu): mnożą `STEP_LEVELS` i podlegają ustawieniom master/efekty/wyciszenie. */
+  setStepVolumes(patch: Partial<StepVolumes>): void {
+    const clamp = (v: number) => Math.min(2, Math.max(0, v));
+    this.stepVolumes = {
+      player: patch.player === undefined ? this.stepVolumes.player : clamp(patch.player),
+      npc: patch.npc === undefined ? this.stepVolumes.npc : clamp(patch.npc),
+    };
+    const s = this.session;
+    if (s && !s.disposed) {
+      const t = s.ctx.currentTime;
+      setParam(s.steps.player.bus.gain, STEP_LEVELS.player * this.stepVolumes.player, t, 0.05);
+      setParam(s.steps.npc.bus.gain, STEP_LEVELS.npc * this.stepVolumes.npc, t, 0.05);
+    }
+    for (const fn of this.subscribers) fn();
+  }
+
+  getStepVolumes(): StepVolumes {
+    return { ...this.stepVolumes };
+  }
+
+  /** Ruch gracza w tej klatce (z pętli gry): akumulator drogi decyduje, czy przypada krok. Bez stanu Reacta i bez timerów. */
+  playerMotion(distance: number, dt: number, x: number, z: number): void {
+    const s = this.session;
+    if (!s || s.disposed) return;
+    const player = s.steps.player;
+    const frozen = this.mode.frozen || this.mode.dialog || !this.running(s);
+    if (!player.scheduler.update(distance, dt, frozen)) return;
+    if (!s.steps.ready) return;
+    const surface = this.surfaceResolver ? this.surfaceResolver(x, z) : DEFAULT_SURFACE;
+    const profile = SURFACE_PROFILES[surface];
+    const pool = s.steps.pools.get(profile.pool);
+    if (!pool || pool.buffers.length === 0) return;
+    const ev = player.voicing.next(profile.pool, pool.buffers.length, player.scheduler.running);
+    player.surface = surface;
+    if (player.voices >= PLAYER_MAX_VOICES) return;
+    this.playPlayerStep(s, pool, ev, profile.gain, profile.lowpassHz);
+    this.recordPlayerStep(player, pool, ev.sample);
+  }
+
+  private recordPlayerStep(player: StepsState["player"], pool: StepPool, sample: number): void {
+    const now = this.now();
+    player.last = sampleNumber(pool.ids[sample]);
+    player.count++;
+    player.times.push(now);
+    while (player.times.length > 0 && now - player.times[0] > STEP_RATE_WINDOW * 1000) player.times.shift();
+  }
+
+  private playPlayerStep(s: Session, pool: StepPool, ev: StepEvent, surfaceGain: number, lowpassHz: number): void {
     const ctx = s.ctx;
     const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.playbackRate.value = e.rate;
+    source.buffer = pool.buffers[ev.sample];
+    source.playbackRate.value = ev.rate;
     const env = ctx.createGain();
-    env.gain.value = e.gain;
+    env.gain.value = ev.gain * surfaceGain;
     const lowpass = ctx.createBiquadFilter();
     lowpass.type = "lowpass";
-    lowpass.frequency.value = e.lowpass;
+    lowpass.frequency.value = Math.min(18000, lowpassHz * ev.tone);
     source.connect(env);
     env.connect(lowpass);
-    lowpass.connect(s.effectsVol);
+    lowpass.connect(s.steps.player.bus);
     const voice: Voice = { kind: "step", source, nodes: [env, lowpass], done: false };
     s.voices.add(voice);
+    s.steps.player.voices++;
     source.onended = () => this.finishVoice(s, voice, false);
-    source.start(0, seg.start, Math.max(0.05, seg.end - seg.start));
+    source.start();
+  }
+
+  /** Krok trolla w jego pozycji w świecie (zdarzenie z fazy kontaktu stopy w animacji Walk), nie gracza i nie kamery. */
+  npcStep(x: number, z: number, foot: 0 | 1): void {
+    const s = this.session;
+    if (!s || s.disposed || !s.pose || !s.steps.ready) return;
+    if (this.mode.dialog || this.mode.frozen || !this.running(s)) return;
+    const npc = s.steps.npc;
+    const distance = Math.hypot(x - s.pose.x, z - s.pose.z);
+    if (distance >= NPC_STEP_SOUND.cullDistance) {
+      npc.culled++;
+      return;
+    }
+    if (npc.voices >= NPC_STEP_SOUND.maxVoices) return;
+    const surface = this.surfaceResolver ? this.surfaceResolver(x, z) : DEFAULT_SURFACE;
+    const profile = SURFACE_PROFILES[surface];
+    const pool = s.steps.pools.get(profile.pool);
+    if (!pool || pool.buffers.length === 0) return;
+    const ev = npc.voicing.next(profile.pool, pool.buffers.length, false);
+    this.playNpcStep(s, pool, ev, x, z, distance, profile.gain);
+    npc.last = sampleNumber(pool.ids[ev.sample]);
+    npc.count++;
+    npc.lastFoot = foot === 0 ? "L" : "P";
+    npc.lastBearingDeg = relativeBearingDeg(s.pose, x, z);
+  }
+
+  private playNpcStep(s: Session, pool: StepPool, ev: StepEvent, x: number, z: number, distance: number, surfaceGain: number): void {
+    const ctx = s.ctx;
+    const npc = s.steps.npc;
+    setPosition(npc.panner, x, NPC_STEP_SOUND.footHeight, z);
+    npc.lowpass.frequency.value = Math.min(18000, npcStepLowpass(distance) * ev.tone);
+    const source = ctx.createBufferSource();
+    source.buffer = pool.buffers[ev.sample];
+    source.playbackRate.value = ev.rate;
+    const env = ctx.createGain();
+    env.gain.value = ev.gain * surfaceGain * npcStepFade(distance);
+    source.connect(env);
+    env.connect(npc.heavy);
+    const voice: Voice = { kind: "npcstep", source, nodes: [env], done: false };
+    s.voices.add(voice);
+    npc.voices++;
+    source.onended = () => this.finishVoice(s, voice, false);
+    source.start();
+    npc.lastAt = this.now();
+    npc.lastDistance = Math.round(distance * 10) / 10;
+    npc.lastAttenuationDb = Math.round(npcStepAttenuationDb(distance) * 10) / 10;
+  }
+
+  /** Odsłuch czterech próbek po kolei: `player` (bez zmienności, tuż przy uchu) albo `npc` (przestrzennie, 6 m przed graczem). */
+  previewSteps(owner: "player" | "npc"): boolean {
+    const s = this.session;
+    if (!s || s.disposed || !this.running(s) || !s.steps.ready) return false;
+    const st = s.steps;
+    const pool = st.pools.get(SURFACE_PROFILES[DEFAULT_SURFACE].pool);
+    if (!pool || pool.buffers.length === 0 || st.preview.timers.length > 0) return false;
+    pool.buffers.forEach((_, i) => {
+      const timer = setTimeout(() => {
+        st.preview.timers = st.preview.timers.filter((t) => t !== timer);
+        if (s.disposed || !this.running(s)) return;
+        const ev: StepEvent = { sample: i, gain: 1, rate: 1, tone: 1, run: false };
+        if (owner === "player") {
+          this.playPlayerStep(s, pool, ev, 1, 16000);
+          st.player.last = sampleNumber(pool.ids[i]);
+        } else {
+          const pose = s.pose ?? { x: 0, z: 0, yaw: 0 };
+          const x = pose.x - Math.sin(pose.yaw) * PREVIEW_DISTANCE;
+          const z = pose.z - Math.cos(pose.yaw) * PREVIEW_DISTANCE;
+          this.playNpcStep(s, pool, { ...ev, rate: 0.94 }, x, z, PREVIEW_DISTANCE, 1);
+          st.npc.last = sampleNumber(pool.ids[i]);
+        }
+      }, i * PREVIEW_GAP_MS);
+      st.preview.timers.push(timer);
+    });
+    return true;
+  }
+
+  private cancelPreview(st: StepsState): void {
+    for (const t of st.preview.timers) clearTimeout(t);
+    st.preview.timers = [];
   }
 
   // --- diagnostyka ---------------------------------------------------------------------------------------------------
+
+  private stepDiagnostics(s: Session | null): StepDiagnostics {
+    const total = Object.values(FOOTSTEP_POOLS).reduce((n, ids) => n + ids.length, 0);
+    if (!s) {
+      return {
+        ready: false,
+        loaded: 0,
+        total,
+        player: { last: null, count: 0, perSecond: 0, surface: null, surfaceLabel: "-" },
+        npc: { last: null, count: 0, emitterActive: false, lastDistance: null, lastAttenuationDb: null, lastBearingDeg: null, lastFoot: null, culled: 0 },
+        volumes: { ...this.stepVolumes },
+        previewing: false,
+      };
+    }
+    const { player, npc } = s.steps;
+    const now = this.now();
+    const recent = player.times.filter((t) => now - t <= STEP_RATE_WINDOW * 1000);
+    const perSecond = recent.length > 1 ? Math.round(((recent.length - 1) / ((recent[recent.length - 1] - recent[0]) / 1000)) * 100) / 100 : 0;
+    return {
+      ready: s.steps.ready,
+      loaded: s.steps.buffers.size,
+      total,
+      player: {
+        last: player.last,
+        count: player.count,
+        perSecond: now - (recent[recent.length - 1] ?? -Infinity) > 1500 ? 0 : perSecond,
+        surface: player.surface,
+        surfaceLabel: player.surface ? SURFACE_PROFILES[player.surface].label : "-",
+      },
+      npc: {
+        last: npc.last,
+        count: npc.count,
+        emitterActive: now - npc.lastAt < EMITTER_ACTIVE_MS,
+        lastDistance: npc.lastDistance,
+        lastAttenuationDb: npc.lastAttenuationDb,
+        lastBearingDeg: npc.lastBearingDeg,
+        lastFoot: npc.lastFoot,
+        culled: npc.culled,
+      },
+      volumes: { ...this.stepVolumes },
+      previewing: s.steps.preview.timers.length > 0,
+    };
+  }
 
   getDiagnostics(): AudioDiagnostics {
     const s = this.session;
@@ -861,8 +1157,8 @@ export class ForestAudioController {
     let steps = 0;
     if (s) {
       for (const v of s.voices) {
-        if (v.kind === "step") steps++;
-        else effects++;
+        if (v.kind === "bird" || v.kind === "wolves") effects++;
+        else steps++;
       }
     }
     const saveId = s?.saveId ?? this.lastWolvesSave;
@@ -882,9 +1178,9 @@ export class ForestAudioController {
       lastEffect: this.lastEffect,
       wolvesLastMidnight: saveId ? this.ledger().last(saveId) : null,
       lastMidnight: this.lastMidnight,
-      footsteps: !s || !s.stepBuffer ? "-" : s.stepSynth ? "syntetyczne (brak pliku)" : "próbki",
-      walking: Boolean(s?.steps.walking),
-      running: Boolean(s?.steps.running),
+      steps: this.stepDiagnostics(s),
+      walking: Boolean(s?.steps.player.scheduler.walking),
+      running: Boolean(s?.steps.player.scheduler.running),
       mode: this.mode,
       muted: this.getSettings().muted,
       loaded: s?.loader?.loaded() ?? [],
