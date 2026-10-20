@@ -254,11 +254,16 @@ export function GameApp() {
   // więc wczytanie zapisu nie otwiera okna ponownie.
   const toastId = state.toast?.id ?? null;
   const toastText = state.toast?.text ?? null;
-  useEffect(() => {
-    if (toastId === null || toastText !== ITEMS["item.bridge_blueprint"].pickupMessage) return;
-    document.exitPointerLock?.();
+  const blueprintToast = toastId !== null && toastText === ITEMS["item.bridge_blueprint"].pickupMessage;
+  // Otwarcie okna to dostosowanie stanu podczas renderu (bez setState w efekcie); każdy komunikat obsługujemy raz.
+  const [handledBlueprintToast, setHandledBlueprintToast] = useState<typeof toastId>(null);
+  if (blueprintToast && handledBlueprintToast !== toastId) {
+    setHandledBlueprintToast(toastId);
     setPanel("blueprint");
-  }, [toastId, toastText]);
+  }
+  useEffect(() => {
+    if (blueprintToast) document.exitPointerLock?.();
+  }, [blueprintToast, toastId]);
   useGamePause(dispatch, "ui.forest", "ui.forest_loading", state.view === "forest" && forestLoading);
 
   const changeForestQuality = useCallback((quality: QualityId) => {

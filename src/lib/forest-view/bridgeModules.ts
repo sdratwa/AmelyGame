@@ -8,7 +8,6 @@
  * (do 4%), końcówki zostają bez zmian.
  */
 import {
-  BRIDGE_MODEL,
   END_REACH,
   BRIDGE_SOURCE_RANGES,
   MODEL_FLAT_DECK,

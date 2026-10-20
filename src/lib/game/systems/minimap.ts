@@ -1,5 +1,5 @@
 import { QUEST_BY_ID } from "../content/quests";
-import type { ChestId } from "../core/ids";
+import type { ChestId, QuestId } from "../core/ids";
 import { rngStream } from "../core/rng";
 import type { GameState } from "../core/state";
 import { FOREST_START_REGION } from "../world/bounds";
@@ -95,7 +95,7 @@ export function searchAreas(state: GameState): SearchArea[] {
   if (!state.world) return [];
   const seed = state.world.seed;
   const out: SearchArea[] = [];
-  for (const [questId] of Object.entries(state.quests.accepted)) {
+  for (const questId of Object.keys(state.quests.accepted) as QuestId[]) {
     if (state.quests.completed[questId]) continue;
     const def = QUEST_BY_ID.get(questId);
     const progress = def ? questProgress(state, questId) : null;

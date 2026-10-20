@@ -19,12 +19,14 @@ function run(state: GameState, ...commands: Command[]): GameState {
 }
 
 function newGame(seed = 777, saveId = "save_test0001", name = "Ola"): GameState {
-  return run(
+  const s = run(
     initialState,
     { type: "setName", name },
     { type: "startLoading", seed, saveId },
     { type: "worldReady" },
   );
+  // Samouczek kończy się przyjęciem zadania z tablicy (nie wejściem do lasu), a do czasu jego końca zegar stoi i las jest zamknięty.
+  return { ...s, tutorialDone: true };
 }
 
 function started(seed = 777, saveId = "save_test0001"): GameState {

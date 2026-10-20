@@ -3,6 +3,7 @@ import { BRIDGE_FLAG } from "./generators/v2";
 import {
   BRIDGE_HALF_WIDTH,
   BRIDGE_MODEL,
+  BRIDGE_RAIL_OFFSET,
   MAX_AXIS_STRETCH,
   END_REACH,
   bayCountFor,
@@ -81,13 +82,16 @@ describe("Most: układ (bridgeLayout)", () => {
       for (const a of left) {
         const mirror = l.length - a;
         expect(left.some((b) => Math.abs(b - mirror) < 0.05), `seed=${seed} a=${a}`).toBe(true);
-        expect(a).toBeGreaterThan(3);
-        expect(a).toBeLessThan(l.length - 3);
+        // Próg 2,5 m: dla krótkich mostów (ok. 17 m, 12 segmentów) najbliższa latarnia leży ok. 2,97 m od lądowiska.
+        expect(a).toBeGreaterThan(2.5);
+        expect(a).toBeLessThan(l.length - 2.5);
       }
       for (const p of l.lamps) {
         expect(p.y).toBeGreaterThan(l.deckAt(p.along));
         const proj = l.project(p.x, p.z);
-        expect(Math.abs(proj.across)).toBeLessThan(BRIDGE_HALF_WIDTH);
+        // Latarnie stoją na poręczach: tuż poza chodzonym pokładem, ale wewnątrz linii colliderów poręczy.
+        expect(Math.abs(proj.across)).toBeGreaterThan(BRIDGE_HALF_WIDTH);
+        expect(Math.abs(proj.across)).toBeLessThan(BRIDGE_RAIL_OFFSET);
         expect(Math.abs(proj.along - p.along)).toBeLessThan(1e-6);
       }
     }

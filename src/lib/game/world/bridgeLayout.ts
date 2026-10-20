@@ -5,7 +5,7 @@
  * wyższą z wartości, więc oczy nigdy nie wchodzą w grunt). Nie zmienia generatora rzeki ani szerokości przejścia
  * (`passage.bridge`, półszerokość 2,2 m): przejście otwiera barierę rzeki, a ten układ tylko opisuje wygląd i wysokość.
  *
- * Model GLB (`public/props/bridge.glb`) to łuk o długości 1,685 jednostki modelu. Aby dopasować go do rzeki (19-23 m
+ * Model mostu (plik w `public/props`) to łuk o długości 1,685 jednostki modelu. Aby dopasować go do rzeki (19-23 m
  * między lądowiskami), końcówki i latarnie zostają oryginalne, a środek jest powielany z segmentów o okresie
  * `BRIDGE_PERIOD` (belki poprzeczne i słupki powtarzają się co ok. 0,21), spłaszczonych względem oryginalnego łuku.
  */
@@ -15,7 +15,7 @@ import { FOREST_PLAN } from "./generators/v2/plan";
 /** Półszerokość użytecznego pokładu (m) = półszerokość przejścia `passage.bridge`. */
 export const BRIDGE_HALF_WIDTH = FOREST_PLAN.bridge.passageHalfWidth;
 
-/** Stałe geometrii modelu (jednostki modelu), wyliczone z analizy siatki `miasto_bridge_optimized.glb`. */
+/** Stałe geometrii modelu (jednostki modelu), wyliczone z analizy siatki modelu mostu. */
 export const BRIDGE_MODEL = {
   /** Skala jednostajna model -> świat: wnętrze poręczy ok. 4,5 m przy ok. 0,39 jedn. modelu od osi. */
   scale: 5.8,

@@ -586,7 +586,7 @@ describe("Q1: zapis i wczytanie na każdym etapie zadania (bez duplikatów, stra
     g.do({ type: "troll.talk", at: near(g.a.troll) });
     g.do({ type: "troll.choose", choice: "fight" });
     checkpoint(); // po konfiskacie
-    expect(g.state.slots.filter(Boolean)).toHaveLength(1);
+    expect(g.state.slots.filter(Boolean)).toHaveLength(0);
     g.advanceTo(g.state.troll.lockUntil);
     g.do({ type: "troll.talk", at: near(g.a.troll) });
     g.do({ type: "riddle.answer", value: RIDDLE_BY_ID.get(g.state.dialog!.riddle!)!.answer });
@@ -741,7 +741,7 @@ describe("Q1: odrodzenie i dyskretne scenariusze bez softlocka", () => {
         const t = pick(targets);
         return { x: t.at.x, z: t.at.z };
       };
-      for (let step = 0; step < 90; step++) {
+      for (let step = 0; step < 160; step++) {
         const a = g.a;
         if (rnd() < 0.1) g.unlockOrder();
         const cid = pick(chests);

@@ -1,6 +1,6 @@
 import { INVENTORY_SLOTS, MAX_HEALTH } from "../core/constants";
 import { isLegacyForestPose } from "../core/pose";
-import { LEGACY_ITEM_IDS } from "../content/items";
+import { LEGACY_ITEM_IDS, LEGACY_REMOVED_ITEMS } from "../content/items";
 import { FINGERPRINT_PATTERN } from "../world/fingerprint";
 import type { SaveV1 } from "./schema";
 import { type ValidationResult } from "./validate";
@@ -13,7 +13,7 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 const isInt = (v: unknown): v is number => Number.isInteger(v);
 const isUint32 = (v: unknown): v is number => isInt(v) && (v as number) >= 0 && (v as number) <= 0xffff_ffff;
 const isItemId = (v: unknown): v is string =>
-  isStr(v) && Object.prototype.hasOwnProperty.call(LEGACY_ITEM_IDS, v);
+  isStr(v) && (Object.prototype.hasOwnProperty.call(LEGACY_ITEM_IDS, v) || LEGACY_REMOVED_ITEMS.includes(v));
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const SAVE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
