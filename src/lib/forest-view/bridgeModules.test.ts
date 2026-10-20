@@ -99,6 +99,24 @@ describe("assembleBridge", () => {
     expect(max).toBeLessThan(l.length + 1.5);
   });
 
+  it("pokład (czubki końcówek, z = ±deckTip) obejmuje dokładnie odległość między lądowiskami, dla wielu ziaren", () => {
+    // Regresja: wcześniej liczba segmentów wynikała z długości 2*deckTip zamiast 2*END_REACH, więc pokład był o ok. 6 m za krótki.
+    const deck = sliceBridgeSources(strip(-0.725, 0.725, 58));
+    for (const seed of [1, 2, 7, 2030, 99991, 4000000000]) {
+      const l = forestBridgeOf(seed);
+      const mesh = assembleBridge(deck, l);
+      let min = Infinity;
+      let max = -Infinity;
+      for (let i = 0; i < mesh.positions.length; i += 3) {
+        const { along } = l.project(mesh.positions[i], mesh.positions[i + 2]);
+        min = Math.min(min, along);
+        max = Math.max(max, along);
+      }
+      expect(min, `seed=${seed}`).toBeCloseTo(0, 3);
+      expect(max, `seed=${seed}`).toBeCloseTo(l.length, 3);
+    }
+  });
+
   it("każdy fragment źródłowy ma niepustą siatkę dla gęstej siatki wejściowej", () => {
     const pieces = synthetic();
     for (const key of Object.keys(BRIDGE_SOURCE_RANGES) as BridgeSource[]) expect(triangleCountOf(pieces[key]), key).toBeGreaterThan(0);

@@ -9,6 +9,7 @@
  */
 import {
   BRIDGE_MODEL,
+  END_REACH,
   BRIDGE_SOURCE_RANGES,
   MODEL_FLAT_DECK,
   MODEL_TIP_DECK,
@@ -142,7 +143,7 @@ export function sliceBridgeSources(source: MeshData): Record<BridgeSource, MeshD
  * Normalne są obracane tylko wokół Y (przechył i skala osi są pomijalnie małe).
  */
 export function assembleBridge(pieces: Record<BridgeSource, MeshData>, layout: BridgeLayout): MeshData {
-  const tipZ = layout.halfMid + (BRIDGE_MODEL.deckTip - BRIDGE_MODEL.endCut);
+  const tipZ = layout.halfMid + END_REACH;
   const perUnit = layout.scale * layout.axisScale;
   const slope = (layout.yEast - layout.yWest) / layout.length;
   let vertexTotal = 0;

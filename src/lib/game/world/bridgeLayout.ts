@@ -37,6 +37,13 @@ export const BRIDGE_MODEL = {
   lampSize: { x: 0.1, y: 0.1, z: 0.08 },
 } as const;
 
+/**
+ * O ile (jedn. modelu) pokład końcówki wystaje poza granicę części środkowej (`endCut`): od granicy do czubka pokładu.
+ * Całkowita długość pokładu w układzie złożonym to `bays * period + 2 * END_REACH` (NIE `bays * period + 2 * deckTip`:
+ * `deckTip` jest liczony od środka modelu, a środkowa część w złożeniu jest już policzona przez `bays * period`).
+ */
+export const END_REACH = BRIDGE_MODEL.deckTip - BRIDGE_MODEL.endCut;
+
 /** Wysokość pokładu w osi dla oryginalnego łuku (jedn. modelu) w odległości |z| od środka modelu. */
 export const modelDeckArch = (z: number): number => BRIDGE_MODEL.deckTop - BRIDGE_MODEL.deckArch * z * z;
 
@@ -115,7 +122,7 @@ export type BridgeLayout = {
 
 /** Liczba segmentów środkowej części dla długości pokładu `length` (najmniejsze rozciągnięcie przy skali jednostajnej). */
 export function bayCountFor(length: number, scale = BRIDGE_MODEL.scale): number {
-  const raw = (length / scale - 2 * BRIDGE_MODEL.deckTip) / BRIDGE_MODEL.period;
+  const raw = (length / scale - 2 * END_REACH) / BRIDGE_MODEL.period;
   return Math.max(3, Math.round(raw));
 }
 
@@ -155,7 +162,7 @@ export function planBridge(landings: { west: Point2; east: Point2 }, heightAt: (
   const normal = { x: axis.z, z: -axis.x };
   const scale = BRIDGE_MODEL.scale;
   const bays = bayCountFor(length, scale);
-  const nominal = scale * (bays * BRIDGE_MODEL.period + 2 * BRIDGE_MODEL.deckTip);
+  const nominal = scale * (bays * BRIDGE_MODEL.period + 2 * END_REACH);
   const axisScale = length / nominal;
   const halfMid = (bays * BRIDGE_MODEL.period) / 2;
   const yWest = heightAt(west.x, west.z);
@@ -175,7 +182,7 @@ export function planBridge(landings: { west: Point2; east: Point2 }, heightAt: (
   slots.push({ source: "end_east", dstStart: halfMid, lamp: false });
 
   // Koniec pokładu (czubek) w układzie złożonym leży o `deckTip - endCut` za granicą części środkowej.
-  const tipZ = halfMid + (BRIDGE_MODEL.deckTip - BRIDGE_MODEL.endCut);
+  const tipZ = halfMid + END_REACH;
   const metersPerUnit = scale * axisScale;
   const toModelZ = (a: number) => -tipZ + a / metersPerUnit;
   const base = (a: number) => yWest + ((yEast - yWest) * Math.min(Math.max(a, 0), length)) / length;

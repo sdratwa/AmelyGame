@@ -4,6 +4,7 @@ import {
   BRIDGE_HALF_WIDTH,
   BRIDGE_MODEL,
   MAX_AXIS_STRETCH,
+  END_REACH,
   bayCountFor,
   bridgeRailBoxes,
   lampIndices,
@@ -15,13 +16,13 @@ const SEEDS = [1, 2, 7, 2030, 99991, 4000000000];
 const OPEN = new Set([BRIDGE_FLAG]);
 
 describe("Most: układ (bridgeLayout)", () => {
-  it("długość pokładu 19-23 m, 9-12 segmentów i rozciągnięcie osi do 4% dla wielu ziaren", () => {
+  it("długość pokładu 19-23 m, 14-17 segmentów i rozciągnięcie osi do 4% dla wielu ziaren", () => {
     for (const seed of SEEDS) {
       const l = forestBridgeOf(seed);
       expect(l.length, `seed=${seed}`).toBeGreaterThanOrEqual(19 - 1e-6);
       expect(l.length, `seed=${seed}`).toBeLessThanOrEqual(23 + 1e-6);
-      expect(l.bays).toBeGreaterThanOrEqual(9);
-      expect(l.bays).toBeLessThanOrEqual(12);
+      expect(l.bays).toBeGreaterThanOrEqual(14);
+      expect(l.bays).toBeLessThanOrEqual(17);
       expect(Math.abs(l.axisScale - 1)).toBeLessThanOrEqual(MAX_AXIS_STRETCH);
       expect(l.scale).toBe(BRIDGE_MODEL.scale);
     }
@@ -30,7 +31,7 @@ describe("Most: układ (bridgeLayout)", () => {
   it("liczba segmentów dla skrajnych długości mieści się w granicy rozciągnięcia", () => {
     for (const length of [19, 20, 21, 22, 23]) {
       const bays = bayCountFor(length);
-      const nominal = BRIDGE_MODEL.scale * (bays * BRIDGE_MODEL.period + 2 * BRIDGE_MODEL.deckTip);
+      const nominal = BRIDGE_MODEL.scale * (bays * BRIDGE_MODEL.period + 2 * END_REACH);
       expect(Math.abs(length / nominal - 1), `L=${length}`).toBeLessThanOrEqual(MAX_AXIS_STRETCH);
     }
   });
@@ -90,7 +91,7 @@ describe("Most: układ (bridgeLayout)", () => {
         expect(Math.abs(proj.along - p.along)).toBeLessThan(1e-6);
       }
     }
-    for (const bays of [9, 10, 11, 12]) {
+    for (const bays of [14, 15, 16, 17]) {
       const idx = lampIndices(bays);
       expect(idx.every((i) => i > 0 && i < bays - 1)).toBe(true);
       expect(idx.map((i) => bays - 1 - i).sort((a, b) => a - b)).toEqual(idx);
