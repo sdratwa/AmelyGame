@@ -7,10 +7,11 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 - [architektura.md](architektura.md) - moduły, komendy i zdarzenia, pauza czasu, dane vs kod.
 - [model-danych.md](model-danych.md) - stan gry, ekwipunek i kontenery, skrzynie, depozyt trolla, docelowy zapis.
 - [swiat-w0.md](swiat-w0.md) - rdzeń świata po W0: współrzędne i sektory, teren, indeks przestrzenny, walkable, punkty i strefy.
-- [zapis-gry.md](zapis-gry.md) - system zapisu: SaveV2, migracja v1 -> v2, SaveStore, kopie, autosave, generatory v1 i v2.
+- [zapis-gry.md](zapis-gry.md) - system zapisu: SaveV3 (bieżący), migracje v1 -> v2 -> v3, SaveStore, kopie, autosave, generatory v1 i v2.
 - [swiat-w1a.md](swiat-w1a.md) - generator lasu W1a (v2): teren, rzeka, ścieżki, profile, roślinność, sektory, testy i ryzyka; sekcja W1b: kotwice questa, walidacja 200 seedów.
 - [swiat-generator.md](swiat-generator.md) - las 300x300 m, sektory, `terrainHeight`, walidator, zgodność wersji generatora.
-- [quest-bridge-01.md](quest-bridge-01.md) - quest "Most do nieznanego".
+- [quest-bridge-01.md](quest-bridge-01.md) - quest "Most do nieznanego": kolejność etapów, okno budowy, model mostu z GLB (segmenty, kolizje, wysokość pokładu), nocne latarnie.
+- [test-reczny-pierwszy-quest.md](test-reczny-pierwszy-quest.md) - scenariusz ręcznego testu całego pierwszego questa (sekcje A-G: start, troll, narzędzia, budowa, latarnie, zapis, brak telefonu).
 - [las-w-grze-f1.md](las-w-grze-f1.md) - F1: las 3D w normalnej grze (streaming sektorów, globalne kolizje, jakość, ograniczenia).
 - [m1-c1-skrzynie-minimapa.md](m1-c1-skrzynie-minimapa.md) - M1 + C1: model skrzyni GLB, skrzynie w lesie, klawisz E, ekwipunek (I), pozyskiwanie drewna i kamienia, minimapa (M), zapis.
 - [audio-las.md](audio-las.md) - AUDIO F1: ambient dzień/noc z crossfade, losowe ptaki 3D, wilki o północy, kroki gracza i trolla (FOOTSTEPS V2), kontroler, ustawienia, panel AUDIO, potok `npm run assets:audio`, ograniczenia.
@@ -49,6 +50,7 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 - [modele-skrzynia-troll.md](modele-skrzynia-troll.md): finalne modele skrzyni i trolla, animacje, koszt renderowania.
 - [troll-materialy.md](troll-materialy.md): matowe materiały trolla (przyczyna połysku i migotania oczu, klasy powierzchni, przełącznik ORIGINAL/MATTE w panelu O).
 - [troll-spotkanie.md](troll-spotkanie.md): animowany troll (7 klipów), maszyna spotkania (patrol, alert, zauważenie, dialog), testowe okno PRAWIDŁOWY/ZŁY, F3, instrukcja testu w przeglądarce.
+- Przebudowa pierwszego questa (20 października 2026): nowa kolejność (schemat -> narzędzia -> materiały -> budowa -> przeprawa), okno budowy (E), most z modelu GLB z latarniami nocnymi, usunięcie telefonu i ręki, SaveV3 z migracją. Kod i testy napisane, **testy i przeglądarka nie były uruchamiane** (zakaz autora); czeka na wyniki ręcznego testu wg [test-reczny-pierwszy-quest.md](test-reczny-pierwszy-quest.md).
 
 ## Kolejność etapów
 

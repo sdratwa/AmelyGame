@@ -54,4 +54,4 @@ flowchart LR
 
 ## Zmiany względem stanu sprzed etapu 1
 
-Zachowujemy: czysty reducer, zegar, drenaż życia, sklep, domy i ich ulepszanie, 8 slotów, telefon w slocie 1. Zmieniamy etapami: ID z przestrzeni nazw i stosy (E2), zapis i seed (E1), tutorial jako maszyna kroków (tutorial), skróty klawiszowe (UI1).
+Zachowujemy: czysty reducer, zegar, drenaż życia, sklep, domy i ich ulepszanie, 8 slotów (telefon usunięty z gry, SaveV3). Zmieniamy etapami: ID z przestrzeni nazw i stosy (E2), zapis i seed (E1), tutorial jako maszyna kroków (tutorial), skróty klawiszowe (UI1).

@@ -15,7 +15,7 @@ Narzędzia: Vitest (`npm test`), `npm run lint`, `npm run typecheck`, `npm run b
 
 ## Ekwipunek i kontenery (E2)
 
-Stosy i łączenie; limit stosu z definicji; ilości dużo większe niż 20; kontener "magazyn" bez limitu bez zmian w kodzie questów (test z kontenerem testowym); pełny ekwipunek; przedmioty `unique` i `pinned`; odrodzenie (narzędzia i surowce zostają, jedzenie przepada); niezmiennik sumy ilości na losowych sekwencjach komend; brak duplikacji przy wielokrotnym przenoszeniu.
+Stosy i łączenie; limit stosu z definicji; ilości dużo większe niż 20; kontener "magazyn" bez limitu bez zmian w kodzie questów (test z kontenerem testowym); pełny ekwipunek; przedmioty `unique`; odrodzenie (narzędzia i surowce zostają, jedzenie przepada); niezmiennik sumy ilości na losowych sekwencjach komend; brak duplikacji przy wielokrotnym przenoszeniu.
 
 ## Questy (E3)
 
@@ -27,7 +27,7 @@ Otwarcie raz; osobne odebranie; pełny ekwipunek zostawia przedmiot w skrzyni; b
 
 ## Troll i depozyt (T1)
 
-Troll zabiera wszystko poza telefonem (także narzędzia); przedmioty w depozycie z pełnym stanem; po poprawnej odpowiedzi wraca cały depozyt; brak slotów nie gubi przedmiotów (reszta u trolla); wielokrotne odbieranie nie duplikuje; zapis i odczyt zachowują depozyt; blokady (następny dzień, 1 godzina) działają po zapisie i odczycie z poprawnym pozostałym czasem; odrodzenie nie usuwa depozytu; konfrontacja atomowa; po pierwszej konfrontacji tylko zagadki; porażka nie blokuje ukończenia questa; pauza podczas dialogu nie przesuwa blokad.
+Troll zabiera wszystko (także narzędzia); przedmioty w depozycie z pełnym stanem; po poprawnej odpowiedzi wraca cały depozyt; brak slotów nie gubi przedmiotów (reszta u trolla); wielokrotne odbieranie nie duplikuje; zapis i odczyt zachowują depozyt; blokady (następny dzień, 1 godzina) działają po zapisie i odczycie z poprawnym pozostałym czasem; odrodzenie nie usuwa depozytu; konfrontacja atomowa; po pierwszej konfrontacji tylko zagadki; porażka nie blokuje ukończenia questa; pauza podczas dialogu nie przesuwa blokad.
 
 ## Troll: spotkanie z graczem (animacje i testowy dialog)
 
@@ -93,7 +93,7 @@ Zrealizowane w `src/lib/game/world/*.test.ts`: determinizm i zróżnicowanie ter
 ## Zrealizowane w E2 + Q1 + W1b
 
 - `systems/containers.test.ts`: stosy, limity, konfiskata i odzysk (niezmiennik księgi), kolejność odzysku (niezbywalne najpierw).
-- `systems/quest.test.ts`: tablica (przeczytane vs przyjęte), cele `obtained`/`holding`/`flag`, skrzynie, pozyskiwanie (narzędzie, limit noszenia, atomowość), troll (konfiskata bez pieniędzy i telefonu, blokada do następnego dnia, +1 godzina po błędnej odpowiedzi, zagadki, depozyt), budowa mostu, nagroda raz, pauza z wieloma przyczynami (zamknięcie jednego okna nie wznawia zegara), zapis i odczyt po każdym kamieniu milowym (przyjęcie, każda skrzynia, konfiskata, odzysk depozytu, materiały, most, ukończenie) z kontrolą braku duplikacji i utraty zasobów, 5 scenariuszy kolejności zdarzeń oraz fuzz na 60 seedach z solverem `autoComplete` (każdy dozwolony stan da się doprowadzić do ukończenia questa).
+- `systems/quest.test.ts`: tablica (przeczytane vs przyjęte), cele `obtained`/`holding`/`flag`, skrzynie, pozyskiwanie (narzędzie, limit noszenia, atomowość), troll (konfiskata bez pieniędzy, blokada do następnego dnia, +1 godzina po błędnej odpowiedzi, zagadki, depozyt), budowa mostu, nagroda raz, pauza z wieloma przyczynami (zamknięcie jednego okna nie wznawia zegara), zapis i odczyt po każdym kamieniu milowym (przyjęcie, każda skrzynia, konfiskata, odzysk depozytu, materiały, most, ukończenie) z kontrolą braku duplikacji i utraty zasobów, 5 scenariuszy kolejności zdarzeń oraz fuzz na 60 seedach z solverem `autoComplete` (każdy dozwolony stan da się doprowadzić do ukończenia questa).
 - `save/migration.test.ts`: migracja v1 -> v2 (zachowane domy, portfel, czas, zdrowie, imię; mapowanie przedmiotów; pozycja poprawna zachowana, niepoprawna przeniesiona do punktu wejścia; zapis legacy czytelny przez `LocalStorageSaveStore`; kopie `premigration` i `.bak`; uszkodzony SaveV1 jest odrzucany bez zgadywania; migracja jest czysta i deterministyczna; po migracji quest da się ukończyć).
 - `save/save.test.ts`: m.in. `Autosaver` traktuje postęp questa jako istotną zmianę.
 - `world/generators/v2/anchors.test.ts`: patrz [swiat-w1a.md](swiat-w1a.md).

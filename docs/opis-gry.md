@@ -6,7 +6,7 @@ Język interfejsu i fabuły: **polski**. Waluta: **złoty (zł)**.
 
 ## Czym jest gra
 
-Przygodowa gra przeglądarkowa dla jednej osoby, bez konta, z automatycznym zapisem w przeglądarce. Gracz podaje imię, dostaje milion złotych i telefon, a potem musi przeżyć w mieście, w którym czas i pogoda zabierają życie. Start: **zima roku 2030**.
+Przygodowa gra przeglądarkowa dla jednej osoby, bez konta, z automatycznym zapisem w przeglądarce. Gracz podaje imię, dostaje milion złotych, a potem musi przeżyć w mieście, w którym czas i pogoda zabierają życie. Start: **zima roku 2030**.
 
 Docelowo świat ma się **odkrywać przez eksplorację** (mgła wojny / nieodkryte fragmenty mapy). Tego jeszcze nie ma. Teraz mapa startowa jest od razu w pełni widoczna i ma cztery miejsca: las, sklep i dwa domy na sprzedaż.
 
@@ -84,11 +84,11 @@ Ekran „Nie przetrwałeś” i przycisk „Odrodź się”.
 Po odrodzeniu:
 
 - życie 100%, widok mapy świata,
-- **zostaje tylko telefon** w slocie 1 (zaznaczenie wraca na slot 1),
+- zostają **narzędzia, schemat i materiały** (jedzenie przepada), zaznaczenie wraca na slot 1,
 - portfel, posiadane domy, imię, rok/pora i licznik śmierci **zostają**,
 - kupione jedzenie **przepada**.
 
-Telefonu nie da się wyrzucić, zjeść ani stracić. Jest w pierwszym slocie od początku i po każdej śmierci.
+Telefonu w grze nie ma (usunięty; stare zapisy są migrowane do SaveV3, patrz `docs/projekt/zapis-gry.md`).
 
 ## Pieniądze
 
@@ -96,12 +96,12 @@ Start: **1 000 000 zł**. Wydatki: jedzenie (kilka–kilkanaście zł) oraz domy
 
 ## Ekwipunek
 
-8 slotów. Slot 1 na starcie: telefon. Reszta pusta.
+8 slotów, na starcie wszystkie puste.
 
 - Klik albo klawisze **1–8** zaznaczają slot.
-- Zaznaczony przedmiot widać w rączce w lesie (pierwsza osoba).
-- Jedzenie: przycisk **„Zjedz”** albo klawisz **E**. Przedmiot znika, życie rośnie o jego wartość (przycięte do 100). Po zjedzeniu zaznaczenie wraca na telefon.
-- Telefonu nie da się użyć (nie leczy, nie dzwoni). Numer z ogłoszenia domu jest tylko napisem.
+- Widok pierwszoosobowy w lesie pokazuje wyłącznie otoczenie (bez ręki i bez trzymanego przedmiotu; wybór kamery FPP/TPP i widoczna postać gracza wejdą później).
+- Jedzenie: przycisk **„Zjedz”** albo klawisz **E**. Przedmiot znika, życie rośnie o jego wartość (przycięte do 100). Po zjedzeniu zaznaczenie wraca na slot 1.
+- Numer telefonu z ogłoszenia domu jest tylko napisem.
 - Pełny ekwipunek blokuje zakupy.
 
 ## Sklep Żappka
@@ -157,7 +157,7 @@ Osobna scena 3D, nie kontynuacja mapy SVG.
 - Odkrywania mapy / mgły wojny (jest w zamyśle, nie w kodzie).
 - Siatki pól w lesie ani na mapie świata.
 - NPC, dialogów, zadań, fabuły, dziennika.
-- Dzwonienia pod numer z ogłoszenia. Telefon to przedmiot-kotwica.
+- Dzwonienia pod numer z ogłoszenia.
 - Schronienia w domu, spania, przechowywania przedmiotów w domu, przeprowadzki, więcej niż dwóch działek.
 - Dochodu. Milion starcza na jeden drogi dom i ulepszenia; drugi dom często zostaje poza zasięgiem, jeśli kupi się rezydencję.
 - Craftingu, broni, walki, głodu i pragnienia osobno od „życia”.
@@ -176,7 +176,7 @@ Osobna scena 3D, nie kontynuacja mapy SVG.
 
 Poniższe **nie jest obietnicą** — to luki, o które warto pytać autora, zanim powstanie treść:
 
-- Po co jest telefon i numery z ogłoszeń, skoro nie da się dzwonić.
+- Po co są numery z ogłoszeń, skoro nie da się dzwonić.
 - Co daje własny dom poza obrazkiem (sen? brak zimna? magazyn?).
 - Skąd brać pieniądze po pierwszym domu.
 - Co jest w lesie poza spacerem (znaleziska, zgubienie się, dzień/noc jako zagrożenie już jest przez pasek życia).

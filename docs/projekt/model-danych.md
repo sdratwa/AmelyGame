@@ -19,7 +19,7 @@ type ContainerSpec = {
 - Limit stosu pochodzi z definicji przedmiotu (`maxStack`, początkowo 20 dla surowców) i opcjonalnie z kontenera (magazyn może mieć wyższy lub nieograniczony). Ekwipunek gracza: 8 slotów.
 - Operacje są dwufazowe: `planMove(from, to, request) -> MovePlan` (czysta, bez zmian stanu, uwzględnia łączenie ze stosami, wolne sloty i limity) oraz `applyMovePlan(state, plan)` (atomowo odejmuje i dodaje, zachowuje sumę). Częściowy zwrot jest jawnym wynikiem planu (`moved`, `remainder`).
 - Zapytania o posiadanie idą przez selektor `holdings(state, itemId)` sumujący kontenery gracza dostępne do crafting/questów. Dodanie magazynu to nowa wartość w rejestrze kontenerów, bez zmian w kodzie questów i receptur.
-- Cechy przedmiotu: `unique` (najwyżej jeden egzemplarz łącznie w kontenerach i skrzyniach), `protected` (nie znika przy odrodzeniu), `pinned` (telefon, nie można go zabrać ani wyrzucić), `category` (`tool`, `resource`, `food`, `blueprint`, `special`).
+- Cechy przedmiotu: `unique` (najwyżej jeden egzemplarz łącznie w kontenerach i skrzyniach), `protected` (nie jest konfiskowany; obecnie nie ma takiego przedmiotu), `category` (`tool`, `resource`, `food`, `blueprint`). Telefon został usunięty z gry (SaveV3).
 - Schematy (`blueprint`) są w osobnej kolekcji `player.projects`, poza slotami.
 - Niezmiennik (testowany własnościowo): suma ilości każdego `ItemId` w (kontenery + skrzynie + depozyt + skonsumowane/zbudowane) jest zachowana po każdej komendzie.
 
@@ -59,7 +59,7 @@ type Deposit = {
 };
 ```
 
-Konfrontacja jest jedną transakcją: wszystkie przedmioty poza `pinned` trafiają do depozytu (`held`), gracz wraca na mapę miasta, `npcs.troll.lockedUntil = nextDayStart(elapsed)`, w dzienniku pojawia się cel odzyskania. Po blokadzie troll daje zagadkę; poprawna odpowiedź ustawia `released` i uruchamia zwrot (`planMove` do ekwipunku, z depozytu schodzi dokładnie tyle, ile przeniesiono; resztę gracz odbiera u trolla bez nowej zagadki). Błędna odpowiedź: `retryAt = elapsed + SECONDS_PER_GAME_HOUR`. Po pierwszej konfrontacji opcja walki znika. Depozyt przeżywa zapis, odczyt, zmianę widoku i odrodzenie. Schematy (`projects`) nie są zabierane.
+Konfrontacja jest jedną transakcją: wszystkie przedmioty trafiają do depozytu (`held`), gracz wraca na mapę miasta, `npcs.troll.lockedUntil = nextDayStart(elapsed)`, w dzienniku pojawia się cel odzyskania. Po blokadzie troll daje zagadkę; poprawna odpowiedź ustawia `released` i uruchamia zwrot (`planMove` do ekwipunku, z depozytu schodzi dokładnie tyle, ile przeniesiono; resztę gracz odbiera u trolla bez nowej zagadki). Błędna odpowiedź: `retryAt = elapsed + SECONDS_PER_GAME_HOUR`. Po pierwszej konfrontacji opcja walki znika. Depozyt przeżywa zapis, odczyt, zmianę widoku i odrodzenie. Schematy (`projects`) nie są zabierane.
 
 ## Czas i blokady
 
@@ -67,7 +67,7 @@ Wszystkie blokady to bezwzględny czas gry (`lockedUntil`, `retryAt`). Pozostał
 
 ## Zapis (`SaveV1` - plan, `SaveV2` - stan w kodzie)
 
-> Stan po E2 + Q1: bieżący format to `SaveV2`, opisany w [zapis-gry.md](zapis-gry.md). Zrealizowane: stosy z `maxStack` (jedzenie 1, surowce 20, narzędzia i schemat 1), flagi `protected` (telefon), `keepOnDeath`, `discardable` (tylko jedzenie), księga `{ gained, spent }`, depozyt trolla jako kontener, zadania sterowane danymi (cele `obtained`, `holding`, `flag`), skrzynie, troll (`unmet`, `confronted`, `solved`) z `lockUntil` i `attempts`. Różnice względem szkicu poniżej: jeden ekwipunek (bez osobnych kontenerów i magazynu), brak `noticeboard.readIds` (przeczytane są w `quests`), kotwice nie są zapisywane, tylko liczone z seeda.
+> Stan po E2 + Q1: bieżący format to `SaveV3` (SaveV2 bez telefonu), opisany w [zapis-gry.md](zapis-gry.md). Zrealizowane: stosy z `maxStack` (jedzenie 1, surowce 20, narzędzia i schemat 1), flagi `protected`, `keepOnDeath`, `discardable` (tylko jedzenie), księga `{ gained, spent }`, depozyt trolla jako kontener, zadania sterowane danymi (cele `obtained`, `holding`, `flag`), skrzynie, troll (`unmet`, `confronted`, `solved`) z `lockUntil` i `attempts`. Różnice względem szkicu poniżej: jeden ekwipunek (bez osobnych kontenerów i magazynu), brak `noticeboard.readIds` (przeczytane są w `quests`), kotwice nie są zapisywane, tylko liczone z seeda.
 
 > Stan implementacji po E1 (to, co jest dziś zapisywane, i szczegóły magazynu): [zapis-gry.md](zapis-gry.md). Poniżej docelowy kształt; pola dla questów, skrzyń, trolla itd. dochodzą w kolejnych wersjach formatu z migracjami. Nazwy pól w kodzie: `world { seed, genVersion, fingerprint, genHistory }`, `player.forestPose`, `genHistory[].atElapsed` (czas gry zamiast czasu ściennego).
 

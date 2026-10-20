@@ -51,6 +51,8 @@ Sekcja "NPC troll": dystans do trolla, stan zachowania, klip (i stan animacji) z
 
 ## Instrukcja ręcznego testu w przeglądarce
 
+> Aktualizacja: w normalnej grze rozmowa z trollem (E) otwiera **prawdziwe okno** z dwiema opcjami ("Spróbuję cię pokonać!" i "Może się dogadamy?"), zagadką liczbową, podpowiedzią i odejściem bez rozmowy (komponent `TrollDialog`); animacje trolla wynikają z wyniku silnika (`resolveDialog`). Testowe okno PRAWIDŁOWY / ZŁY opisane niżej jest dostępne **tylko w trybie deweloperskim z otwartym panelem O**. Scenariusz: [test-reczny-pierwszy-quest.md](test-reczny-pierwszy-quest.md).
+
 1. Uruchom grę (`npm run dev`, port 43217), rozpocznij nową grę (albo Kontynuuj) i wejdź do lasu z mapy miasta. Naciśnij O (albo F3; w dev także przycisk "Diagnostyka"). Troll stoi >= 25 m od punktu startu, 3,4 m od skrzyni ze schematem; jego pozycję i dystans podaje F3.
 2. **Patrol (> 20 m)**: podejdź na ok. 25-30 m. Troll chodzi w promieniu ok. 2,6 m od kotwicy i robi postoje; w F3 stan `patrol`, animacja `Walk` w marszu i `Idle` na postoju. Stopy nie powinny ślizgać się po ziemi.
 3. **Alert (< 20 m)**: przekrocz 20 m. Troll łagodnie się zatrzymuje, `Walk -> Idle`, po chwili `Nervous`, potem znów `Idle` i powtórki. W F3 stan `alert`; przy jednoczesnym przejściu wagi pokazują dwa klipy sumujące się do 1. Odejdź poza 22 m: po krótkiej zwłoce wraca patrol.

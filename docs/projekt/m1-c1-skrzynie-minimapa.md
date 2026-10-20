@@ -2,6 +2,8 @@
 
 Pierwsza część questa "Most do nieznanego" jest grywalna w normalnej grze: przyjęcie zadania, wejście do lasu, minimapa (`M`), trzy skrzynie, klawisz `E`, ekwipunek (`I`), piła i kilof, drewno i kamień, postęp w dzienniku (`J`), zapis. Nie ma jeszcze trolla, zagadek ani budowy mostu (kolejny etap).
 
+> Aktualizacja (przebudowa pierwszego questa, 20 października 2026): kolejność questa to schemat (troll) -> narzędzia -> materiały -> budowa -> przeprawa; skrzynie z piłą i kilofem otwierają się **dopiero po zdobyciu schematu** (przed schematem komunikat "Najpierw zdobądź schemat mostu"). Minimapa pokazuje wyłącznie obszary bieżącego etapu (`areas` w danych etapu: skrzynia, miejsce budowy, przeprawa). Wzięcie schematu daje komunikat "Zdobyto schemat mostu" i możliwość czytania go z ekwipunku (I). Telefon i ręka w widoku FPP zostały usunięte; ekwipunek startuje pusty. Szczegóły: [quest-bridge-01.md](quest-bridge-01.md), scenariusz testu: [test-reczny-pierwszy-quest.md](test-reczny-pierwszy-quest.md).
+
 > Uwaga: model skrzyni z tego dokumentu (`chest.fairy`) został zastąpiony modelem `chest.treasure`; aktualny opis w [modele-skrzynia-troll.md](modele-skrzynia-troll.md). Logika, pozycje i interakcje poniżej pozostają aktualne.
 
 ## Model skrzyni (GLB od autora, wersja historyczna)

@@ -20,12 +20,12 @@ Zasoby 3D (modele lasu, CC0 Quaternius): `npm run assets:report` (raport z manif
 
 1. **Imię** → ekran ładowania świata → mapa świata z góry.
 2. **Tutorial** – podświetlony las z wykrzyknikiem, reszta wyszarzona. Trzeba kliknąć las.
-3. **Las (FPV)** – las 3D 300 × 300 m (streaming sektorów, kolizje, rzeka bez przejścia do czasu mostu): `W/S/A/D` – ruch, `Shift` – bieg, mysz – rozglądanie, `O` (albo `F3`) – panel diagnostyczny, jakość Niska/Średnia/Wysoka, `E` – otwórz skrzynię / zetnij drzewo / rozbij skałę, `I` – ekwipunek, `M` – minimapa, `J` – dziennik, `Esc` – zamknięcie okna i zwolnienie myszy, drugi `Esc` – powrót na mapę. Pełna lista: [`docs/projekt/sterowanie.md`](docs/projekt/sterowanie.md). Szczegóły i ograniczenia: [`docs/projekt/las-w-grze-f1.md`](docs/projekt/las-w-grze-f1.md), skrzynie i zbieranie: [`docs/projekt/m1-c1-skrzynie-minimapa.md`](docs/projekt/m1-c1-skrzynie-minimapa.md). Tablica ogłoszeń w mieście: quest „Most do nieznanego”. W rączce widać zaznaczony przedmiot (domyślnie telefon).
+3. **Las (FPV)** – las 3D 300 × 300 m (streaming sektorów, kolizje, rzeka bez przejścia do czasu mostu): `W/S/A/D` – ruch, `Shift` – bieg, mysz – rozglądanie, `O` (albo `F3`) – panel diagnostyczny, jakość Niska/Średnia/Wysoka, `E` – otwórz skrzynię / zetnij drzewo / rozbij skałę, `I` – ekwipunek, `M` – minimapa, `J` – dziennik, `Esc` – zamknięcie okna i zwolnienie myszy, drugi `Esc` – powrót na mapę. Pełna lista: [`docs/projekt/sterowanie.md`](docs/projekt/sterowanie.md). Szczegóły i ograniczenia: [`docs/projekt/las-w-grze-f1.md`](docs/projekt/las-w-grze-f1.md), skrzynie i zbieranie: [`docs/projekt/m1-c1-skrzynie-minimapa.md`](docs/projekt/m1-c1-skrzynie-minimapa.md). Tablica ogłoszeń w mieście: quest „Most do nieznanego”. Widok pierwszoosobowy pokazuje wyłącznie otoczenie (bez ręki i telefonu).
 4. **Sklep „Żappka”** – wnętrze sklepu: kupno jedzenia (leczy życie), w środku życie nie spada (schronienie). Wyjście: `Esc`.
 5. **Dwa domy na sprzedaż** – cena losowa 200–500 tys. zł, 6-cyfrowy telefon, a wygląd zależy od ceny: 4 poziomy (1 Chatka < 275 tys., 2 Domek < 350 tys., 3 Dom z poddaszem < 425 tys., 4 Rezydencja). Dom można kupić i ulepszać do poziomu 4 (koszt: 60 / 90 / 130 tys. zł).
 6. **Pasek górny** – życie (lewo); portfel (start: 1 000 000 zł), dzień/noc, pora roku i rok (prawo). Start: zima 2030.
-7. **Ekwipunek** – 8 slotów, w pierwszym telefon (nie da się go stracić, także po śmierci). Zaznacz jedzenie i `Zjedz` / `E`, by się uleczyć. Klawisze `1–8` wybierają slot.
-8. **Śmierć i odrodzenie** – przy 0% życia pojawia się ekran śmierci; odrodzenie na mapie z pełnym życiem i samym telefonem.
+7. **Ekwipunek** – 8 slotów, na starcie puste (telefonu w grze już nie ma). Zaznacz jedzenie i `Zjedz` / `E`, by się uleczyć. Klawisze `1–8` wybierają slot.
+8. **Śmierć i odrodzenie** – przy 0% życia pojawia się ekran śmierci; odrodzenie na mapie z pełnym życiem; jedzenie przepada, narzędzia, schemat i materiały zostają.
 
 ### Zasady czasu i życia
 
@@ -40,7 +40,7 @@ Pełny opis stanu gry, zasad i tego, czego jeszcze nie ma — do wklejenia innem
 
 ### Zapis gry
 
-Postęp zapisuje się automatycznie w `localStorage` przeglądarki (imię, czas, życie, portfel, ekwipunek ze stosami, domy, pozycja w lesie, seed świata, postęp questa „Most do nieznanego”: zadania, skrzynie, troll z depozytem, most). Po odświeżeniu pojawia się ekran „Kontynuuj / Nowa gra”. Zapis (SaveV2) jest wersjonowany, z kopią zapasową i migracją ze starych zapisów v1 – szczegóły w [`docs/projekt/zapis-gry.md`](docs/projekt/zapis-gry.md).
+Postęp zapisuje się automatycznie w `localStorage` przeglądarki (imię, czas, życie, portfel, ekwipunek ze stosami, domy, pozycja w lesie, seed świata, postęp questa „Most do nieznanego”: zadania, skrzynie, troll z depozytem, most). Po odświeżeniu pojawia się ekran „Kontynuuj / Nowa gra”. Zapis (SaveV3) jest wersjonowany, z kopią zapasową i migracją ze starych zapisów (v1 -> v2 -> v3; v3 to usunięcie telefonu) – szczegóły w [`docs/projekt/zapis-gry.md`](docs/projekt/zapis-gry.md).
 
 ### Debug
 

@@ -93,7 +93,7 @@
 - Surowce, narzędzia i schemat są niezbywalne (`discardable: false`): nie da się zmarnować skończonej puli. Odrzucić można tylko jedzenie.
 - Kolejność odzysku z depozytu: najpierw przedmioty niezbywalne, żeby ewentualny brak miejsca dotknął jedzenia.
 - Odrodzenie zachowuje narzędzia i surowce (`keepOnDeath`), traci jedzenie.
-- Troll: pierwsza nieudana konfrontacja zabiera wszystko poza telefonem (pieniądze zostają), blokada do następnego dnia gry; błędna odpowiedź to blokada +1 godzina (zawsze `max` z istniejącą); zamknięcie okna zagadki nie zużywa próby; kolejność zagadek to stabilne tasowanie ze strumienia `troll.riddles`.
+- Troll: pierwsza nieudana konfrontacja zabiera wszystkie przedmioty (pieniądze zostają; telefonu w grze już nie ma), blokada do następnego dnia gry; błędna odpowiedź to blokada +1 godzina (zawsze `max` z istniejącą); zamknięcie okna zagadki nie zużywa próby; kolejność zagadek to stabilne tasowanie ze strumienia `troll.riddles`.
 - Pauza: dialog dodaje własną przyczynę systemową (`system.dialog`, z `state.dialog`); zegar rusza dopiero, gdy nie ma żadnej przyczyny.
 - Most zbudowany przed przyjęciem questa kończy quest przy przyjęciu. Toast ukończenia questa zastępuje toast budowy mostu.
 - Silnik ufa klientowi co do `at` (pozycji gracza) i identyfikatora pozyskiwanego obiektu w granicach zasięgu kotwic; pełna weryfikacja po stronie serwera nie jest potrzebna dla gry lokalnej.
@@ -170,3 +170,13 @@
 - Przyczyną połysku jest mapa MR z pliku (chropowatość ok. 0,3 na ponad 90% powierzchni), a migotania w oczach chropowatość 0 i ostry wał normalnych w oczach, oświetlone jedynym światłem kierunkowym (księżyc nocą). Metaliczność (B ≈ 0), emissive i mapa środowiska nie są przyczyną. Szczegóły: [troll-materialy.md](troll-materialy.md).
 - Poprawka jest lokalna dla trolla (`prepareTrollMaterials`, klon materiału z wypieczoną mapą chropowatości), bez zmiany GLB, geometrii, animacji i oświetlenia lasu; oryginał dostępny przełącznikiem w panelu dev.
 - Do decyzji autora: wartości chropowatości po obejrzeniu w grze oraz czy zrobić dokładną maskę klas w pipeline `assets:troll` (zmienia plik GLB).
+
+## Przebudowa pierwszego questa: most GLB, latarnie, bez telefonu (20 października 2026)
+
+- Kolejność questa: schemat (troll) -> narzędzia (po schemacie) -> materiały -> budowa -> przeprawa. Tablica ogłoszeń z wykrzyknikiem od początku gry; wejście do lasu dopiero po przyjęciu zadania. Troll zachowuje obie opcje (walka = konfiskata i blokada do następnego dnia, rozmowa = zagadka).
+- Schemat jest brany ze skrzyni ręcznie (E), nigdy automatycznie; można go czytać z ekwipunku. Quest kończy się po odkryciu obszaru za rzeką; nagroda (5000 zł, odznaka) raz.
+- Budowa: E przy zachodnim lądowisku otwiera okno z wymaganiami; komendę wysyła przycisk; silnik ponownie weryfikuje i wykonuje atomowo (zdjęcie materiałów, flaga mostu, quest, natychmiastowy zapis).
+- Most z GLB (wariant A): bez rozciągania modelu; przyczółki + powielane segmenty środka (dopasowanie 19-23 m, rozciągnięcie osi do 4%), skala jednostajna 5,8, użyteczna szerokość 4,4 m. Kolizje: istniejący pas `passage.bridge` + proste prostokąty poręczy, nie geometria GLB. Wysokość pokładu to **dodatkowa, udokumentowana warstwa** nad `terrainHeight` (kontroler bierze maksimum). Generator rzeki, `worldSeed` i szerokość przejścia bez zmian.
+- Latarnie: pozycje z modelu, strojenie w `BRIDGE_LAMP_CONFIG`, poziom wg godziny gry (18-21 włącza, 5-8 gasi), świecące powierzchnie + pula 3 bezcieniowych PointLight (2400 K), bez bloomu, bez zmian `MIASTO_DEFAULT`.
+- Telefon i ręka usunięte z gry; SaveV3 (migracja v2 -> v3 wycina tylko telefon). Numery telefonów właścicieli domów zostają jako napis w ogłoszeniach.
+- Do decyzji / weryfikacji autora: wygląd szwów segmentów mostu, pozycja i jasność latarni (`BRIDGE_LAMP_CONFIG`), wysokość pokładu na brzegach, koszt trzech świateł punktowych (FPS), czy poręcze mają blokować także wejście z boku na końcach pokładu.
