@@ -17,6 +17,8 @@ export const CHEST_RANGE = 3.5;
 export const TROLL_RANGE = 6;
 export const HARVEST_RANGE = 3.5;
 export const BUILD_RANGE = 8;
+/** Zasięg podpowiedzi "[E] Zbuduj most" od zachodniego lądowiska; mniejszy od zasięgu silnika, więc podpowiedź nie obiecuje więcej niż silnik przyjmie. */
+export const BUILD_PROMPT_RANGE = 6;
 
 /** Zasięgi podpowiedzi [E] w lesie (m): zawsze mniejsze od zasięgów silnika, więc widoczna podpowiedź oznacza, że komenda przejdzie. */
 export const CHEST_PROMPT_RANGE = 2.6;

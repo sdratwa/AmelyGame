@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
 import { loadDeerAsset, loadTrollAsset, type DeerAsset, type TrollAsset } from "@/lib/assets/characters";
+import { loadBridgeAsset } from "@/lib/assets/bridge";
 import { loadChestAsset } from "@/lib/assets/props";
-import { forestChestsOf, forestOf, forestWalkOf, syncHarvestedColliders } from "@/lib/game/world/lookup";
+import { forestBridgeOf, forestChestsOf, forestOf, forestWalkOf, syncBridgeColliders, syncHarvestedColliders } from "@/lib/game/world/lookup";
 import { BRIDGE_FLAG } from "@/lib/game/world/generators/v2";
 import { BENCHMARK_SECONDS, benchmarkPose, buildBenchmarkRoute, type BenchmarkRoute } from "./benchmark";
 import { atmosphereAt, DEFAULT_HOUR, type AtmosphereState, type Rgb } from "./atmosphere";
@@ -20,6 +21,7 @@ import type { ForestWorld } from "@/lib/game/world/generators/v2/forest";
 import { surfaceFromWorld, type SurfaceId } from "@/lib/audio/surfaces";
 import { NpcLayer, type NpcStats } from "./npc";
 import type { TrollMaterialMode } from "@/lib/npc/trollMaterials";
+import { BridgeLayer } from "./bridge";
 import { ChestLayer, FxBurst, type BurstKind } from "./props";
 import { STREAM_RADIUS } from "./stream";
 import { forestModelIds, StreamedForest, type StreamStats } from "./streaming";
@@ -231,6 +233,10 @@ export class ForestRenderer {
   private stream: StreamedForest | null = null;
   private streamOptions: StreamOptions | null = null;
   private chestLayer: ChestLayer | null = null;
+  private bridgeLayer: BridgeLayer | null = null;
+  private bridgeLoad: Promise<void> | null = null;
+  private bridgeAnimate = false;
+  private bridgeError: string | null = null;
   private npcLayer: NpcLayer | null = null;
   private npcMaterialMode: TrollMaterialMode = "matte";
   private npcError: string | null = null;
@@ -375,8 +381,65 @@ export class ForestRenderer {
 
   /** Flaga świata `bridge.built`: otwiera lub zamyka przejście przez rzekę (kolizje, nie wygląd). */
   setBridgeBuilt(built: boolean): void {
+    const was = this.worldFlags.has(BRIDGE_FLAG);
     if (built) this.worldFlags.add(BRIDGE_FLAG);
     else this.worldFlags.delete(BRIDGE_FLAG);
+    // Pojawienie się z animacją tylko przy zmianie w trakcie sesji (po wczytaniu zapisu most stoi od razu).
+    this.applyBridge(this.controller !== null && built && !was);
+  }
+
+  /** Błąd wczytania modelu mostu (kolizje i przejście działają bez niego); null, gdy brak. */
+  getBridgeError(): string | null {
+    return this.bridgeError;
+  }
+
+  /**
+   * Zgrywa most z flagą świata: collidery poręczy, wysokość pokładu w kontrolerze i widoczność modelu (ładowanego
+   * leniwie dopiero, gdy most jest zbudowany). Wywoływane po zmianie flagi i po zbudowaniu lasu.
+   */
+  private applyBridge(animate: boolean): void {
+    const seed = this.streamOptions?.seed;
+    if (seed === undefined) return;
+    const built = this.worldFlags.has(BRIDGE_FLAG);
+    syncBridgeColliders(seed, built);
+    if (this.controller) this.controller.deckHeight = built ? (x, z) => forestBridgeOf(seed).deckHeightAt(x, z) : null;
+    if (!built) {
+      this.bridgeLayer?.setBuilt(false, false);
+      return;
+    }
+    if (this.bridgeLayer) {
+      this.bridgeLayer.setBuilt(true, animate);
+      return;
+    }
+    this.bridgeAnimate = animate;
+    void this.loadBridge(seed);
+  }
+
+  private loadBridge(seed: number): Promise<void> {
+    if (this.bridgeLoad) return this.bridgeLoad;
+    const gen = this.generation;
+    this.bridgeLoad = (async () => {
+      let asset: Awaited<ReturnType<typeof loadBridgeAsset>> | null = null;
+      try {
+        asset = await loadBridgeAsset();
+        if (gen !== this.generation || this.disposed || this.streamOptions?.seed !== seed) {
+          asset.dispose();
+          return;
+        }
+        const layer = new BridgeLayer(asset, forestBridgeOf(seed), { receiveShadow: this.shadowsOn() });
+        this.bridgeLayer = layer;
+        this.scene.add(layer.group);
+        this.bridgeError = null;
+        layer.setBuilt(this.worldFlags.has(BRIDGE_FLAG), this.bridgeAnimate);
+      } catch (e) {
+        asset?.dispose();
+        this.bridgeError = e instanceof Error ? e.message : String(e);
+        console.error(e);
+      } finally {
+        if (gen === this.generation) this.bridgeLoad = null;
+      }
+    })();
+    return this.bridgeLoad;
   }
 
   /**
@@ -652,6 +715,12 @@ export class ForestRenderer {
   }
 
   private disposeStream(): void {
+    if (this.bridgeLayer) {
+      this.scene.remove(this.bridgeLayer.group);
+      this.bridgeLayer.dispose();
+      this.bridgeLayer = null;
+    }
+    this.bridgeLoad = null;
     if (this.chestLayer) {
       this.scene.remove(this.chestLayer.group);
       this.chestLayer.dispose();
@@ -804,6 +873,7 @@ export class ForestRenderer {
       const controller = new FirstPersonController(walk, forest.terrain, opts.pose);
       controller.flags = this.worldFlags;
       this.controller = controller;
+      this.applyBridge(false);
       this.lastCamPos.set(1e9, 0, 0);
       this.dirtyInstances = true;
       this.applyProfileToRenderer();
@@ -1010,6 +1080,7 @@ export class ForestRenderer {
     this.renderer.shadowMap.enabled = shadows;
     this.sun.castShadow = shadows;
     this.chestLayer?.setShadows(shadows, shadows);
+    this.bridgeLayer?.setShadows(shadows);
     this.npcLayer?.setShadows(shadows, shadows);
     this.deerLayer?.setShadows(shadows, shadows);
     const sc = this.sun.shadow.camera;
@@ -1197,6 +1268,7 @@ export class ForestRenderer {
       this.updateInstances(time);
       this.updateSun();
       this.chestLayer?.update(dt, s);
+      this.bridgeLayer?.update(dt);
       // Troll żyje także w trakcie własnego dialogu (stoi w Idle i patrzy na gracza), choć sterowanie graczem jest wstrzymane.
       if (!this.suspended || this.npcLayer?.dialogActive) this.npcLayer?.update(dt, s);
       if (!this.suspended) this.deerLayer?.update(dt, s);

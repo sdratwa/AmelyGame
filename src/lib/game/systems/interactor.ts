@@ -1,5 +1,5 @@
 import type { Command } from "../core/apply";
-import { CHEST_PROMPT_RANGE } from "../core/constants";
+import { BUILD_PROMPT_RANGE, CHEST_PROMPT_RANGE } from "../core/constants";
 import type { ChestId } from "../core/ids";
 import type { GameState } from "../core/state";
 import type { ItemId } from "../content/items";
@@ -20,6 +20,8 @@ export type InteractorSnapshot = {
   window: ChestWindowView | null;
   /** Skrzynia w trakcie otwierania (pokrywa się unosi): E jest wtedy ignorowane. */
   opening: ChestId | null;
+  /** Okno budowy mostu (E przy miejscu budowy z schematem); komendę wysyła dopiero przycisk w oknie. */
+  buildWindow: boolean;
 };
 
 export type InteractorDeps = {
@@ -37,7 +39,8 @@ export type InteractorDeps = {
 export class ForestInteractor {
   private pending: { id: ChestId; since: number; revealAt: number } | null = null;
   private windowFor: ChestId | null = null;
-  private last: InteractorSnapshot = { target: null, prompt: null, window: null, opening: null };
+  private buildOpen = false;
+  private last: InteractorSnapshot = { target: null, prompt: null, window: null, opening: null, buildWindow: false };
 
   private deps: InteractorDeps | null;
 
@@ -62,10 +65,11 @@ export class ForestInteractor {
     const pose = deps.getPose();
     const now = deps.now();
     this.settle(state, pose, now);
+    if (this.discoverIfCrossed(state, pose)) return this.poll();
 
     let target: InteractTarget | null = null;
     let prompt: Prompt | null = null;
-    if (!this.windowFor && pose) {
+    if (!this.windowFor && !this.buildOpen && pose) {
       target = pickInteraction(state, pose);
       if (target && !(this.pending && target.kind === "chest" && target.id === this.pending.id)) prompt = describePrompt(state, target);
     }
@@ -74,6 +78,7 @@ export class ForestInteractor {
       prompt,
       window: this.windowFor ? this.windowView(state, this.windowFor) : null,
       opening: this.pending?.id ?? null,
+      buildWindow: this.buildOpen,
     };
     if (!sameSnapshot(this.last, next)) this.last = next;
     return this.last;
@@ -94,10 +99,18 @@ export class ForestInteractor {
       this.takeFromWindow();
       return true;
     }
-    if (this.pending) return true;
+    if (this.pending || this.buildOpen) return true;
     if (!pose || state.dead || state.view !== "forest") return false;
     const target = pickInteraction(state, pose);
     if (!target) return false;
+    if (target.kind === "bridge_site") {
+      // Bez schematu to tylko komunikat (podpowiedź); z schematem E otwiera okno budowy.
+      if (target.hasBlueprint) {
+        this.buildOpen = true;
+        this.poll();
+      }
+      return true;
+    }
     if (target.kind === "chest" && target.action === "peek") {
       this.windowFor = target.id;
       this.poll();
@@ -121,6 +134,36 @@ export class ForestInteractor {
     this.poll();
   }
 
+  /**
+   * Przejście przez most: gdy most stoi, a gracz dotarł na drugi brzeg (w promieniu obszaru "za rzeką"), wysyłamy
+   * `region.discover`. To jedyny sposób odkrycia: nie ma przycisku ani teleportu. Silnik sam sprawdza dystans, flagę
+   * mostu i to, czy region nie został już odkryty, więc powtórzenie jest nieszkodliwe.
+   */
+  private discoverIfCrossed(state: GameState, pose: ViewPose | null): boolean {
+    const deps = this.deps;
+    const beyond = state.world?.anchors?.beyond;
+    if (!deps || !pose || !beyond || state.view !== "forest" || state.dead || state.phase !== "playing") return false;
+    if (!state.bridge.built || state.discovered.includes(beyond.region)) return false;
+    if (Math.hypot(beyond.x - pose.x, beyond.z - pose.z) > beyond.radius) return false;
+    deps.dispatch({ type: "region.discover", id: beyond.region, at: { x: pose.x, z: pose.z } });
+    return !!deps.getState().discovered.includes(beyond.region);
+  }
+
+  /** Przycisk "Zbuduj most" w oknie budowy: jedyna droga do komendy; silnik ponownie sprawdza schemat, materiały i miejsce. */
+  confirmBuild(): void {
+    const pose = this.deps?.getPose();
+    if (!this.buildOpen || !pose || !this.deps) return;
+    this.deps.dispatch({ type: "bridge.build", at: { x: pose.x, z: pose.z } });
+    this.buildOpen = false;
+    this.poll();
+  }
+
+  /** Zamyka okno budowy bez budowania. */
+  closeBuildWindow(): void {
+    this.buildOpen = false;
+    this.poll();
+  }
+
   /** Zamyka okno bez zabierania: skrzynia zostaje otwarta, a przedmiot w środku. */
   closeWindow(): void {
     this.windowFor = null;
@@ -131,14 +174,21 @@ export class ForestInteractor {
   reset(): void {
     this.pending = null;
     this.windowFor = null;
-    this.last = { target: null, prompt: null, window: null, opening: null };
+    this.buildOpen = false;
+    this.last = { target: null, prompt: null, window: null, opening: null, buildWindow: false };
   }
 
   private settle(state: GameState, pose: ViewPose | null, now: number): void {
     if (state.view !== "forest" || state.dead || state.phase !== "playing") {
       this.pending = null;
       this.windowFor = null;
+      this.buildOpen = false;
       return;
+    }
+    if (this.buildOpen) {
+      const site = state.world?.anchors?.bridge.west;
+      const far = !pose || !site || Math.hypot(site.x - pose.x, site.z - pose.z) > BUILD_PROMPT_RANGE + 1.5;
+      if (state.bridge.built || far) this.buildOpen = false;
     }
     const p = this.pending;
     if (p) {
@@ -178,6 +228,7 @@ function sameSnapshot(a: InteractorSnapshot, b: InteractorSnapshot): boolean {
     a.prompt?.text === b.prompt?.text &&
     a.prompt?.key === b.prompt?.key &&
     a.window?.id === b.window?.id &&
-    a.window?.taken === b.window?.taken
+    a.window?.taken === b.window?.taken &&
+    a.buildWindow === b.buildWindow
   );
 }

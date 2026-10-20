@@ -23,6 +23,7 @@ import { useForestAudio } from "./useForestAudio";
 import { ForestHand } from "./ForestHand";
 import { TrollTestDialog } from "./TrollTestDialog";
 import { TrollDialog } from "./TrollDialog";
+import { BridgeBuildDialog } from "./BridgeBuildDialog";
 import { TrollMaterialDiagnostics } from "./TrollMaterialDiagnostics";
 import { Minimap } from "./Minimap";
 import { useGamePause } from "./quest/useGamePause";
@@ -31,7 +32,7 @@ import type { TrollMaterialMode } from "@/lib/npc/trollMaterials";
 
 const MINIMAP_KEY = "miasto.forest.minimap";
 const POLL_MS = 100;
-const NO_INTERACTION: InteractorSnapshot = { target: null, prompt: null, window: null, opening: null };
+const NO_INTERACTION: InteractorSnapshot = { target: null, prompt: null, window: null, opening: null, buildWindow: false };
 
 function readMinimap(): boolean {
   try {
@@ -335,7 +336,9 @@ export function ForestWorldView({
   const windowOpen = snap.window !== null;
   useGamePause(dispatch, "ui.panel", "ui.chest", windowOpen);
   useGamePause(dispatch, "ui.panel", "ui.troll_test", trollDialog);
-  const frozen = suspended || windowOpen || trollDialog || trollMessage !== null;
+  const buildOpen = snap.buildWindow;
+  useGamePause(dispatch, "ui.panel", "ui.bridge_build", buildOpen);
+  const frozen = suspended || windowOpen || buildOpen || trollDialog || trollMessage !== null;
   const npcDialog = trollDialog || trollMessage !== null || gameState.dialog !== null;
   const saveId = gameState.world?.saveId ?? null;
   const getPose = useCallback(() => rendererRef.current?.getPose() ?? null, []);
@@ -348,8 +351,8 @@ export function ForestWorldView({
     g.suspended = frozen;
   }, [frozen]);
   useEffect(() => {
-    if (windowOpen || trollDialog || trollMessage !== null || gameState.dialog) document.exitPointerLock?.();
-  }, [windowOpen, trollDialog, trollMessage, gameState.dialog]);
+    if (windowOpen || buildOpen || trollDialog || trollMessage !== null || gameState.dialog) document.exitPointerLock?.();
+  }, [windowOpen, buildOpen, trollDialog, trollMessage, gameState.dialog]);
 
   const resolveTrollDialog = useCallback((outcome: DialogOutcome) => {
     if (!trollDialogRef.current) return;
@@ -682,6 +685,18 @@ export function ForestWorldView({
         </DialogContent>
       </Dialog>
 
+      <BridgeBuildDialog
+        open={buildOpen}
+        state={gameState}
+        onBuild={() => {
+          interactor.confirmBuild();
+          setSnap(interactor.snapshot);
+        }}
+        onClose={() => {
+          interactor.closeBuildWindow();
+          setSnap(interactor.snapshot);
+        }}
+      />
       <TrollDialog dialog={gameState.dialog} message={trollMessage} onChoose={chooseTroll} onAnswer={answerTroll} onClose={closeTroll} />
       <TrollTestDialog open={trollDialog} onOutcome={resolveTrollDialog} />
     </section>

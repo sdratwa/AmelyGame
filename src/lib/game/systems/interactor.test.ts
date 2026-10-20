@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { reducer, type Command } from "../core/apply";
 import type { GameState } from "../core/state";
-import { harvestTargets, inForest, newPlaying, run, slotsFrom, unlockToolOrder } from "../testkit";
+import { anchorsOf, grantItem, harvestTargets, inForest, newPlaying, run, slotsFrom, unlockToolOrder } from "../testkit";
 import { forestChestsOf, forestObject } from "../world/lookup";
 import { countOf } from "./containers";
 import { CHEST_WINDOW_DELAY_MS, ForestInteractor, OPEN_CONFIRM_TIMEOUT_MS } from "./interactor";
@@ -196,5 +196,103 @@ describe("M1/C1: kontroler interakcji (E, okno skrzyni)", () => {
     h.state = { ...h.state, dead: true };
     expect(interactor.poll().target).toBeNull();
     expect(interactor.press()).toBe(false);
+  });
+});
+
+describe("Most: okno budowy i odkrycie obszaru (kontroler interakcji)", () => {
+  /** Gracz ma schemat i komplet materiałów (bez zbierania), stoi przy zachodnim lądowisku. */
+  const ready = (extra?: { wood?: number; stone?: number; blueprint?: boolean }) => {
+    let state = inForest(run(newPlaying(SEED), { type: "quest.accept", id: "quest.bridge_01" }));
+    if (extra?.blueprint !== false) state = grantItem(state, "item.bridge_blueprint", 1);
+    state = grantItem(state, "resource.wood", extra?.wood ?? 5);
+    state = grantItem(state, "resource.stone", extra?.stone ?? 10);
+    const west = anchorsOf(state).bridge.west;
+    const ctx = harness(state);
+    ctx.h.pose = { x: west.x + 0.5, z: west.z, yaw: 0 };
+    return { ...ctx, west };
+  };
+
+  it("E przy miejscu budowy ze schematem otwiera okno, ale nie buduje; budowa tylko przyciskiem w oknie", () => {
+    const { h, interactor } = ready();
+    expect(interactor.poll().prompt).toEqual({ key: "E", text: "Zbuduj most", tone: "action" });
+    expect(interactor.press()).toBe(true);
+    expect(interactor.snapshot.buildWindow).toBe(true);
+    expect(h.dispatched).toEqual([]);
+    expect(h.state.bridge.built).toBe(false);
+    interactor.confirmBuild();
+    expect(h.dispatched.map((c) => c.type)).toEqual(["bridge.build"]);
+    expect(h.state.bridge.built).toBe(true);
+    expect(interactor.snapshot.buildWindow).toBe(false);
+    expect(countOf(h.state.slots, "resource.wood")).toBe(0);
+    expect(countOf(h.state.slots, "resource.stone")).toBe(0);
+  });
+
+  it("zamknięcie okna nic nie zmienia, a podwójne zatwierdzenie nie buduje ani nie zabiera materiałów drugi raz", () => {
+    const { h, interactor } = ready({ wood: 7, stone: 12 });
+    interactor.poll();
+    interactor.press();
+    interactor.closeBuildWindow();
+    expect(interactor.snapshot.buildWindow).toBe(false);
+    expect(h.state.bridge.built).toBe(false);
+    interactor.press();
+    interactor.confirmBuild();
+    interactor.confirmBuild();
+    expect(h.dispatched.filter((c) => c.type === "bridge.build")).toHaveLength(1);
+    expect(countOf(h.state.slots, "resource.wood")).toBe(2);
+    expect(countOf(h.state.slots, "resource.stone")).toBe(2);
+  });
+
+  it("bez schematu podpowiedź jest tylko komunikatem i E nie otwiera okna", () => {
+    const { h, interactor } = ready({ blueprint: false });
+    expect(interactor.poll().prompt).toEqual({ key: null, text: "Tutaj kiedyś stał most.", tone: "blocked" });
+    interactor.press();
+    expect(interactor.snapshot.buildWindow).toBe(false);
+    expect(h.dispatched.filter((c) => c.type === "bridge.build")).toEqual([]);
+  });
+
+  it("brak materiałów: silnik odrzuca budowę, nic nie jest zabrane i most nie stoi", () => {
+    const { h, interactor } = ready({ wood: 4 });
+    interactor.poll();
+    interactor.press();
+    interactor.confirmBuild();
+    expect(h.state.bridge.built).toBe(false);
+    expect(countOf(h.state.slots, "resource.wood")).toBe(4);
+    expect(countOf(h.state.slots, "resource.stone")).toBe(10);
+  });
+
+  it("okno budowy zamyka się samo po odejściu od miejsca budowy", () => {
+    const { h, interactor, west } = ready();
+    interactor.poll();
+    interactor.press();
+    expect(interactor.snapshot.buildWindow).toBe(true);
+    h.pose = { x: west.x - 40, z: west.z, yaw: 0 };
+    expect(interactor.poll().buildWindow).toBe(false);
+  });
+
+  it("po zbudowaniu przejście na drugi brzeg (w obu kierunkach) odkrywa obszar dokładnie raz i kończy quest", () => {
+    const { h, interactor } = ready();
+    interactor.poll();
+    interactor.press();
+    interactor.confirmBuild();
+    const beyond = anchorsOf(h.state).beyond;
+    h.pose = { x: beyond.x, z: beyond.z, yaw: 0 };
+    interactor.poll();
+    expect(h.state.discovered).toContain(beyond.region);
+    const count = h.dispatched.filter((c) => c.type === "region.discover").length;
+    expect(count).toBe(1);
+    const money = h.state.wallet;
+    interactor.poll();
+    interactor.poll();
+    expect(h.dispatched.filter((c) => c.type === "region.discover")).toHaveLength(1);
+    expect(h.state.wallet).toBe(money);
+    expect(h.state.badges.filter((b) => b === "badge.explorer")).toHaveLength(1);
+  });
+
+  it("przed zbudowaniem mostu samo stanie w obszarze za rzeką nie odkrywa go", () => {
+    const { h, interactor } = ready();
+    const beyond = anchorsOf(h.state).beyond;
+    h.pose = { x: beyond.x, z: beyond.z, yaw: 0 };
+    interactor.poll();
+    expect(h.state.discovered).not.toContain(beyond.region);
   });
 });

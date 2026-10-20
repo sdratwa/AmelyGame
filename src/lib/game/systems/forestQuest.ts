@@ -280,8 +280,13 @@ export function claimDeposit(state: GameState, at: At): CommandResult {
 
 /* ---------- most i odkrycie ---------- */
 
+/**
+ * Budowa mostu jest atomowa: silnik sam sprawdza (nie ufa oknu budowy) most nie zbudowany, miejsce, schemat w
+ * ekwipunku i komplet materiałów z jednego źródła (`RECIPE_BRIDGE_01`), po czym w jednej zmianie stanu zabiera materiały,
+ * zapisuje wydatek w księdze i ustawia `bridge.built`. Powtórzone lub równoległe komendy nie zabierają materiałów drugi raz.
+ */
 export function buildBridge(state: GameState, at: At): CommandResult {
-  if (!alive(state) || !validAt(at)) return unchanged(state);
+  if (!alive(state) || !validAt(at) || state.view !== "forest") return unchanged(state);
   const anchors = state.world!.anchors!;
   if (state.bridge.built) return unchanged(state);
   if (distance2(at, anchors.bridge.west) > BUILD_RANGE) {
@@ -296,7 +301,9 @@ export function buildBridge(state: GameState, at: At): CommandResult {
   let slots = state.slots;
   let ledger = state.ledger;
   for (const r of RECIPE_BRIDGE_01.requires) {
-    slots = removeFromSlots(slots, r.id, r.count).slots;
+    const taken = removeFromSlots(slots, r.id, r.count);
+    if (!taken.ok) return fail(state, "Brakuje materiałów na most.", { type: "bridge.build_failed", reason: "missing_materials" });
+    slots = taken.slots;
     ledger = spend(ledger, r.id, r.count);
   }
   return result(

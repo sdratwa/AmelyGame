@@ -77,6 +77,55 @@
         "author": "dostarczone przez autora projektu Miasto",
         "note": "Trzy siatki z teksturami koloru; pivot zawiasu wyliczony z geometrii pokrywy (tylna dolna krawędź), pokrywa przesunięta do układu zawiasu."
       }
+    },
+    {
+      "id": "bridge.wooden",
+      "file": "bridge.glb",
+      "kind": "bridge",
+      "bytes": 2454808,
+      "triangles": 49999,
+      "mesh": "Bridge_Visual",
+      "sourceBounds": {
+        "min": [
+          -0.5052,
+          -0.2905,
+          -0.8414
+        ],
+        "max": [
+          0.5067,
+          0.3984,
+          0.8443
+        ]
+      },
+      "worldScale": 5.8,
+      "textures": [
+        {
+          "node": "Bridge_Visual",
+          "role": "baseColor",
+          "size": [
+            2048,
+            2048
+          ],
+          "format": "jpeg"
+        },
+        {
+          "node": "Bridge_Visual",
+          "role": "metallicRoughness",
+          "size": [
+            1024,
+            1024
+          ],
+          "format": "jpeg"
+        }
+      ],
+      "source": {
+        "file": "assets/source/miasto_bridge_optimized.glb",
+        "sha256": "f8758699c4c08611b70f241a1c1677df8e2803d32d08776520508623f87ff18a",
+        "sourceMeshes": 1,
+        "sourceTriangles": 49999,
+        "author": "dostarczone przez autora projektu Miasto",
+        "note": "Jedna siatka z teksturą koloru i metallicRoughness; gotowy plik bez zmian (kopia 1:1). Dopasowanie do rzeki: cięcie na moduły i powielanie segmentów środka w czasie ładowania (bridgeModules.ts), bez modyfikacji pliku."
+      }
     }
   ]
 }

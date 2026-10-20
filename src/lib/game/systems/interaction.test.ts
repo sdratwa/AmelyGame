@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { applyCommand } from "../core/apply";
-import { CHEST_RANGE, HARVEST_PROMPT_RANGE, HARVEST_RANGE, CHEST_PROMPT_RANGE } from "../core/constants";
+import { BUILD_PROMPT_RANGE, CHEST_RANGE, HARVEST_PROMPT_RANGE, HARVEST_RANGE, CHEST_PROMPT_RANGE } from "../core/constants";
 import type { GameState } from "../core/state";
 import { harvestOf } from "../world/harvest";
 import { forestChestsOf, forestObject } from "../world/lookup";
-import { harvestTargets, inForest, newPlaying, run, unlockToolOrder } from "../testkit";
+import { anchorsOf, grantItem, harvestTargets, inForest, newPlaying, run, unlockToolOrder } from "../testkit";
 import { slotsFrom } from "../testkit";
 import { describePrompt, interactionCommand, pickInteraction, type ViewPose } from "./interaction";
 import { countOf } from "./containers";
@@ -136,5 +136,31 @@ describe("M1/C1: wybór obiektu do interakcji", () => {
     const out = applyCommand(s, { type: "harvest", objectId: tree.id, at: tree.at });
     expect(out.state.harvested).toEqual([]);
     expect(countOf(out.state.slots, "resource.wood")).toBe(0);
+  });
+});
+
+describe("Most: miejsce budowy jako cel interakcji", () => {
+  const west = () => anchorsOf(forestState()).bridge.west;
+
+  it("w zasięgu przy zachodnim lądowisku, w obu wariantach (ze schematem i bez), bez wymogu patrzenia w punkt", () => {
+    const base = forestState();
+    const w = west();
+    const pose = { x: w.x + 2, z: w.z, yaw: 1.1 };
+    const without = pickInteraction(base, pose);
+    expect(without).toMatchObject({ kind: "bridge_site", hasBlueprint: false });
+    expect(describePrompt(base, without!)).toEqual({ key: null, text: "Tutaj kiedyś stał most.", tone: "blocked" });
+    const withBp = grantItem(base, "item.bridge_blueprint", 1);
+    const t = pickInteraction(withBp, pose);
+    expect(t).toMatchObject({ kind: "bridge_site", hasBlueprint: true });
+    expect(describePrompt(withBp, t!)).toEqual({ key: "E", text: "Zbuduj most", tone: "action" });
+    expect(interactionCommand(t!, pose)).toBeNull();
+  });
+
+  it("poza zasięgiem i po zbudowaniu mostu miejsce nie jest celem", () => {
+    const w = west();
+    const far = { x: w.x - BUILD_PROMPT_RANGE - 5, z: w.z, yaw: 0 };
+    expect(pickInteraction(forestState(), far)?.kind).not.toBe("bridge_site");
+    const built = { ...grantItem(forestState(), "item.bridge_blueprint", 1), bridge: { ...forestState().bridge, built: true } } as GameState;
+    expect(pickInteraction(built, { x: w.x + 1, z: w.z, yaw: 0 })?.kind).not.toBe("bridge_site");
   });
 });

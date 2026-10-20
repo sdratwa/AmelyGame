@@ -29,6 +29,12 @@ export class FirstPersonController {
   flags: WorldFlags | undefined;
   /** Ruchome okręgi kolizji (NPC): gracz nie wchodzi w nie, ale też nie zostaje wypchnięty w drzewo lub rzekę. */
   blockers: readonly Blocker[] = [];
+  /**
+   * Dodatkowa warstwa powierzchni (pokład mostu): wysokość pod punktem albo null poza pokładem. Teren nadal pochodzi
+   * wyłącznie z `terrain.height`; tu bierzemy wyższą z obu wartości, więc oczy nigdy nie schodzą poniżej gruntu.
+   * Ustawiana tylko, gdy most jest zbudowany.
+   */
+  deckHeight: ((x: number, z: number) => number | null) | null = null;
 
   constructor(
     private readonly walk: WalkWorld,
@@ -38,11 +44,18 @@ export class FirstPersonController {
     this.state = { x: start.x, z: start.z, yaw: start.yaw, pitch: -0.05, eyeY: terrain.height(start.x, start.z) + EYE_HEIGHT };
   }
 
+  /** Wysokość powierzchni, po której chodzi gracz: teren albo (na zbudowanym moście) wyższy pokład. */
+  groundAt(x: number, z: number): number {
+    const terrain = this.terrain.height(x, z);
+    const deck = this.deckHeight?.(x, z);
+    return deck == null ? terrain : Math.max(terrain, deck);
+  }
+
   teleport(x: number, z: number, yaw = this.state.yaw): void {
     this.state.x = x;
     this.state.z = z;
     this.state.yaw = yaw;
-    this.state.eyeY = this.terrain.height(x, z) + EYE_HEIGHT;
+    this.state.eyeY = this.groundAt(x, z) + EYE_HEIGHT;
   }
 
   look(dx: number, dy: number, sensitivity = 0.0022): void {
@@ -94,7 +107,7 @@ export class FirstPersonController {
       s.z = result.z;
       this.lastBlock = result.blocked.length > 0 ? `${result.blocked[0].reason}${result.blocked[0].by ? `:${result.blocked[0].by}` : ""}` : null;
     }
-    const target = this.terrain.height(s.x, s.z) + EYE_HEIGHT;
+    const target = this.groundAt(s.x, s.z) + EYE_HEIGHT;
     s.eyeY += (target - s.eyeY) * (1 - Math.exp(-14 * Math.max(step, 1 / 240)));
     return moved;
   }

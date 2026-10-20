@@ -181,6 +181,13 @@ export function GameApp() {
     autosaverRef.current?.update(state);
   }, [state, enabledAutosave]);
 
+  // Kamienie milowe (zbudowany most, odkryty obszar, ukończone zadanie) zapisują się od razu, bez czekania na debounce.
+  const milestones = `${state.bridge.built ? 1 : 0}|${state.discovered.length}|${Object.keys(state.quests.completed).length}`;
+  useEffect(() => {
+    if (!enabledAutosave) return;
+    autosaverRef.current?.flush();
+  }, [milestones, enabledAutosave]);
+
   const saveNow = useCallback(async () => {
     const autosaver = autosaverRef.current;
     if (!autosaver) return;

@@ -1,5 +1,6 @@
 import type { ItemId } from "../content/items";
-import { CHEST_PROMPT_RANGE, HARVEST_PROMPT_RANGE } from "../core/constants";
+import { BUILD_PROMPT_RANGE, CHEST_PROMPT_RANGE, HARVEST_PROMPT_RANGE } from "../core/constants";
+import { RECIPE_BRIDGE_01 } from "../content/quests";
 import type { ChestId } from "../core/ids";
 import type { GameState } from "../core/state";
 import { harvestOf, type HarvestKind, type HarvestSize } from "../world/harvest";
@@ -12,7 +13,9 @@ export type ViewPose = { x: number; z: number; yaw: number };
 
 export type InteractTarget =
   | { kind: "chest"; id: ChestId; distance: number; action: "open" | "peek"; locked: boolean; lockReason: "troll" | "order" | null }
-  | { kind: "tree" | "rock"; id: string; distance: number; size: HarvestSize; amount: number };
+  | { kind: "tree" | "rock"; id: string; distance: number; size: HarvestSize; amount: number }
+  /** Miejsce budowy mostu (obszar przy zachodnim lądowisku, bez wymogu patrzenia w jeden punkt). */
+  | { kind: "bridge_site"; id: "bridge.site"; distance: number; hasBlueprint: boolean };
 
 export type PromptTone = "action" | "blocked";
 export type Prompt = { key: "E" | null; text: string; tone: PromptTone };
@@ -69,6 +72,15 @@ export function pickInteraction(state: GameState, pose: ViewPose): InteractTarge
     });
   }
 
+  const anchors = state.world.anchors;
+  if (anchors && !state.bridge.built) {
+    const distance = Math.hypot(anchors.bridge.west.x - pose.x, anchors.bridge.west.z - pose.z);
+    if (distance <= BUILD_PROMPT_RANGE) {
+      // Obszar, nie punkt: wygrywa z drzewami i skałami w pobliżu (wynik niższy niż typowy wynik zbierania).
+      consider(0.2, { kind: "bridge_site", id: "bridge.site", distance, hasBlueprint: countOf(state.slots, RECIPE_BRIDGE_01.blueprint) >= 1 });
+    }
+  }
+
   const gone = new Set(state.harvested);
   for (const o of forestOf(seed).collidersNear(pose.x, pose.z, HARVEST_PROMPT_RANGE)) {
     const info = harvestOf(o);
@@ -93,6 +105,11 @@ export function toolFor(kind: HarvestKind): ItemId {
 
 /** Tekst podpowiedzi dla celu. Gdy brakuje narzędzia lub skrzynię pilnuje troll, podpowiedź jest komunikatem bez akcji. */
 export function describePrompt(state: GameState, target: InteractTarget): Prompt {
+  if (target.kind === "bridge_site") {
+    return target.hasBlueprint
+      ? { key: "E", text: "Zbuduj most", tone: "action" }
+      : { key: null, text: "Tutaj kiedyś stał most.", tone: "blocked" };
+  }
   if (target.kind === "chest") {
     if (target.locked) {
       return {
@@ -126,6 +143,8 @@ export function interactionCommand(target: InteractTarget, pose: ViewPose):
   | { type: "harvest"; objectId: string; at: { x: number; z: number } }
   | null {
   const at = { x: pose.x, z: pose.z };
+  // Budowa mostu nie wysyła komendy od razu: E otwiera okno z materiałami, a komendę wysyła przycisk w oknie.
+  if (target.kind === "bridge_site") return null;
   if (target.kind === "chest") return target.action === "open" ? { type: "chest.open", id: target.id, at } : null;
   return { type: "harvest", objectId: target.id, at };
 }
