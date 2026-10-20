@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, getClock, trackedQuest } from "@/lib/game/engine";
 import { hydrateState } from "@/lib/game/save/hydrate";
-import type { SaveV2 } from "@/lib/game/save/schema";
+import type { SaveV3 } from "@/lib/game/save/schema";
 import { FrogLogo } from "./art";
 
 export function NameScreen({
@@ -35,7 +35,7 @@ export function NameScreen({
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Gra Miasto</h1>
           <p className="mt-2 text-sm text-slate-300">
-            Jest zima 2030. Masz telefon, milion złotych i trochę czasu, zanim
+            Jest zima 2030. Masz milion złotych i trochę czasu, zanim
             zimno zacznie dawać się we znaki. Jak masz na imię?
           </p>
         </div>
@@ -103,7 +103,7 @@ export function ContinueScreen({
   onContinue,
   onNewGame,
 }: {
-  save: SaveV2;
+  save: SaveV3;
   notice?: string;
   onContinue: () => void;
   onNewGame: () => void;
@@ -255,7 +255,7 @@ const TIPS = [
   "Zimą w dzień życie spada o 1% co 10 s, a w nocy aż co 5 s.",
   "W sklepie Żappka możesz się schronić przed zimnem.",
   "Jedzenie z ekwipunku leczy – zaznacz je i naciśnij E.",
-  "Telefon zawsze zostaje z Tobą, nawet po śmierci.",
+  "Po odrodzeniu zostają Ci narzędzia, schemat i materiały, a jedzenie przepada.",
 ];
 
 export function LoadingScreen({
@@ -342,8 +342,8 @@ export function DeathOverlay({ onRespawn }: { onRespawn: () => void }) {
           Nie przetrwałeś
         </h2>
         <p className="mt-2 text-sm text-slate-300">
-          Życie spadło do zera. Odrodzisz się na mapie świata z pełnym zdrowiem
-          i telefonem – pozostałe przedmioty przepadną.
+          Życie spadło do zera. Odrodzisz się na mapie świata z pełnym zdrowiem.
+          Jedzenie przepadnie, ale narzędzia, schemat i materiały zostaną.
         </p>
         <Button
           autoFocus

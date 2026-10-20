@@ -11,7 +11,7 @@ import { isTimePaused, pauseReasons } from "../core/pause";
 import type { GameState } from "../core/state";
 import { hydrateState } from "../save/hydrate";
 import { serializeState } from "../save/serialize";
-import { validateSaveV2 } from "../save/validate";
+import { validateSaveV3 } from "../save/validate";
 import { anchorsOf, autoComplete, harvestTarget, harvestTargets, inForest, near, newPlaying, run, unlockToolOrder } from "../testkit";
 import { countOf, inventoryProblems } from "./containers";
 import { riddleFor } from "./forestQuest";
@@ -43,14 +43,14 @@ class Game {
     const s = this.state;
     expect(inventoryProblems(s.slots, s.troll.deposit, s.ledger)).toEqual([]);
     const save = serializeState(s, 1)!;
-    const valid = validateSaveV2(JSON.parse(JSON.stringify(save)));
+    const valid = validateSaveV3(JSON.parse(JSON.stringify(save)));
     expect(valid.ok ? [] : valid.problems).toEqual([]);
     expect(serializeState(hydrateState(save), 1)).toEqual(save);
   }
   /** Zapis i ponowne wczytanie gry (jak zamknięcie i otwarcie karty). */
   reload() {
     const save = JSON.parse(JSON.stringify(serializeState(this.state, 1)));
-    const valid = validateSaveV2(save);
+    const valid = validateSaveV3(save);
     if (!valid.ok) throw new Error(valid.problems.join("; "));
     this.state = hydrateState(valid.value);
     this.check();
@@ -149,7 +149,7 @@ describe("Q1: skrzynie", () => {
 
   it("pełny ekwipunek zostawia przedmiot w skrzyni, a po zrobieniu miejsca można go odebrać", () => {
     const g = new Game();
-    for (let i = 0; i < 7; i++) g.do({ type: "buy", item: "item.water" });
+    for (let i = 0; i < 8; i++) g.do({ type: "buy", item: "item.water" });
     const id = "chest.bridge.saw";
     g.unlockOrder();
     g.do({ type: "chest.open", id, at: near(g.chest(id)) });
@@ -238,7 +238,7 @@ describe("Q1: troll, konfiskata i depozyt", () => {
     return g;
   }
 
-  it("pierwsza nieudana konfrontacja zabiera wszystko poza telefonem, nie rusza pieniędzy i odsyła do miasta", () => {
+  it("pierwsza nieudana konfrontacja zabiera wszystkie przedmioty, nie rusza pieniędzy i odsyła do miasta", () => {
     const g = new Game();
     g.openAndTake("chest.bridge.pickaxe");
     g.do({ type: "buy", item: "item.coffee" });
@@ -248,7 +248,7 @@ describe("Q1: troll, konfiskata i depozyt", () => {
     expect(g.state.dialog?.stage).toBe("intro");
     const ev = g.do({ type: "troll.choose", choice: "fight" });
     expect(eventTypes(ev)).toContain("troll.confiscated");
-    expect(g.state.slots.filter(Boolean)).toEqual([{ id: "item.phone", count: 1 }]);
+    expect(g.state.slots.filter(Boolean)).toEqual([]);
     expect(g.state.wallet).toBe(wallet);
     expect(g.state.view).toBe("world");
     expect(g.state.dialog).toBeNull();
@@ -262,7 +262,7 @@ describe("Q1: troll, konfiskata i depozyt", () => {
     expect(g.state.troll.phase).toBe("confronted");
     g.reload();
     expect(g.state.troll.deposit).toHaveLength(2);
-    expect(g.state.slots[0]).toEqual({ id: "item.phone", count: 1 });
+    expect(g.state.slots.filter(Boolean)).toEqual([]);
   });
 
   it("ponowna próba dopiero następnego dnia gry, a cel odzyskania pojawia się w zadaniu", () => {
@@ -367,14 +367,14 @@ describe("Q1: troll, konfiskata i depozyt", () => {
   it("odbiór depozytu przy pełnym ekwipunku: reszta zostaje u trolla i nic nie ginie", () => {
     const g = confiscated();
     g.advanceTo(g.state.troll.lockUntil);
-    for (let i = 0; i < 7; i++) g.do({ type: "buy", item: "item.water" });
+    for (let i = 0; i < 8; i++) g.do({ type: "buy", item: "item.water" });
     g.do({ type: "troll.talk", at: near(g.a.troll) });
     const ev = g.do({ type: "riddle.answer", value: RIDDLE_BY_ID.get(g.state.dialog!.riddle!)!.answer });
     expect(eventTypes(ev)).toEqual(["troll.riddle_answered"]);
     expect(g.state.troll.phase).toBe("solved");
     expect(g.state.troll.deposit.length).toBe(3);
     expect(eventTypes(g.do({ type: "troll.claim", at: near(g.a.troll) }))).toEqual(["troll.claim_failed"]);
-    for (let slot = 1; slot <= 7; slot++) g.do({ type: "discard", slot });
+    for (let slot = 0; slot <= 7; slot++) g.do({ type: "discard", slot });
     g.do({ type: "troll.claim", at: near(g.a.troll) });
     expect(g.state.troll.deposit).toEqual([]);
     expect(g.has("item.pickaxe") + g.has("item.saw")).toBe(2);
@@ -389,7 +389,7 @@ describe("Q1: troll, konfiskata i depozyt", () => {
     g.do({ type: "troll.talk", at: near(g.a.troll) });
     g.do({ type: "troll.choose", choice: "fight" });
     g.advanceTo(g.state.troll.lockUntil);
-    for (let i = 0; i < 6; i++) g.do({ type: "buy", item: "item.coffee" });
+    for (let i = 0; i < 7; i++) g.do({ type: "buy", item: "item.coffee" });
     g.do({ type: "troll.talk", at: near(g.a.troll) });
     g.do({ type: "riddle.answer", value: RIDDLE_BY_ID.get(g.state.dialog!.riddle!)!.answer });
     for (let guard = 0; guard < 12 && g.state.troll.deposit.length > 0; guard++) {
@@ -464,7 +464,7 @@ describe("Q1: pozyskiwanie surowców", () => {
   it("brak miejsca nie zużywa obiektu: surowiec nie ginie", () => {
     const g = new Game();
     g.openAndTake("chest.bridge.saw");
-    for (let i = 0; i < 6; i++) g.do({ type: "buy", item: "item.water" });
+    for (let i = 0; i < 7; i++) g.do({ type: "buy", item: "item.water" });
     const before = g.state.harvested.length;
     const full = harvestTarget(g.seed, "tree", "l", 5);
     expect(eventTypes(g.do({ type: "harvest", objectId: full.id, at: full.at }))).toEqual(["harvest.failed"]);
@@ -702,11 +702,11 @@ describe("Q1: odrodzenie i dyskretne scenariusze bez softlocka", () => {
         g.harvest("tree", "l", 3);
       },
       (g) => {
-        for (let i = 0; i < 7; i++) g.do({ type: "buy", item: "item.water" });
+        for (let i = 0; i < 8; i++) g.do({ type: "buy", item: "item.water" });
         g.do({ type: "troll.talk", at: near(g.a.troll) });
         g.do({ type: "troll.choose", choice: "fight" });
         g.forest();
-        for (let i = 0; i < 7; i++) g.do({ type: "buy", item: "item.coffee" });
+        for (let i = 0; i < 8; i++) g.do({ type: "buy", item: "item.coffee" });
       },
       (g) => {
         g.do({ type: "troll.talk", at: near(g.a.troll) });

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ForestRenderer, type PanelStats } from "@/lib/forest-view";
 import type { QualityId } from "@/lib/assets";
-import { ITEMS, type Command, type ForestPose, type GameState, type ItemId } from "@/lib/game/engine";
+import { ITEMS, type Command, type ForestPose, type GameState } from "@/lib/game/engine";
 import { applyCommand } from "@/lib/game/core/apply";
 import { ForestInteractor, type InteractorSnapshot } from "@/lib/game/systems/interactor";
 import { dispatchWithReactions } from "@/lib/game/systems/npcReactions";
@@ -20,7 +20,6 @@ import { nextClockTime } from "@/lib/game/systems/devClock";
 import { AudioControls } from "./AudioControls";
 import { AudioDiagnostics, type AudioSnapshot } from "./AudioDiagnostics";
 import { useForestAudio } from "./useForestAudio";
-import { ForestHand } from "./ForestHand";
 import { TrollTestDialog } from "./TrollTestDialog";
 import { TrollDialog } from "./TrollDialog";
 import { BridgeBuildDialog } from "./BridgeBuildDialog";
@@ -61,7 +60,6 @@ export type ForestWorldViewProps = {
   hour: number;
   quality: QualityId;
   onQualityChange: (quality: QualityId) => void;
-  held: ItemId | null;
   /** Panel (dziennik, dialog) zawiesza sterowanie. */
   suspended: boolean;
   onPose: (pose: ForestPose) => void;
@@ -237,7 +235,6 @@ export function ForestWorldView({
   hour,
   quality,
   onQualityChange,
-  held,
   suspended,
   onPose,
   onLeave,
@@ -665,8 +662,6 @@ export function ForestWorldView({
           <Button onClick={onLeave}>Wróć do miasta</Button>
         </div>
       )}
-
-      {!loading && !error && <ForestHand item={held} />}
 
       <Dialog open={windowOpen} onOpenChange={(o) => !o && interactor.closeWindow()}>
         <DialogContent className="max-w-sm border-amber-200/30 bg-slate-900 text-white" data-testid="chest-window">

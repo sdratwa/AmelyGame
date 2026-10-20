@@ -143,7 +143,7 @@ describe("M1/C1: kontroler interakcji (E, okno skrzyni)", () => {
     expect(h.state.chests["chest.bridge.saw"]).toEqual({ opened: true, taken: false });
     expect(interactor.poll().window).toMatchObject({ id: "chest.bridge.saw", taken: false });
     expect(h.state.toast?.tone).toBe("error");
-    h.state = { ...h.state, slots: slotsFrom(["item.phone"]) };
+    h.state = { ...h.state, slots: slotsFrom([]) };
     interactor.takeFromWindow();
     expect(countOf(h.state.slots, "item.saw")).toBe(1);
   });
@@ -173,7 +173,7 @@ describe("M1/C1: kontroler interakcji (E, okno skrzyni)", () => {
     expect(h.state.harvested).toEqual([]);
     expect(h.state.toast?.tone).toBe("error");
 
-    h.state = { ...h.state, slots: slotsFrom(["item.phone", "item.saw"]), ledger: { ...h.state.ledger, gained: { ...h.state.ledger.gained, "item.saw": 1 } } };
+    h.state = { ...h.state, slots: slotsFrom(["item.saw"]), ledger: { ...h.state.ledger, gained: { ...h.state.ledger.gained, "item.saw": 1 } } };
     const t = interactor.poll();
     expect(t.prompt?.key).toBe("E");
     const targetId = t.target!.id;

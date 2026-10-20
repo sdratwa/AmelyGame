@@ -90,7 +90,7 @@ export function addToPile(pile: readonly ItemStack[], id: ItemId, count: number)
   return next;
 }
 
-/** Zabiera z kontenera wszystko, co nie jest chronione (telefon zostaje); zwraca zabrane sumy w stałej kolejności. */
+/** Zabiera z kontenera wszystko, co nie jest chronione (przedmioty z flagą `protected`, obecnie żaden); zwraca zabrane sumy w stałej kolejności. */
 export function confiscate(slots: readonly (ItemStack | null)[]): { slots: Slots; taken: ItemStack[] } {
   let taken: ItemStack[] = [];
   const next: Slots = slots.map((s) => {

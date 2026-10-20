@@ -355,7 +355,6 @@ export function GameApp() {
       : { kind: "idle", lastAt: lastSavedAt };
   const clock = getClock(state.elapsed);
   const sheltered = isSheltered(state);
-  const heldId = state.slots[state.selected]?.id ?? null;
 
   return (
     <div className="relative flex h-full flex-col">
@@ -391,7 +390,6 @@ export function GameApp() {
             hour={clock.hour + clock.minute / 60}
             quality={forestQuality}
             onQualityChange={changeForestQuality}
-            held={heldId}
             suspended={panel !== null || !!state.dialog || state.dead}
             onPose={onPose}
             onLeave={leave}

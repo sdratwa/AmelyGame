@@ -14,16 +14,3 @@ export function FrogLogo({ size = 40 }: { size?: number }) {
     </svg>
   );
 }
-
-
-export function PhoneIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 40 64" className={className} aria-hidden>
-      <rect x="2" y="2" width="36" height="60" rx="7" fill="#1f2937" stroke="#94a3b8" strokeWidth="2" />
-      <rect x="6" y="9" width="28" height="42" rx="2" fill="#38bdf8" />
-      <rect x="9" y="13" width="22" height="4" rx="1" fill="#e0f2fe" opacity={0.9} />
-      <rect x="9" y="21" width="14" height="3" rx="1" fill="#e0f2fe" opacity={0.7} />
-      <circle cx="20" cy="57" r="2" fill="#94a3b8" />
-    </svg>
-  );
-}

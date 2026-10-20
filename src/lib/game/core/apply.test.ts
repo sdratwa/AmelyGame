@@ -56,7 +56,7 @@ describe("applyCommand", () => {
 
   it("nieudany zakup informuje o powodzie", () => {
     const full = playing({
-      slots: slotsFrom(["item.phone", "item.water", "item.water", "item.water", "item.water", "item.water", "item.water", "item.water"]),
+      slots: slotsFrom(["item.water", "item.water", "item.water", "item.water", "item.water", "item.water", "item.water", "item.water"]),
     });
     expect(applyCommand(full, { type: "buy", item: "item.water" }).events).toEqual([
       { type: "item.purchase_failed", item: "item.water", reason: "inventory_full" },
@@ -78,7 +78,7 @@ describe("applyCommand", () => {
 
   it("jedzenie, śmierć i odrodzenie emitują zdarzenia", () => {
     const eat = applyCommand(
-      playing({ health: 50, slots: slotsFrom(["item.phone", "item.hotdog", null, null, null, null, null, null]), selected: 1 }),
+      playing({ health: 50, slots: slotsFrom(["item.hotdog", null, null, null, null, null, null, null]), selected: 0 }),
       { type: "eat" },
     );
     expect(eat.events).toEqual([{ type: "item.eaten", item: "item.hotdog", healed: 25 }]);
@@ -114,7 +114,7 @@ describe("applyCommand", () => {
   });
 
   it("silnik nie mutuje poprzedniego stanu", () => {
-    const s = playing({ health: 50, slots: slotsFrom(["item.phone", "item.hotdog", null, null, null, null, null, null]), selected: 1 });
+    const s = playing({ health: 50, slots: slotsFrom(["item.hotdog", null, null, null, null, null, null, null]), selected: 0 });
     const snapshot = JSON.parse(JSON.stringify(s));
     applyCommand(s, { type: "eat" });
     applyCommand(s, { type: "tick", dt: 5 });

@@ -90,13 +90,11 @@ export type GameState = {
 };
 
 export function initialSlots(): (ItemStack | null)[] {
-  return Array.from({ length: INVENTORY_SLOTS }, (_, i) =>
-    i === 0 ? { id: "item.phone", count: 1 } : null,
-  );
+  return Array.from({ length: INVENTORY_SLOTS }, () => null);
 }
 
 export function initialLedger(): Ledger {
-  return { gained: { "item.phone": 1 }, spent: {} };
+  return { gained: {}, spent: {} };
 }
 
 export function initialQuests(): QuestsState {

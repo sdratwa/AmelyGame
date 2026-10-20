@@ -13,7 +13,6 @@ import {
   type Season,
 } from "@/lib/game/engine";
 import { cn } from "@/lib/utils";
-import { PhoneIcon } from "./art";
 
 const SEASON_EMOJI: Record<Season, string> = {
   winter: "❄️",
@@ -185,11 +184,7 @@ export function InventoryBar({
               <span className="absolute left-1 top-0.5 text-[9px] font-medium text-slate-500 sm:text-[10px]">
                 {i + 1}
               </span>
-              {id === "item.phone" ? (
-                <PhoneIcon className="h-3/5" />
-              ) : item ? (
-                <span aria-hidden>{item.emoji}</span>
-              ) : null}
+              {item ? <span aria-hidden>{item.emoji}</span> : null}
               {stack && stack.count > 1 && (
                 <span
                   data-testid={`slot-${i}-count`}

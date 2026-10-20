@@ -6,7 +6,7 @@ const GROUPS: { id: string; title: string; categories: ItemCategory[] }[] = [
   { id: "tools", title: "Narzędzia", categories: ["tool"] },
   { id: "quest", title: "Przedmioty zadań", categories: ["blueprint"] },
   { id: "resources", title: "Surowce", categories: ["resource"] },
-  { id: "other", title: "Pozostałe", categories: ["food", "device"] },
+  { id: "other", title: "Pozostałe", categories: ["food"] },
 ];
 
 const TAGS: Partial<Record<ItemCategory, string>> = { tool: "narzędzie", blueprint: "przedmiot zadania" };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ITEMS, ITEM_IDS, LEGACY_ITEM_IDS, type ItemId, type ItemStack } from "../content/items";
+import { ITEMS, ITEM_IDS, LEGACY_ITEM_IDS, isItemId, type ItemId, type ItemStack } from "../content/items";
 import { slotsFrom } from "../testkit";
 import {
   addToPile,
@@ -16,42 +16,42 @@ import {
 
 describe("E2: stosy i kontenery", () => {
   it("dopełnia istniejące stosy, potem zajmuje puste miejsca; nadwyżka wraca jako reszta", () => {
-    let slots = slotsFrom(["item.phone"]);
+    let slots = slotsFrom([]);
     const a = addToSlots(slots, "resource.wood", 25);
     expect(a.added).toBe(25);
-    expect(a.slots.filter(Boolean).map((s) => s!.count)).toEqual([1, 20, 5]);
+    expect(a.slots.filter(Boolean).map((s) => s!.count)).toEqual([20, 5]);
     slots = a.slots;
     const b = addToSlots(slots, "resource.wood", 20);
-    expect(b.slots[2]).toEqual({ id: "resource.wood", count: 20 });
+    expect(b.slots[1]).toEqual({ id: "resource.wood", count: 20 });
     expect(countOf(b.slots, "resource.wood")).toBe(45);
-    const full = addToSlots(slotsFrom(["item.phone"]), "resource.stone", 999);
-    expect(full.added).toBe(7 * 20);
-    expect(full.rest).toBe(999 - 140);
+    const full = addToSlots(slotsFrom([]), "resource.stone", 999);
+    expect(full.added).toBe(8 * 20);
+    expect(full.rest).toBe(999 - 160);
   });
 
   it("przedmioty niestosowalne zajmują po jednym miejscu; pojemność jest liczona poprawnie", () => {
-    const slots = slotsFrom(["item.phone", "item.pickaxe"]);
-    expect(capacityFor(slots, "item.saw")).toBe(6);
-    expect(capacityFor(slots, "resource.wood")).toBe(120);
-    expect(canAdd(slots, "item.saw", 6)).toBe(true);
-    expect(canAdd(slots, "item.saw", 7)).toBe(false);
+    const slots = slotsFrom(["item.pickaxe"]);
+    expect(capacityFor(slots, "item.saw")).toBe(7);
+    expect(capacityFor(slots, "resource.wood")).toBe(140);
+    expect(canAdd(slots, "item.saw", 7)).toBe(true);
+    expect(canAdd(slots, "item.saw", 8)).toBe(false);
   });
 
   it("odejmowanie nie schodzi poniżej zera i nie zmienia wejścia", () => {
-    const slots = slotsFrom(["item.phone", { id: "resource.wood", count: 7 }]);
+    const slots = slotsFrom([{ id: "resource.wood", count: 7 }]);
     const snapshot = JSON.stringify(slots);
     expect(removeFromSlots(slots, "resource.wood", 8).ok).toBe(false);
     const r = removeFromSlots(slots, "resource.wood", 7);
     expect(r.ok).toBe(true);
-    expect(r.slots[1]).toBeNull();
+    expect(r.slots[0]).toBeNull();
     expect(JSON.stringify(slots)).toBe(snapshot);
   });
 
-  it("konfiskata zostawia tylko przedmioty chronione, a odzyskanie zwraca dokładnie to samo", () => {
-    const slots = slotsFrom(["item.phone", "item.pickaxe", { id: "resource.wood", count: 14 }, "item.hotdog", "item.hotdog"]);
+  it("konfiskata zabiera wszystko (żaden przedmiot nie jest chroniony), a odzyskanie zwraca dokładnie to samo", () => {
+    const slots = slotsFrom(["item.pickaxe", { id: "resource.wood", count: 14 }, "item.hotdog", "item.hotdog"]);
     const before = totalsOf(slots);
     const { slots: kept, taken } = confiscate(slots);
-    expect(kept.filter(Boolean)).toEqual([{ id: "item.phone", count: 1 }]);
+    expect(kept.filter(Boolean)).toEqual([]);
     expect(totalsOf(taken)).toEqual({ "item.pickaxe": 1, "resource.wood": 14, "item.hotdog": 2 });
     const back = recover(kept, taken);
     expect(back.pile).toEqual([]);
@@ -64,7 +64,7 @@ describe("E2: stosy i kontenery", () => {
       { id: "item.hotdog", count: 2 },
       { id: "item.pickaxe", count: 1 },
     ];
-    const slots = slotsFrom(["item.phone", "item.coffee", "item.coffee", "item.coffee", "item.coffee", "item.coffee", "item.coffee"]);
+    const slots = slotsFrom(["item.coffee", "item.coffee", "item.coffee", "item.coffee", "item.coffee", "item.coffee", "item.coffee"]);
     const back = recover(slots, pile);
     expect(back.slots.some((s) => s?.id === "item.pickaxe")).toBe(true);
     expect(back.pile.some((s) => s.id === "item.pickaxe")).toBe(false);
@@ -81,25 +81,26 @@ describe("E2: stosy i kontenery", () => {
   });
 
   it("niezmienniki: księga zgodna z zawartością, brak duplikatów unikatów, poprawne stosy", () => {
-    const slots = slotsFrom(["item.phone", "item.saw"]);
-    const ok = inventoryProblems(slots, [], { gained: { "item.phone": 1, "item.saw": 1 }, spent: {} });
+    const slots = slotsFrom(["item.saw"]);
+    const ok = inventoryProblems(slots, [], { gained: { "item.saw": 1 }, spent: {} });
     expect(ok).toEqual([]);
-    expect(inventoryProblems(slots, [{ id: "item.saw", count: 1 }], { gained: { "item.phone": 1, "item.saw": 2 }, spent: {} }).join()).toContain("powielony");
-    expect(inventoryProblems(slots, [], { gained: { "item.phone": 1, "item.saw": 2 }, spent: {} }).join()).toContain("księga");
-    const overstack = slotsFrom(["item.phone", { id: "resource.wood", count: 21 }]);
-    expect(inventoryProblems(overstack, [], { gained: { "item.phone": 1, "resource.wood": 21 }, spent: {} }).join()).toContain("zła liczba");
+    expect(inventoryProblems(slots, [{ id: "item.saw", count: 1 }], { gained: { "item.saw": 2 }, spent: {} }).join()).toContain("powielony");
+    expect(inventoryProblems(slots, [], { gained: { "item.saw": 2 }, spent: {} }).join()).toContain("księga");
+    const overstack = slotsFrom([{ id: "resource.wood", count: 21 }]);
+    expect(inventoryProblems(overstack, [], { gained: { "resource.wood": 21 }, spent: {} }).join()).toContain("zła liczba");
   });
 
-  it("definicje przedmiotów: identyfikatory z przestrzeni nazw, telefon chroniony, zgodność ze starymi zapisami", () => {
+  it("definicje przedmiotów: identyfikatory z przestrzeni nazw, brak telefonu, zgodność ze starymi zapisami", () => {
     for (const id of ITEM_IDS) {
       expect(id).toMatch(/^(item|resource)\./);
       expect(ITEMS[id].id).toBe(id);
       expect(ITEMS[id].maxStack).toBeGreaterThanOrEqual(1);
     }
-    expect(ITEMS["item.phone"].protected).toBe(true);
-    expect(ITEM_IDS.filter((id) => ITEMS[id].protected)).toEqual(["item.phone"]);
+    expect(ITEM_IDS).not.toContain("item.phone");
+    expect(isItemId("item.phone")).toBe(false);
+    expect(ITEM_IDS.filter((id) => ITEMS[id].protected)).toEqual([]);
     for (const mapped of Object.values(LEGACY_ITEM_IDS)) expect(ITEM_IDS).toContain(mapped);
-    expect(Object.keys(LEGACY_ITEM_IDS).sort()).toEqual(["chocolate", "coffee", "hotdog", "phone", "sandwich", "water"]);
+    expect(Object.keys(LEGACY_ITEM_IDS).sort()).toEqual(["chocolate", "coffee", "hotdog", "sandwich", "water"]);
   });
 
   it("własność losowa: dowolne dodawania i odejmowania nie gubią ani nie tworzą sztuk", () => {
@@ -109,11 +110,10 @@ describe("E2: stosy i kontenery", () => {
       return (x >>> 0) / 4294967296;
     };
     for (let round = 0; round < 200; round++) {
-      let slots = slotsFrom(["item.phone"]);
-      const expected: Record<string, number> = { "item.phone": 1 };
+      let slots = slotsFrom([]);
+      const expected: Record<string, number> = {};
       for (let i = 0; i < 40; i++) {
         const id = ITEM_IDS[Math.floor(rnd() * ITEM_IDS.length)] as ItemId;
-        if (id === "item.phone") continue;
         const n = 1 + Math.floor(rnd() * 12);
         if (rnd() < 0.6) {
           const r = addToSlots(slots, id, n);

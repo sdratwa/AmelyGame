@@ -1,5 +1,4 @@
 export type ItemId =
-  | "item.phone"
   | "item.hotdog"
   | "item.sandwich"
   | "item.water"
@@ -11,7 +10,7 @@ export type ItemId =
   | "resource.wood"
   | "resource.stone";
 
-export type ItemCategory = "device" | "food" | "tool" | "blueprint" | "resource";
+export type ItemCategory = "food" | "tool" | "blueprint" | "resource";
 
 export type Item = {
   id: ItemId;
@@ -57,19 +56,6 @@ const food = (
 });
 
 export const ITEMS: Record<ItemId, Item> = {
-  "item.phone": {
-    id: "item.phone",
-    name: "Telefon",
-    emoji: "📱",
-    category: "device",
-    heal: 0,
-    price: 0,
-    description: "Twój telefon. Nigdy go nie stracisz.",
-    maxStack: 1,
-    protected: true,
-    keepOnDeath: true,
-    discardable: false,
-  },
   "item.hotdog": food("item.hotdog", "Hot-dog", "🌭", 25, 12, "Gorący i sycący."),
   "item.sandwich": food("item.sandwich", "Kanapka", "🥪", 20, 9, "Szybka przekąska na drogę."),
   "item.coffee": food("item.coffee", "Kawa", "☕", 10, 7, "Rozgrzewa w zimowy dzień."),
@@ -156,14 +142,16 @@ export const SHOP_ITEMS: ItemId[] = [
   "item.water",
 ];
 
-/** Zgodność ze starymi zapisami (SaveV1): identyfikatory bez przestrzeni nazw. */
+/** Zgodność ze starymi zapisami (SaveV1): identyfikatory bez przestrzeni nazw. Stary "phone" (przedmiot usunięty z gry) jest pomijany przez migrację v1 -> v2, patrz `LEGACY_REMOVED_ITEMS`. */
 export const LEGACY_ITEM_IDS: Readonly<Record<string, ItemId>> = {
-  phone: "item.phone",
   hotdog: "item.hotdog",
   sandwich: "item.sandwich",
   water: "item.water",
   coffee: "item.coffee",
   chocolate: "item.chocolate",
 };
+
+/** Identyfikatory przedmiotów usuniętych z gry; migracje zapisów wycinają je z ekwipunku, księgi i depozytu. */
+export const LEGACY_REMOVED_ITEMS: readonly string[] = ["item.phone", "phone"];
 
 export type ItemStack = { id: ItemId; count: number };

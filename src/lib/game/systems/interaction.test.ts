@@ -20,7 +20,7 @@ const standing = (target: { x: number; z: number }, d: number, from = 0, off = 0
 };
 
 const forestState = (extra: Partial<GameState> = {}) => ({ ...inForest(newPlaying(SEED)), ...extra }) as GameState;
-const withTools = (s: GameState) => ({ ...s, slots: slotsFrom(["item.phone", "item.saw", "item.pickaxe"]) });
+const withTools = (s: GameState) => ({ ...s, slots: slotsFrom(["item.saw", "item.pickaxe"]) });
 
 describe("M1/C1: wybór obiektu do interakcji", () => {
   it("skrzynia: podpowiedź w zasięgu ok. 2 m i tylko przy patrzeniu w jej stronę", () => {
