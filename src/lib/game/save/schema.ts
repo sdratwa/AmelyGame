@@ -4,7 +4,7 @@ import type { BadgeId, RegionId } from "../core/ids";
 import type { ChestState, ForestPose, Ledger, TrollPhase } from "../core/state";
 
 /** Bieżąca wersja formatu zapisu (SaveVN). Zmiana struktury = nowa wersja + migracja. */
-export const CURRENT_SAVE_VERSION = 2;
+export const CURRENT_SAVE_VERSION = 3;
 
 type LegacySlot = string | null;
 
@@ -41,12 +41,12 @@ export type SaveV1 = {
 };
 
 /**
- * SaveV2: SaveV1 + ekwipunek ze stosami i księgą, zadania, skrzynie, troll z depozytem, pozyskane obiekty,
+ * SaveV3 (bieżący): SaveV1 + ekwipunek ze stosami i księgą, zadania, skrzynie, troll z depozytem, pozyskane obiekty,
  * most, odkryte regiony i odznaki. Kotwice świata (pozycje skrzyń itd.) NIE są zapisywane: wynikają z
  * (seed, genVersion) i są chronione odciskiem świata.
  */
-export type SaveV2 = {
-  version: 2;
+export type SaveV3 = {
+  version: 3;
   saveId: string;
   savedAt: number;
   world: SaveV1["world"];
@@ -78,8 +78,24 @@ export type SaveV2 = {
   badges: BadgeId[];
 };
 
+/** Stos przedmiotu w zamrożonym formacie V2: id jest zwykłym napisem, bo przedmioty usunięte z gry (telefon) nie są już w `ItemId`. */
+type LegacyStack = { id: string; count: number };
+
+/**
+ * SaveV2 (zamrożony): poprzedni format, identyczny z SaveV3 poza tym, że ekwipunek, księga i depozyt mogły zawierać
+ * telefon (slot 1, `item.phone`). Czytany wyłącznie przez migrację v2 -> v3, która usuwa telefon i nic poza nim.
+ */
+export type SaveV2 = Omit<SaveV3, "version" | "player" | "troll"> & {
+  version: 2;
+  player: Omit<SaveV3["player"], "slots" | "ledger"> & {
+    slots: (LegacyStack | null)[];
+    ledger: { gained: Record<string, number>; spent: Record<string, number> };
+  };
+  troll: Omit<SaveV3["troll"], "deposit"> & { deposit: LegacyStack[] };
+};
+
 /** Aktualny format zapisu. */
-export type Save = SaveV2;
+export type Save = SaveV3;
 
 /** Klucze najwyższego poziomu – używane w testach pilnujących rozdziału danych trwałych od sesji. */
 export const SAVE_TOP_LEVEL_KEYS = [

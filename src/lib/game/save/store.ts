@@ -1,6 +1,6 @@
 import { decodeSave, encodeSave } from "./codec";
 import { DEFAULT_SCHEMA, migratePayload, type SchemaConfig } from "./migrate";
-import type { SaveV2 } from "./schema";
+import type { SaveV3 } from "./schema";
 
 /** Minimalny podzbiór `Storage` (localStorage) – pozwala podmienić magazyn w testach. */
 export interface KeyValueStorage {
@@ -15,7 +15,7 @@ export type LoadResult =
   | { kind: "none" }
   | {
       kind: "ok";
-      save: SaveV2;
+      save: SaveV3;
       source: "primary" | "backup";
       /** Powody, dla których główny zapis nie został użyty (gdy source = backup). */
       recoveredBecause?: string[];
@@ -36,7 +36,7 @@ export type SaveOutcome = { ok: true } | { ok: false; error: string };
  */
 export interface SaveStore {
   load(): Promise<LoadResult>;
-  save(save: SaveV2): Promise<SaveOutcome>;
+  save(save: SaveV3): Promise<SaveOutcome>;
   /** Usuwa wszystko, co należy do gry (zapis, kopie, archiwa) – narzędzie dev/testowe. */
   reset(): Promise<void>;
 }
@@ -131,7 +131,7 @@ export class LocalStorageSaveStore implements SaveStore {
   }
 
   private inspect(raw: string):
-    | { kind: "ok"; save: SaveV2; migratedFrom?: number }
+    | { kind: "ok"; save: SaveV3; migratedFrom?: number }
     | { kind: "invalid"; problems: string[] }
     | { kind: "unsupported"; version: number; reason: string }
     | { kind: "migration_failed"; from: number; error: string } {
@@ -198,7 +198,7 @@ export class LocalStorageSaveStore implements SaveStore {
     return { kind: "corrupt", problems };
   }
 
-  private saveSync(save: SaveV2): SaveOutcome {
+  private saveSync(save: SaveV3): SaveOutcome {
     const k = this.keys;
     try {
       const validated = this.schema.validate(save);
@@ -250,7 +250,7 @@ export class LocalStorageSaveStore implements SaveStore {
     return this.loadSync();
   }
 
-  async save(save: SaveV2): Promise<SaveOutcome> {
+  async save(save: SaveV3): Promise<SaveOutcome> {
     return this.saveSync(save);
   }
 

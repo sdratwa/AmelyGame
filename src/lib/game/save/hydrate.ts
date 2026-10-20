@@ -1,7 +1,7 @@
 import type { ItemStack } from "../content/items";
 import type { GameState } from "../core/state";
 import { generateWorld, hasGenerator } from "../world";
-import type { SaveV2 } from "./schema";
+import type { SaveV3 } from "./schema";
 
 const stacks = (list: readonly (ItemStack | null)[]) => list.map((s) => (s ? { id: s.id, count: s.count } : null));
 const record = <T extends object>(map: Record<string, T>) =>
@@ -11,7 +11,7 @@ const record = <T extends object>(map: Record<string, T>) =>
  * Stan gry z zapisu. Dane sesji (widok, dialog, komunikaty, stos pauz) startują od zera:
  * po wczytaniu gracz zawsze wraca na mapę świata. Kotwice świata są odtwarzane z (seed, wersja generatora).
  */
-export function hydrateState(save: SaveV2): GameState {
+export function hydrateState(save: SaveV3): GameState {
   const anchors = hasGenerator(save.world.genVersion)
     ? (generateWorld(save.world.seed, save.world.genVersion).forest?.anchors ?? null)
     : null;

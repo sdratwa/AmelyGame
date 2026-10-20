@@ -1,4 +1,4 @@
-import { LEGACY_ITEM_IDS, type ItemStack } from "../../content/items";
+import { LEGACY_ITEM_IDS, LEGACY_REMOVED_ITEMS, type ItemStack } from "../../content/items";
 import { safeForestPose } from "../../world/generators/v2/pose";
 import { fingerprintWorld, generateWorld } from "../../world";
 import type { SaveV1, SaveV2 } from "../schema";
@@ -9,7 +9,7 @@ import { validateSaveV1 } from "../validateV1";
  * - miasto, domy (łącznie z własnością i poziomem), pieniądze, zdrowie, czas, imię i tutorial zostają bez zmian;
  * - świat: generator 1 -> 2 (miasto identyczne, dochodzi las z kotwicami); odcisk liczony dla nowego generatora,
  *   wpis w `genHistory` zapisuje moment migracji;
- * - ekwipunek: identyfikatory z przestrzenią nazw, stosy i księga przedmiotów zgodna z zawartością;
+ * - ekwipunek: identyfikatory z przestrzenią nazw, stosy i księga przedmiotów zgodna z zawartością; dawny telefon (usunięty z gry) jest pomijany;
  * - pozycja w lesie: zostaje, jeśli jest poprawna w nowym lesie, w przeciwnym razie bezpieczny punkt wejścia;
  * - nowe dane (zadania, skrzynie, troll, most) startują od zera.
  */
@@ -21,6 +21,8 @@ export function migrateV1ToV2(payload: Record<string, unknown>): Record<string, 
 
   const slots: (ItemStack | null)[] = v1.player.slots.map((id) => {
     if (id === null) return null;
+    // Telefon (przedmiot usunięty z gry) nie trafia do nowego formatu; reszta ekwipunku zostaje na swoich miejscach.
+    if (LEGACY_REMOVED_ITEMS.includes(id)) return null;
     const mapped = LEGACY_ITEM_IDS[id];
     if (!mapped) throw new Error(`nieznany przedmiot ${id}`);
     return { id: mapped, count: 1 };

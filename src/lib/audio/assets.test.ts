@@ -110,7 +110,7 @@ describe("izolacja audio od logiki gry", () => {
       for (const i of imports) {
         if (i.startsWith("@/lib/game")) expect(i, `${f} importuje ${i}`).toBe("@/lib/game/core/constants");
       }
-      expect(text, f).not.toMatch(/rngStream|worldSeed|SaveV2|forestOf/);
+      expect(text, f).not.toMatch(/rngStream|worldSeed|SaveV[23]|forestOf/);
     }
   });
 

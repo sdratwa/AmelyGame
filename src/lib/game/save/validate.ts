@@ -5,7 +5,7 @@ import { QUEST_BY_ID } from "../content/quests";
 import { inventoryProblems } from "../systems/containers";
 import { CHEST_CONTENTS } from "../systems/forestQuest";
 import { FINGERPRINT_PATTERN } from "../world/fingerprint";
-import type { SaveV2 } from "./schema";
+import type { SaveV3 } from "./schema";
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; problems: string[] };
 
@@ -45,12 +45,12 @@ function checkStacks(value: unknown, path: string, bad: (p: string, why: string)
 }
 
 /** Walidacja ręczna (bez zewnętrznych bibliotek): sprawdza strukturę, typy i niezmienniki (ekwipunek, zadania, skrzynie). */
-export function validateSaveV2(input: unknown): ValidationResult<SaveV2> {
+export function validateSaveV3(input: unknown): ValidationResult<SaveV3> {
   const problems: string[] = [];
   const bad = (path: string, why: string) => problems.push(`${path}: ${why}`);
 
   if (!isObj(input)) return { ok: false, problems: ["save: oczekiwano obiektu"] };
-  if (input.version !== 2) bad("version", "oczekiwano 2");
+  if (input.version !== 3) bad("version", "oczekiwano 3");
   if (!isStr(input.saveId) || !SAVE_ID.test(input.saveId)) bad("saveId", "niepoprawny identyfikator");
   if (!isNum(input.savedAt) || input.savedAt < 0) bad("savedAt", "oczekiwano liczby >= 0");
 
@@ -89,8 +89,6 @@ export function validateSaveV2(input: unknown): ValidationResult<SaveV2> {
     if (!Array.isArray(player.slots) || player.slots.length !== INVENTORY_SLOTS) bad("player.slots", `oczekiwano tablicy ${INVENTORY_SLOTS} miejsc`);
     else {
       slotsOk = checkStacks(player.slots, "player.slots", bad, true);
-      const first = player.slots[0];
-      if (!isObj(first) || first.id !== "item.phone" || first.count !== 1) bad("player.slots[0]", "telefon musi zajmować pierwsze miejsce");
     }
     const ledger = player.ledger;
     if (!isObj(ledger) || !isObj(ledger.gained) || !isObj(ledger.spent)) bad("player.ledger", "oczekiwano { gained, spent }");
@@ -220,5 +218,5 @@ export function validateSaveV2(input: unknown): ValidationResult<SaveV2> {
   }
 
   if (problems.length > 0) return { ok: false, problems };
-  return { ok: true, value: input as unknown as SaveV2 };
+  return { ok: true, value: input as unknown as SaveV3 };
 }

@@ -33,7 +33,7 @@ import type { GameEvent } from "./events";
 import { addPause, clearPauseOwner, pauseReasons, removePause } from "./pause";
 import { result, unchanged, type CommandResult } from "./result";
 import { hydrateState } from "../save/hydrate";
-import type { SaveV2 } from "../save/schema";
+import type { SaveV3 } from "../save/schema";
 import type { ForestPose, GameState, View } from "./state";
 
 /**
@@ -44,7 +44,7 @@ export type Command =
   | { type: "setName"; name: string }
   | { type: "startLoading"; seed: number; saveId: string }
   | { type: "worldReady" }
-  | { type: "game.load"; save: SaveV2 }
+  | { type: "game.load"; save: SaveV3 }
   | { type: "forest.pose"; pose: ForestPose }
   | { type: "tick"; dt: number }
   | { type: "enter"; view: View }

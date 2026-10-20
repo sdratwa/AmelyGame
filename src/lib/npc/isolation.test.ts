@@ -21,7 +21,7 @@ describe("test dialogu trolla jest oddzielony od prawdziwej logiki questa", () =
     }
   });
 
-  it("pełne spotkanie z oboma wynikami dialogu nie zmienia SaveV2, stanu questa, skrzyń ani ekwipunku", async () => {
+  it("pełne spotkanie z oboma wynikami dialogu nie zmienia SaveV3, stanu questa, skrzyń ani ekwipunku", async () => {
     const seed = 777;
     const state = Object.freeze(inForest(run(newPlaying(seed), { type: "board.read", id: "quest.bridge_01" }, { type: "quest.accept", id: "quest.bridge_01" })));
     const before = JSON.stringify(serializeState(state, 1));

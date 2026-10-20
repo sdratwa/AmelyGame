@@ -12,11 +12,12 @@ import { loadGame, verifyWorld } from "./loader";
 import { MemoryStorage } from "./memoryStorage";
 import { migratePayload } from "./migrate";
 import { migrateV1ToV2 } from "./migrations/v1ToV2";
-import { CURRENT_SAVE_VERSION, type SaveV1, type SaveV2 } from "./schema";
+import { migrateV2ToV3 } from "./migrations/v2ToV3";
+import { CURRENT_SAVE_VERSION, type SaveV1, type SaveV3 } from "./schema";
 import { serializeState } from "./serialize";
 import { LocalStorageSaveStore } from "./store";
 import { validateSaveV1 } from "./validateV1";
-import { validateSaveV2 } from "./validate";
+import { validateSaveV3 } from "./validate";
 
 const SEED = 31415;
 
@@ -48,18 +49,18 @@ function v1Save(seed = SEED, patch: Partial<SaveV1["player"]> = {}): SaveV1 {
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
-function migrated(v1: SaveV1): SaveV2 {
+function migrated(v1: SaveV1): SaveV3 {
   const out = migratePayload(clone(v1), 1);
   if (!out.ok) throw new Error(out.error);
   return out.save;
 }
 
-describe("migracja SaveV1 -> SaveV2: dane gracza i miasto", () => {
+describe("migracja SaveV1 -> SaveV3 (łańcuch v1 -> v2 -> v3): dane gracza i miasto", () => {
   it("zachowuje miasto, domy (własność i poziom), pieniądze, zdrowie, czas, imię i tutorial", () => {
     const v1 = v1Save();
     const v2 = migrated(v1);
     expect(v2.version).toBe(CURRENT_SAVE_VERSION);
-    expect(v2.version).toBe(2);
+    expect(v2.version).toBe(3);
     expect(v2.saveId).toBe(v1.saveId);
     expect(v2.houses).toEqual(v1.houses);
     expect(v2.houses[0]).toMatchObject({ owned: true, level: 3 });
@@ -72,7 +73,7 @@ describe("migracja SaveV1 -> SaveV2: dane gracza i miasto", () => {
   it("przedmioty dostają identyfikatory z przestrzenią nazw, miejsca zostają, księga zgadza się z zawartością", () => {
     const v2 = migrated(v1Save());
     expect(v2.player.slots).toEqual([
-      { id: "item.phone", count: 1 },
+      null,
       { id: "item.hotdog", count: 1 },
       null,
       { id: "item.water", count: 1 },
@@ -82,7 +83,7 @@ describe("migracja SaveV1 -> SaveV2: dane gracza i miasto", () => {
       null,
     ]);
     expect(v2.player.ledger).toEqual({
-      gained: { "item.phone": 1, "item.hotdog": 1, "item.water": 1, "item.coffee": 1 },
+      gained: { "item.hotdog": 1, "item.water": 1, "item.coffee": 1 },
       spent: {},
     });
     expect(inventoryProblems(v2.player.slots, v2.troll.deposit, v2.player.ledger)).toEqual([]);
@@ -108,14 +109,15 @@ describe("migracja SaveV1 -> SaveV2: dane gracza i miasto", () => {
     });
     const v2 = migrated(v1);
     expect(v2.player.dead).toBe(true);
-    expect(v2.player.slots.filter(Boolean)).toHaveLength(8);
+    expect(v2.player.slots.filter(Boolean)).toHaveLength(7);
+    expect(v2.player.slots[0]).toBeNull();
     expect(v2.player.ledger.gained["item.hotdog"]).toBe(2);
     const state = hydrateState(v2);
     expect(state.dead).toBe(true);
   });
 });
 
-describe("migracja SaveV1 -> SaveV2: generator świata", () => {
+describe("migracja SaveV1 -> SaveV3 (łańcuch v1 -> v2 -> v3): generator świata", () => {
   it("generator v2 zachowuje miasto: te same domy co v1 dla wielu seedów", () => {
     for (let i = 0; i < 25; i++) {
       const seed = (Math.imul(i + 3, 2654435761) ^ 0x1234567) >>> 0;
@@ -134,7 +136,7 @@ describe("migracja SaveV1 -> SaveV2: generator świata", () => {
   it("po migracji świat przechodzi weryfikację (odcisk, domy), a stary zapis tego samego seeda na v1 też nadal się odtwarza", () => {
     const v2 = migrated(v1Save());
     expect(verifyWorld(v2)).toEqual({ ok: true });
-    expect(verifyWorld(v1Save() as unknown as SaveV2)).toEqual({ ok: true });
+    expect(verifyWorld(v1Save() as unknown as SaveV3)).toEqual({ ok: true });
   });
 
   it("zapis z dopisaną historią zachowuje wcześniejsze wpisy", () => {
@@ -147,7 +149,7 @@ describe("migracja SaveV1 -> SaveV2: generator świata", () => {
   });
 });
 
-describe("migracja SaveV1 -> SaveV2: pozycja w lesie", () => {
+describe("migracja SaveV1 -> SaveV3 (łańcuch v1 -> v2 -> v3): pozycja w lesie", () => {
   const forest = createForest(SEED);
 
   function findPose(valid: boolean) {
@@ -183,12 +185,12 @@ describe("migracja SaveV1 -> SaveV2: pozycja w lesie", () => {
   });
 });
 
-describe("migracja SaveV1 -> SaveV2: bezpieczeństwo i zgodność", () => {
+describe("migracja SaveV1 -> SaveV3 (łańcuch v1 -> v2 -> v3): bezpieczeństwo i zgodność", () => {
   it("stary zapis nadal da się odczytać i zwalidować jako SaveV1, a koperta wskazuje migrację", () => {
     const v1 = v1Save();
     expect(validateSaveV1(v1).ok).toBe(true);
-    expect(validateSaveV2(v1).ok).toBe(false);
-    const decoded = decodeSave(encodeSave(v1 as unknown as SaveV2));
+    expect(validateSaveV3(v1).ok).toBe(false);
+    const decoded = decodeSave(encodeSave(v1 as unknown as SaveV3));
     expect(decoded.kind).toBe("needs_migration");
     if (decoded.kind === "needs_migration") expect(decoded.from).toBe(1);
   });
@@ -214,14 +216,14 @@ describe("migracja SaveV1 -> SaveV2: bezpieczeństwo i zgodność", () => {
 
   it("magazyn: stary zapis jest migrowany, kopia przed migracją i .bak zawierają oryginał, a po migracji gra się ładuje", async () => {
     const storage = new MemoryStorage();
-    const raw = encodeSave(v1Save() as unknown as SaveV2);
+    const raw = encodeSave(v1Save() as unknown as SaveV3);
     storage.setItem("miasto.save", raw);
     const store = new LocalStorageSaveStore({ storage });
     const loaded = await store.load();
     expect(loaded.kind).toBe("ok");
     if (loaded.kind !== "ok") return;
     expect(loaded.migratedFrom).toBe(1);
-    expect(loaded.save.version).toBe(2);
+    expect(loaded.save.version).toBe(3);
     expect(storage.getItem("miasto.save.premigration.v1.0")).toBe(raw);
     expect(storage.getItem("miasto.save.bak")).toBe(raw);
 
@@ -247,8 +249,121 @@ describe("migracja SaveV1 -> SaveV2: bezpieczeństwo i zgodność", () => {
     for (let i = 0; i < 12; i++) {
       const seed = (Math.imul(i + 11, 2654435761) ^ 0x7777) >>> 0;
       const v2 = migrated(v1Save(seed, { forestPose: { x: 10 + i, z: -3 * i, yaw: 0.1 } }));
-      expect(validateSaveV2(v2).ok).toBe(true);
+      expect(validateSaveV3(v2).ok).toBe(true);
       expect(verifyWorld(v2)).toEqual({ ok: true });
     }
   });
 });
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- fixtures celowo budują dawny format SaveV2 z telefonem */
+describe("migracja SaveV2 -> SaveV3: usunięcie telefonu", () => {
+  type Json = Record<string, any>;
+
+  /** Dawny zapis V2: telefon w slocie 1 (reszta przedmiotów przesunięta o jedno miejsce, jak w starej grze) i w księdze. */
+  function v2With(state: ReturnType<typeof hydrateState>): Json {
+    const base = clone(serializeState(state, 1_000)) as unknown as Json;
+    const last = base.player.slots[base.player.slots.length - 1];
+    if (last !== null) throw new Error("fixture: brak miejsca na telefon");
+    base.version = 2;
+    base.player.slots = [{ id: "item.phone", count: 1 }, ...base.player.slots.slice(0, -1)];
+    base.player.ledger.gained["item.phone"] = 1;
+    base.player.selected = Math.min(7, base.player.selected + 1);
+    return base;
+  }
+
+  const fresh = () => hydrateState(migrated(v1Save(SEED, { forestPose: null })));
+
+  it("wycina tylko telefon: miejsca pozostałych przedmiotów, księga, pieniądze i domy zostają", () => {
+    const state = fresh();
+    const v2 = v2With(state);
+    const out = migratePayload(v2, 2);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const v3 = out.save;
+    expect(v3.version).toBe(3);
+    expect(v3.player.slots[0]).toBeNull();
+    expect(v3.player.slots.slice(1)).toEqual(v2.player.slots.slice(1));
+    expect(JSON.stringify(v3)).not.toContain("item.phone");
+    expect(v3.player.ledger.gained).toEqual(Object.fromEntries(Object.entries(v2.player.ledger.gained).filter(([id]) => id !== "item.phone")));
+    expect(v3.player.wallet).toBe(v2.player.wallet);
+    expect(v3.houses).toEqual(v2.houses);
+    expect(v3.world).toEqual(v2.world);
+    expect(v3.player.selected).toBe(v2.player.selected);
+    expect(verifyWorld(v3)).toEqual({ ok: true });
+  });
+
+  it("nie modyfikuje wejścia, jest deterministyczna i odrzuca zły format zamiast zgadywać", () => {
+    const v2 = v2With(fresh());
+    const snapshot = JSON.stringify(v2);
+    const a = migrateV2ToV3(clone(v2));
+    const b = migrateV2ToV3(clone(v2));
+    expect(JSON.stringify(v2)).toBe(snapshot);
+    expect(a).toEqual(b);
+    expect(() => migrateV2ToV3({ ...clone(v2), version: 3 })).toThrow();
+    expect(() => migrateV2ToV3({ ...clone(v2), player: null })).toThrow();
+    expect(() => migrateV2ToV3({ ...clone(v2), troll: {} })).toThrow();
+  });
+
+  it("zapis V2 bez telefonu (np. uszkodzony ręcznie) też przechodzi, a wynik jest poprawnym SaveV3", () => {
+    const v2 = v2With(fresh());
+    v2.player.slots[0] = null;
+    delete v2.player.ledger.gained["item.phone"];
+    const out = migratePayload(v2, 2);
+    expect(out.ok).toBe(true);
+  });
+
+  it("wycina telefon także z księgi wydatków i depozytu trolla, nie ruszając pozostałych wpisów", () => {
+    const v2 = v2With(fresh());
+    v2.player.ledger.spent["item.phone"] = 0;
+    v2.troll.deposit = [{ id: "item.phone", count: 1 }];
+    v2.troll.phase = "confronted";
+    const out = migrateV2ToV3(clone(v2)) as Json;
+    expect(out.player.ledger.spent).toEqual({});
+    expect(out.troll.deposit).toEqual([]);
+    expect(out.troll.phase).toBe("confronted");
+  });
+
+  it("ukończony quest ze zbudowanym mostem, odkrytym obszarem i odznaką przeżywa migrację bez cofania postępu", () => {
+    const done = autoComplete(reducer(fresh(), { type: "leave" }));
+    expect(done.quests.completed["quest.bridge_01"]).toBeDefined();
+    const v2 = v2With(done);
+    const out = migratePayload(v2, 2);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const state = hydrateState(out.save);
+    expect(state.bridge.built).toBe(true);
+    expect(state.quests.completed["quest.bridge_01"]).toBeDefined();
+    expect(state.discovered).toEqual(done.discovered);
+    expect(state.badges).toEqual(done.badges);
+    expect(state.wallet).toBe(done.wallet);
+    expect(state.harvested).toEqual(done.harvested);
+    expect(state.world?.seed).toBe(done.world?.seed);
+    expect(state.world?.fingerprint).toBe(done.world?.fingerprint);
+    expect(state.slots.some((s) => s?.id === ("item.phone" as string))).toBe(false);
+    // nagroda nie zostaje wypłacona drugi raz
+    expect(reducer(state, { type: "tick", dt: 1 }).wallet).toBe(done.wallet);
+  });
+
+  it("magazyn: zapis V2 jest migrowany do V3, kopia przed migracją zawiera oryginał, a gra się ładuje", async () => {
+    const storage = new MemoryStorage();
+    const v2 = v2With(fresh());
+    const raw = encodeSave(v2 as unknown as SaveV3);
+    storage.setItem("miasto.save", raw);
+    const loaded = await new LocalStorageSaveStore({ storage }).load();
+    expect(loaded.kind).toBe("ok");
+    if (loaded.kind !== "ok") return;
+    expect(loaded.migratedFrom).toBe(2);
+    expect(loaded.save.version).toBe(3);
+    expect(storage.getItem("miasto.save.premigration.v2.0")).toBe(raw);
+    const boot = await loadGame(new LocalStorageSaveStore({ storage }));
+    expect(boot.kind).toBe("ok");
+  });
+
+  it("nowa gra nie ma telefonu w ekwipunku, księdze ani zapisie", () => {
+    const state = reducer(fresh(), { type: "leave" });
+    const saved = serializeState(state, 1)!;
+    expect(saved.version).toBe(CURRENT_SAVE_VERSION);
+    expect(JSON.stringify(saved)).not.toContain("item.phone");
+  });
+});
+/* eslint-enable @typescript-eslint/no-explicit-any */

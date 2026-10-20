@@ -8,10 +8,10 @@ import { loadGame, verifyWorld } from "./loader";
 import { migratePayload, type SchemaConfig } from "./migrate";
 import { MemoryStorage } from "./memoryStorage";
 import { createNewGameParams } from "./newGame";
-import { SAVE_TOP_LEVEL_KEYS, type SaveV2 } from "./schema";
+import { SAVE_TOP_LEVEL_KEYS, type SaveV3 } from "./schema";
 import { serializeState } from "./serialize";
 import { LocalStorageSaveStore, type KeyValueStorage, type SaveOutcome, type SaveStore } from "./store";
-import { validateSaveV2 } from "./validate";
+import { validateSaveV3 } from "./validate";
 import { canonicalize, fingerprintOf, hashHex } from "../world/fingerprint";
 
 function run(state: GameState, ...commands: Command[]): GameState {
@@ -40,14 +40,14 @@ function progressed(seed = 777, saveId = "save_test0001"): GameState {
     { type: "forest.pose", pose: { x: 12.5, z: -7.25, yaw: 1.2 } },
     { type: "leave" },
     { type: "buy", item: "item.hotdog" },
-    { type: "select", slot: 1 },
+    { type: "select", slot: 0 },
     { type: "tick", dt: 37.5 },
   );
   const cheapest = [...s.houses].sort((a, b) => a.price - b.price)[0];
   return run(s, { type: "buyHouse", id: cheapest.id }, { type: "upgradeHouse", id: cheapest.id });
 }
 
-const save = (s: GameState, savedAt = 1_000): SaveV2 => {
+const save = (s: GameState, savedAt = 1_000): SaveV3 => {
   const out = serializeState(s, savedAt);
   if (!out) throw new Error("stan nie nadaje się do zapisu");
   return out;
@@ -281,7 +281,7 @@ describe("E1.5 uszkodzony zapis nie niszczy poprawnej kopii", () => {
 
   it("nie zapisuje niepoprawnych danych", async () => {
     const { store, storage } = makeStore();
-    const bad = { ...save(progressed()), player: { ...save(progressed()).player, health: 1000 } } as SaveV2;
+    const bad = { ...save(progressed()), player: { ...save(progressed()).player, health: 1000 } } as SaveV3;
     const outcome = await store.save(bad);
     expect(outcome.ok).toBe(false);
     expect(storage.getItem("miasto.save")).toBeNull();
@@ -319,7 +319,7 @@ describe("E1.5 uszkodzony zapis nie niszczy poprawnej kopii", () => {
 });
 
 describe("E1.6 niezgodny worldFingerprint nie powoduje nadpisania", () => {
-  function tamperedRaw(mutate: (s: SaveV2) => SaveV2): string {
+  function tamperedRaw(mutate: (s: SaveV3) => SaveV3): string {
     return encodeSave(mutate(save(progressed())));
   }
 
@@ -364,44 +364,44 @@ describe("E1.6 niezgodny worldFingerprint nie powoduje nadpisania", () => {
   });
 });
 
-describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 3)", () => {
-  const v3: SchemaConfig = {
-    current: 3,
-    steps: { 2: (p) => ({ ...p, version: 3, schemaNote: "v3" }) },
+describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 4)", () => {
+  const v4: SchemaConfig = {
+    current: 4,
+    steps: { 3: (p) => ({ ...p, version: 4, schemaNote: "v4" }) },
     validate: (p) => {
       const { version, schemaNote, ...rest } = p as Record<string, unknown>;
-      if (version !== 3 || schemaNote !== "v3") return { ok: false, problems: ["v3: brak pól"] };
-      const base = validateSaveV2({ ...rest, version: 2 });
-      return base.ok ? { ok: true, value: { ...base.value, version: 3, schemaNote } as unknown as SaveV2 } : base;
+      if (version !== 4 || schemaNote !== "v4") return { ok: false, problems: ["v4: brak pól"] };
+      const base = validateSaveV3({ ...rest, version: 3 });
+      return base.ok ? { ok: true, value: { ...base.value, version: 4, schemaNote } as unknown as SaveV3 } : base;
     },
   };
 
   const oldRaw = () => encodeSave(save(progressed()));
 
-  it("migracja v1 -> v2 przechodzi, a oryginał zostaje w kopii przed migracją i w .bak", async () => {
+  it("migracja v3 -> v4 przechodzi, a oryginał zostaje w kopii przed migracją i w .bak", async () => {
     const storage = new MemoryStorage();
     const raw = oldRaw();
     storage.setItem("miasto.save", raw);
-    const loaded = await new LocalStorageSaveStore({ storage, schema: v3 }).load();
+    const loaded = await new LocalStorageSaveStore({ storage, schema: v4 }).load();
     expect(loaded.kind).toBe("ok");
     if (loaded.kind !== "ok") return;
-    expect(loaded.migratedFrom).toBe(2);
-    expect(storage.getItem("miasto.save.premigration.v2.0")).toBe(raw);
+    expect(loaded.migratedFrom).toBe(3);
+    expect(storage.getItem("miasto.save.premigration.v3.0")).toBe(raw);
     expect(storage.getItem("miasto.save.bak")).toBe(raw);
-    const migrated = decodeSave(storage.getItem("miasto.save") ?? "", v3);
+    const migrated = decodeSave(storage.getItem("miasto.save") ?? "", v4);
     expect(migrated.kind).toBe("ok");
-    expect((migrated as { save: { version: number } }).save.version).toBe(3);
+    expect((migrated as { save: { version: number } }).save.version).toBe(4);
   });
 
   it("błąd migracji (wyjątek): oryginał nietknięty, kopia przed migracją istnieje", async () => {
     const storage = new MemoryStorage();
     const raw = oldRaw();
     storage.setItem("miasto.save", raw);
-    const broken: SchemaConfig = { ...v3, steps: { 2: () => { throw new Error("bum"); } } };
+    const broken: SchemaConfig = { ...v4, steps: { 3: () => { throw new Error("bum"); } } };
     const loaded = await new LocalStorageSaveStore({ storage, schema: broken }).load();
     expect(loaded.kind).toBe("migration_failed");
     expect(storage.getItem("miasto.save")).toBe(raw);
-    expect(storage.getItem("miasto.save.premigration.v2.0")).toBe(raw);
+    expect(storage.getItem("miasto.save.premigration.v3.0")).toBe(raw);
     expect(storage.getItem("miasto.save.bak")).toBeNull();
   });
 
@@ -409,7 +409,7 @@ describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 3)", () =
     const storage = new MemoryStorage();
     const raw = oldRaw();
     storage.setItem("miasto.save", raw);
-    const bad: SchemaConfig = { ...v3, steps: { 2: (p) => ({ ...p, version: 3 }) } };
+    const bad: SchemaConfig = { ...v4, steps: { 3: (p) => ({ ...p, version: 4 }) } };
     const loaded = await new LocalStorageSaveStore({ storage, schema: bad }).load();
     expect(loaded.kind).toBe("migration_failed");
     expect(storage.getItem("miasto.save")).toBe(raw);
@@ -417,14 +417,14 @@ describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 3)", () =
 
   it("brak kroku migracji i zła wersja kroku są błędami, a nie cichym pominięciem", () => {
     const payload = JSON.parse(JSON.stringify(save(progressed())));
-    expect(migratePayload(payload, 2, { ...v3, steps: {} }).ok).toBe(false);
-    expect(migratePayload(payload, 2, { ...v3, steps: { 2: (p) => ({ ...p, version: 5 }) } }).ok).toBe(false);
+    expect(migratePayload(payload, 3, { ...v4, steps: {} }).ok).toBe(false);
+    expect(migratePayload(payload, 3, { ...v4, steps: { 3: (p) => ({ ...p, version: 6 }) } }).ok).toBe(false);
   });
 
   it("migracja nie modyfikuje danych wejściowych", () => {
     const payload = JSON.parse(JSON.stringify(save(progressed()))) as Record<string, unknown>;
     const snapshot = JSON.stringify(payload);
-    const out = migratePayload(payload, 2, v3);
+    const out = migratePayload(payload, 3, v4);
     expect(out.ok).toBe(true);
     expect(JSON.stringify(payload)).toBe(snapshot);
   });
@@ -443,7 +443,7 @@ describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 3)", () =
         mem.setItem(k, v);
       },
     };
-    const loaded = await new LocalStorageSaveStore({ storage: noRoom, schema: v3 }).load();
+    const loaded = await new LocalStorageSaveStore({ storage: noRoom, schema: v4 }).load();
     expect(loaded.kind).toBe("migration_failed");
     expect(mem.getItem("miasto.save")).toBe(raw);
   });
@@ -506,7 +506,7 @@ describe("walidacja zapisu", () => {
   const valid = () => JSON.parse(JSON.stringify(save(progressed()))) as Record<string, any>;
 
   it("akceptuje poprawny zapis", () => {
-    expect(validateSaveV2(valid()).ok).toBe(true);
+    expect(validateSaveV3(valid()).ok).toBe(true);
   });
 
   it.each([
@@ -516,7 +516,7 @@ describe("walidacja zapisu", () => {
     ["niespójne dead/health", (s: any) => (s.player.dead = true)],
     ["nieznany przedmiot", (s: any) => (s.player.slots[2] = "bomba")],
     ["zła liczba miejsc", (s: any) => s.player.slots.pop()],
-    ["telefon nie w slocie 0", (s: any) => (s.player.slots[0] = null)],
+    ["usunięty przedmiot (telefon) w ekwipunku", (s: any) => (s.player.slots[0] = { id: "item.phone", count: 1 })],
     ["selected poza zakresem", (s: any) => (s.player.selected = 8)],
     ["pozycja poza lasem", (s: any) => (s.player.forestPose = { x: 500, z: 0, yaw: 0 })],
     ["pozycja NaN", (s: any) => (s.player.forestPose = { x: NaN, z: 0, yaw: 0 })],
@@ -531,11 +531,11 @@ describe("walidacja zapisu", () => {
   ])("odrzuca: %s", (_name, mutate) => {
     const s = valid();
     mutate(s);
-    expect(validateSaveV2(s).ok).toBe(false);
+    expect(validateSaveV3(s).ok).toBe(false);
   });
 
   it("odrzuca nie-obiekty", () => {
-    for (const bad of [null, 5, "x", [], undefined]) expect(validateSaveV2(bad).ok).toBe(false);
+    for (const bad of [null, 5, "x", [], undefined]) expect(validateSaveV3(bad).ok).toBe(false);
   });
 });
 
@@ -574,7 +574,7 @@ function fakeTimers() {
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
 function recordingStore() {
-  const saved: SaveV2[] = [];
+  const saved: SaveV3[] = [];
   const store: SaveStore = {
     load: async () => ({ kind: "none" }),
     save: async (s): Promise<SaveOutcome> => {
