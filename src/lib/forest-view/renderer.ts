@@ -8,6 +8,8 @@ import { BRIDGE_FLAG } from "@/lib/game/world/generators/v2";
 import { BENCHMARK_SECONDS, benchmarkPose, buildBenchmarkRoute, type BenchmarkRoute } from "./benchmark";
 import { atmosphereAt, DEFAULT_HOUR, type AtmosphereState, type Rgb } from "./atmosphere";
 import { FirstPersonController, type MoveInput } from "./controller";
+import { mergeMove } from "@/lib/input/analog";
+import type { InputHub } from "@/lib/input/inputHub";
 import { FrameStats } from "./frameStats";
 import { buildGroundMesh, buildWaterMesh, createGroundBuilder, type GroundMeshData, type GroundStyle } from "./ground";
 import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PaletteStore, gradeFragment } from "./grading";
@@ -278,6 +280,10 @@ export class ForestRenderer {
   private lastTime = 0;
   private elapsed = 0;
   private keys = new Set<string>();
+  /** Hub wejścia (pad); odczyt w `frame`, bez własnej pętli. */
+  private inputHub: InputHub | null = null;
+  private detachInputHub: (() => void) | null = null;
+  private readonly moveOut: MoveInput = { forward: 0, right: 0, sprint: false };
   private locked = false;
   private loading: string | null = "Przygotowanie sceny";
   private error: string | null = null;
@@ -643,8 +649,17 @@ export class ForestRenderer {
     this.bench = null;
   }
 
+  /** Podłącza hub wejścia (pad): renderer staje się "kierowcą" odczytu w swojej pętli `frame`. */
+  setInputHub(hub: InputHub | null): void {
+    this.detachInputHub?.();
+    this.detachInputHub = null;
+    this.inputHub = hub;
+    if (hub) this.detachInputHub = hub.attachDriver();
+  }
+
   dispose(): void {
     this.disposed = true;
+    this.setInputHub(null);
     this.npcDialogListener = null;
     this.stepSink = null;
     this.stepForest = null;
@@ -1236,11 +1251,12 @@ export class ForestRenderer {
   }
 
   private moveInput(): MoveInput {
-    if (this.suspended) return { forward: 0, right: 0, sprint: false };
     const k = this.keys;
     const forward = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
     const right = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);
-    return { forward, right, sprint: k.has("ShiftLeft") || k.has("ShiftRight") };
+    const sprint = k.has("ShiftLeft") || k.has("ShiftRight");
+    const pad = this.inputHub;
+    return mergeMove(forward, right, sprint, pad?.move.x ?? 0, pad?.move.y ?? 0, pad?.sprint ?? false, this.suspended, this.moveOut);
   }
 
   // ---- pętla ----
@@ -1253,6 +1269,7 @@ export class ForestRenderer {
     const dt = Math.min(dtMs / 1000, 0.25);
     this.elapsed += dt;
     this.frameStats.push(dtMs);
+    this.inputHub?.pump(time);
 
     const ctl = this.controller;
     const lab = this.lab;
@@ -1276,6 +1293,8 @@ export class ForestRenderer {
         ctl.blockers = [...(this.npcLayer?.blockers() ?? []), ...(this.deerLayer?.blockers() ?? [])];
         const px = ctl.state.x;
         const pz = ctl.state.z;
+        const pad = this.inputHub;
+        if (pad && (pad.look.x !== 0 || pad.look.y !== 0)) ctl.lookAnalog(pad.look.x, pad.look.y, dt, pad.lookYawRate, pad.lookPitchRate);
         ctl.update(dt, this.moveInput());
         const walked = dt > MAX_STEP_FRAME_DT ? 0 : Math.hypot(ctl.state.x - px, ctl.state.z - pz);
         this.stepSink?.playerMotion(walked, Math.min(dt, MAX_STEP_FRAME_DT), ctl.state.x, ctl.state.z);

@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { INVENTORY_SLOTS, ITEMS, RECIPE_BRIDGE_01, type GameState, type Item, type ItemCategory } from "@/lib/game/engine";
 import { cn } from "@/lib/utils";
+import { HintText } from "@/components/input/InputHint";
 
 const GROUPS: { id: string; title: string; categories: ItemCategory[] }[] = [
   { id: "tools", title: "Narzędzia", categories: ["tool"] },
@@ -32,7 +33,7 @@ export function InventoryPanel({ open, state, onClose, onReadBlueprint }: { open
         <DialogHeader>
           <DialogTitle>Ekwipunek</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Zajęte miejsca: {used}/{INVENTORY_SLOTS}. Czas gry stoi, dopóki ekwipunek jest otwarty. Zamknięcie: I lub Esc.
+            Zajęte miejsca: {used}/{INVENTORY_SLOTS}. Czas gry stoi, dopóki ekwipunek jest otwarty. Zamknięcie: <HintText action="inventory" fallback="I" /> lub <HintText action="cancel" fallback="Esc" />.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[56vh] space-y-4 overflow-y-auto pr-1">
@@ -53,6 +54,7 @@ export function InventoryPanel({ open, state, onClose, onReadBlueprint }: { open
                         key={item.id}
                         data-testid={`inventory-item-${item.id}`}
                         data-count={count}
+                        tabIndex={0}
                         className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2"
                       >
                         <span aria-hidden className="text-2xl">

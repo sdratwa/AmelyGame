@@ -13,6 +13,7 @@ import {
   type Season,
 } from "@/lib/game/engine";
 import { cn } from "@/lib/utils";
+import { HintText, InputHint } from "@/components/input/InputHint";
 
 const SEASON_EMOJI: Record<Season, string> = {
   winter: "❄️",
@@ -25,10 +26,12 @@ export function TopBar({
   state,
   sheltered,
   onOpenJournal,
+  onOpenMenu,
 }: {
   state: GameState;
   sheltered: boolean;
   onOpenJournal: () => void;
+  onOpenMenu: () => void;
 }) {
   const clock = getClock(state.elapsed);
   const pct = Math.round((state.health / MAX_HEALTH) * 100);
@@ -103,7 +106,17 @@ export function TopBar({
             className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-1 font-semibold text-amber-100 transition hover:bg-amber-400/30"
           >
             <span aria-hidden>📖</span>
-            Dziennik <kbd className="hidden rounded bg-black/30 px-1 text-[10px] sm:inline">J</kbd>
+            Dziennik <InputHint action="journal" className="hidden bg-black/30 sm:inline" />
+          </button>
+          <button
+            type="button"
+            data-testid="open-menu"
+            onClick={onOpenMenu}
+            aria-label="Menu gry"
+            className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 font-semibold text-slate-100 transition hover:bg-white/20"
+          >
+            <span aria-hidden>☰</span>
+            Menu <InputHint action="pause" className="hidden bg-black/30 sm:inline" />
           </button>
         </div>
       </div>
@@ -156,7 +169,7 @@ export function InventoryBar({
             onClick={onEat}
             className="shrink-0 rounded-full bg-emerald-500 px-3.5 py-1.5 font-semibold text-emerald-950 transition hover:bg-emerald-400 active:scale-95"
           >
-            Zjedz (E) +{selectedItem.heal}%
+            Zjedz (<HintText action="interact" fallback="E" />) +{selectedItem.heal}%
           </button>
         )}
       </div>

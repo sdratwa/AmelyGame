@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatMoney, type QuestView } from "@/lib/game/engine";
 import { ObjectiveList } from "./ObjectiveList";
+import { HintText } from "@/components/input/InputHint";
 
 export type SaveStatus =
   | { kind: "idle"; lastAt: number | null }
@@ -103,10 +104,10 @@ export function JournalPanel({
         <DialogHeader>
           <DialogTitle>Dziennik</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Aktywne zadania i cele. Czas gry stoi, dopóki dziennik jest otwarty. Zamknięcie: J lub Esc.
+            Aktywne zadania i cele. Czas gry stoi, dopóki dziennik jest otwarty. Zamknięcie: <HintText action="journal" fallback="J" /> lub <HintText action="cancel" fallback="Esc" />.
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[56vh] space-y-3 overflow-y-auto pr-1">
+        <div className="max-h-[56vh] space-y-3 overflow-y-auto pr-1" tabIndex={0} aria-label="Treść dziennika">
           {active.length === 0 && (
             <p data-testid="journal-empty" className="rounded-xl bg-white/5 p-3 text-sm text-slate-300">
               Nie masz aktywnych zadań. Zajrzyj na tablicę ogłoszeń na placu (znak wykrzyknika oznacza nowe ogłoszenie).

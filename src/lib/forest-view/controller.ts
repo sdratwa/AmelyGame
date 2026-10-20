@@ -63,6 +63,16 @@ export class FirstPersonController {
     this.state.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.state.pitch - dy * sensitivity));
   }
 
+  /**
+   * Obrót kamery wychyleniem analoga: `x` w prawo, `y` w dół (po deadzone i krzywej), `yawRate`/`pitchRate` w rad/s przy
+   * pełnym wychyleniu. Prędkość zależy od `dt` (niezależna od FPS), bez wygładzania; pitch ma ten sam limit co mysz.
+   */
+  lookAnalog(x: number, y: number, dt: number, yawRate: number, pitchRate: number): void {
+    const step = Math.min(Math.max(dt, 0), MAX_FRAME_DT);
+    this.state.yaw -= x * yawRate * step;
+    this.state.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.state.pitch - y * pitchRate * step));
+  }
+
   /** Wypycha punkt z okręgów kolizji NPC; wypchnięcie sprawdza `walk.move`, a gdy nie da się go wykonać, gracz zostaje w miejscu. */
   private avoidBlockers(from: { x: number; z: number }, to: { x: number; z: number; blocked: WalkBlock[] }) {
     if (this.blockers.length === 0) return to;

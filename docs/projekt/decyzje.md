@@ -180,3 +180,12 @@
 - Latarnie: pozycje z modelu, strojenie w `BRIDGE_LAMP_CONFIG`, poziom wg godziny gry (18-21 włącza, 5-8 gasi), świecące powierzchnie + pula 3 bezcieniowych PointLight (2400 K), bez bloomu, bez zmian `MIASTO_DEFAULT`.
 - Telefon i ręka usunięte z gry; SaveV3 (migracja v2 -> v3 wycina tylko telefon). Numery telefonów właścicieli domów zostają jako napis w ogłoszeniach.
 - Do decyzji / weryfikacji autora: wygląd szwów segmentów mostu, pozycja i jasność latarni (`BRIDGE_LAMP_CONFIG`), wysokość pokładu na brzegach, koszt trzech świateł punktowych (FPS), czy poręcze mają blokować także wejście z boku na końcach pokładu.
+
+## Gamepad V1 (20 października 2026)
+
+- Obsługa DualSense/Xbox przez przeglądarkowe Gamepad API; wspólna warstwa akcji (`src/lib/input/`), jedno źródło mapowania (`gamepadConfig.ts`), jeden aktywny pad (tylko standardowe mapowanie). Szczegóły: [gamepad.md](gamepad.md).
+- Odczyt pada w istniejącej pętli renderera lasu; poza lasem lekka pętla rAF tylko przy podłączonym padzie. Klawiatura zostaje na własnych zdarzeniach, ale wywołuje te same funkcje akcji co pad.
+- Decyzje robocze (do zatwierdzenia przez autora): R1/R2 oraz D-pad lewo/prawo w lesie zmieniają slot paska; ✕ bez interakcji zjada zaznaczony przedmiot (jak E); ○ w wolnym lesie nie wychodzi z lasu, wyjście z lasu padem przez nowe menu gry (OPTIONS) -> "Wróć do miasta"; klawiatura ekranowa dla zagadki (cyfry) i imienia (litery) przy aktywnym padzie.
+- Ustawienia kontrolera w `localStorage` (`miasto.input.gamepad`), bez zmiany `SaveV3`. Wibracje opcjonalne i delikatne (skrzynia, ważny przedmiot, most).
+- Bez zmian: mechanika pierwszego questa, trolla, jelenia, generator, most, `MIASTO_DEFAULT`, wartości życia/zegara.
+- Agent nie uruchamiał testów, lint, typecheck, build ani przeglądarki (zakaz projektu); do weryfikacji przez autora.

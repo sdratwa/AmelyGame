@@ -201,3 +201,18 @@
 @media (prefers-reduced-motion: reduce) {
   .pulse, .bob, .flicker, .smoke { animation: none; }
 }
+
+/* Gamepad: wyraźny fokus przy sterowaniu padem (ustawiany przez lib/input/browser.ts: html[data-input="pad"]). */
+html[data-input="pad"] :focus:not([data-slot="dialog-content"]) {
+  outline: 3px solid #fcd34d;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px rgba(252, 211, 77, 0.28);
+}
+html[data-input="pad"] .spot:focus {
+  outline: 3px solid #fff;
+  outline-offset: 4px;
+  box-shadow: none;
+}
+html[data-input="pad"] .spot:focus .lift {
+  filter: brightness(1.12) drop-shadow(0 0 10px rgba(255, 235, 160, 0.7));
+}

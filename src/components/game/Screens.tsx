@@ -6,6 +6,8 @@ import { formatMoney, getClock, trackedQuest } from "@/lib/game/engine";
 import { hydrateState } from "@/lib/game/save/hydrate";
 import type { SaveV3 } from "@/lib/game/save/schema";
 import { FrogLogo } from "./art";
+import { HintText } from "@/components/input/InputHint";
+import { PadKeyboard } from "@/components/input/PadKeyboard";
 
 export function NameScreen({
   initial,
@@ -58,6 +60,7 @@ export function NameScreen({
         <p id="name-error" className="mt-1.5 h-5 text-sm text-red-400" role="alert">
           {error}
         </p>
+        <PadKeyboard mode="text" value={value} maxLength={20} onChange={setValue} />
         <Button
           type="submit"
           data-testid="start-button"
@@ -251,10 +254,12 @@ export function SaveProblemScreen({
   );
 }
 
-const TIPS = [
+const TIPS: React.ReactNode[] = [
   "Zimą w dzień życie spada o 1% co 10 s, a w nocy aż co 5 s.",
   "W sklepie Żappka możesz się schronić przed zimnem.",
-  "Jedzenie z ekwipunku leczy – zaznacz je i naciśnij E.",
+  <span key="eat">
+    Jedzenie z ekwipunku leczy – zaznacz je i naciśnij <HintText action="interact" fallback="E" />.
+  </span>,
   "Po odrodzeniu zostają Ci narzędzia, schemat i materiały, a jedzenie przepada.",
 ];
 
@@ -330,6 +335,7 @@ export function DeathOverlay({ onRespawn }: { onRespawn: () => void }) {
   return (
     <div
       data-testid="death-overlay"
+      data-gamepad-modal=""
       role="alertdialog"
       aria-labelledby="death-title"
       className="absolute inset-0 z-40 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"

@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ITEMS, RECIPE_BRIDGE_01, type GameState } from "@/lib/game/engine";
+import { preferredInitialFocus } from "@/lib/input/domNavigator";
 
 const countHeld = (state: GameState, id: string) => state.slots.reduce((n, slot) => (slot?.id === id ? n + slot.count : n), 0);
 
@@ -16,7 +17,7 @@ export function BridgeBuildDialog({ open, state, onBuild, onClose }: { open: boo
   const ready = hasBlueprint && rows.every((r) => r.have >= r.count);
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm border-amber-200/30 bg-slate-900 text-white" data-testid="bridge-build-window">
+      <DialogContent className="max-w-sm border-amber-200/30 bg-slate-900 text-white" data-testid="bridge-build-window" initialFocus={preferredInitialFocus}>
         <DialogHeader>
           <DialogTitle>Budowa mostu</DialogTitle>
           <DialogDescription className="text-slate-300">
@@ -47,7 +48,7 @@ export function BridgeBuildDialog({ open, state, onBuild, onClose }: { open: boo
           <Button data-testid="bridge-build-cancel" variant="secondary" onClick={onClose}>
             Anuluj
           </Button>
-          <Button data-testid="bridge-build-confirm" disabled={!ready} onClick={onBuild}>
+          <Button data-testid="bridge-build-confirm" data-gamepad-initial="" disabled={!ready} onClick={onBuild}>
             ZBUDUJ MOST
           </Button>
         </div>

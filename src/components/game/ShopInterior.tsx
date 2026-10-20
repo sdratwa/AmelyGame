@@ -11,6 +11,7 @@ import {
 } from "@/lib/game/engine";
 import { cn } from "@/lib/utils";
 import { FrogLogo } from "./art";
+import { HintText } from "@/components/input/InputHint";
 
 export function ShopInterior({
   state,
@@ -22,7 +23,12 @@ export function ShopInterior({
   onLeave: () => void;
 }) {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onLeave();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Esc zamykający okno (np. menu gry) nie może jednocześnie wychodzić ze sklepu.
+      if (document.querySelector('[data-slot="dialog-content"]')) return;
+      onLeave();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onLeave]);
@@ -49,7 +55,7 @@ export function ShopInterior({
           onClick={onLeave}
           className="shrink-0"
         >
-          Wyjdź (Esc)
+          Wyjdź (<HintText action="cancel" fallback="Esc" />)
         </Button>
       </div>
 

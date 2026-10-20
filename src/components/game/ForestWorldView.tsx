@@ -14,6 +14,11 @@ import { harvestOf } from "@/lib/game/world/harvest";
 import { safeForestPose } from "@/lib/game/world/generators/v2";
 import { cn } from "@/lib/utils";
 import { FOREST_CONTROLS, isDiagnosticsShortcut, isGameLetterShortcut } from "@/lib/input/shortcuts";
+import { getInputHub, rumble } from "@/lib/input/browser";
+import { preferredInitialFocus } from "@/lib/input/domNavigator";
+import { padForestHelp } from "@/lib/input/prompts";
+import { InputHint } from "@/components/input/InputHint";
+import { useInputActions, useInputDevice } from "@/components/input/hooks";
 import { nearestCreature } from "@/lib/forest-view/diagnostics";
 import { getForestAudio } from "@/lib/audio/controller";
 import { nextClockTime } from "@/lib/game/systems/devClock";
@@ -197,11 +202,13 @@ function DiagnosticsPanel({
 }
 
 function ControlsHelp() {
+  const device = useInputDevice();
+  const entries = device === "keyboard" ? FOREST_CONTROLS : padForestHelp(device);
   return (
     <div data-testid="controls-help" className="hidden max-w-[17rem] rounded-lg bg-black/45 px-3 py-2 text-xs text-white backdrop-blur sm:block">
       <p className="mb-1 font-semibold">Sterowanie</p>
       <ul className="space-y-0.5">
-        {FOREST_CONTROLS.map((c) => (
+        {entries.map((c) => (
           <li key={c.label} className="flex items-baseline gap-1.5">
             <span className="flex shrink-0 gap-0.5">
               {c.keys.map((k) => (
@@ -213,10 +220,14 @@ function ControlsHelp() {
             <span className="text-slate-200">{c.label}</span>
           </li>
         ))}
-        <li className="pt-0.5 text-slate-300">Mysz – rozglądanie (kliknij w scenę).</li>
+        {device === "keyboard" && <li className="pt-0.5 text-slate-300">Mysz – rozglądanie (kliknij w scenę).</li>}
       </ul>
     </div>
   );
+}
+
+function takenChestCount(state: GameState): number {
+  return Object.values(state.chests).filter((c) => c.taken).length;
 }
 
 function openedChestIds(state: GameState): string[] {
@@ -260,6 +271,7 @@ export function ForestWorldView({
   const dispatchRef = useRef(dispatch);
   const [snap, setSnap] = useState<InteractorSnapshot>(NO_INTERACTION);
   const [minimap, setMinimap] = useState(readMinimap);
+  const device = useInputDevice();
   const [interactor] = useState(() => new ForestInteractor());
   const harvestedSeen = useRef(gameState.harvested.length);
   const ready = useRef(false);
@@ -307,6 +319,7 @@ export function ForestWorldView({
       return;
     }
     rendererRef.current = renderer;
+    renderer.setInputHub(getInputHub());
     ready.current = false;
     renderer.onNpcDialog(() => {
       // Okno testowe PRAWIDŁOWY/ZŁY tylko w trybie deweloperskim przy otwartym panelu diagnostycznym (O/F3);
@@ -443,6 +456,20 @@ export function ForestWorldView({
     harvestedSeen.current = gameState.harvested.length;
   }, [gameState.harvested, seed]);
 
+  // Delikatna wibracja pada (opcjonalna): otwarcie skrzyni, zabranie przedmiotu ze skrzyni, ukończenie mostu.
+  const rumbleSeen = useRef({ opened: openedChestIds(gameState).length, taken: takenChestCount(gameState), bridge: bridgeBuilt });
+  const openedCount = openedKey ? openedKey.split("|").length : 0;
+  const takenCount = takenChestCount(gameState);
+  useEffect(() => {
+    const seen = rumbleSeen.current;
+    if (bridgeBuilt && !seen.bridge) rumble("bridge");
+    else if (takenCount > seen.taken) rumble("item");
+    else if (openedCount > seen.opened) rumble("chest");
+    seen.opened = openedCount;
+    seen.taken = takenCount;
+    seen.bridge = bridgeBuilt;
+  }, [openedCount, takenCount, bridgeBuilt]);
+
   useEffect(() => {
     const id = setInterval(() => {
       if (!ready.current) return;
@@ -482,18 +509,27 @@ export function ForestWorldView({
   useEffect(() => {
     suspendedRef.current = suspended;
   }, [suspended]);
+  /**
+   * Interakcja (E / ✕ / A): jedna wspólna ścieżka dla klawiatury i pada. Zwraca true, gdy akcja została obsłużona
+   * (albo połknięta przez bramkę podwójnej interakcji z drugiego urządzenia).
+   */
+  const triggerInteract = useCallback((): boolean => {
+    if (suspendedRef.current || trollDialogRef.current || !ready.current) return false;
+    const handled = getInputHub().interactGate.run(performance.now(), () => interactor.press() || (rendererRef.current?.talkToNpc() ?? false));
+    if (handled) setSnap(interactor.snapshot);
+    return handled;
+  }, [interactor]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!isGameLetterShortcut(e, "e")) return;
-      if (suspendedRef.current || trollDialogRef.current || !ready.current) return;
-      if (!interactor.press() && !rendererRef.current?.talkToNpc()) return;
+      if (!triggerInteract()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      setSnap(interactor.snapshot);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [interactor]);
+  }, [triggerInteract]);
 
   const toggleMinimap = useCallback(() => {
     setMinimap((on) => {
@@ -506,6 +542,30 @@ export function ForestWorldView({
       return next;
     });
   }, []);
+
+  /** Minimapa (M / L1) działa tylko w wolnym lesie; to samo sprawdzenie dla klawiatury i pada. */
+  const requestMinimapToggle = useCallback(() => {
+    if (!suspendedRef.current && !trollDialogRef.current && ready.current) toggleMinimap();
+  }, [toggleMinimap]);
+
+  // Pad: interakcja i minimapa używają tych samych funkcji co klawiatura. Gdy nic nie przejmie interakcji,
+  // ✕/A robi to co E w pasku ekwipunku: zjada zaznaczony przedmiot (jeśli leczy).
+  useInputActions((e) => {
+    if (e.source !== "gamepad") return;
+    if (e.action === "interact") {
+      if (!triggerInteract() && ready.current && !suspendedRef.current && !trollDialogRef.current) {
+        const st = stateRef.current;
+        const slot = st.slots[st.selected];
+        if (slot && !st.dead && ITEMS[slot.id].heal > 0) dispatchRef.current({ type: "eat" });
+      }
+      return true;
+    }
+    if (e.action === "minimap") {
+      requestMinimapToggle();
+      return true;
+    }
+    return false;
+  });
 
   const locked = stats?.locked ?? false;
   useEffect(() => {
@@ -527,7 +587,7 @@ export function ForestWorldView({
         return;
       }
       if (isGameLetterShortcut(e, "m")) {
-        if (!suspendedRef.current && !trollDialogRef.current && ready.current) toggleMinimap();
+        requestMinimapToggle();
         return;
       }
       if (e.key !== "Escape") return;
@@ -539,7 +599,7 @@ export function ForestWorldView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggleMinimap, restartEncounter]);
+  }, [requestMinimapToggle, restartEncounter]);
 
   const error = fatal ?? stats?.error ?? null;
   const percent = Math.round((stats?.loadProgress ?? 0) * 100);
@@ -563,7 +623,7 @@ export function ForestWorldView({
       {!loading && !error && talkable && !snap.prompt && !windowOpen && !trollDialog && (
         <div className="pointer-events-none absolute inset-x-0 top-[58%] z-10 flex justify-center px-4">
           <p data-testid="troll-talk-prompt" className="flex items-center gap-2 rounded-full bg-amber-100/90 px-4 py-2 text-sm font-semibold text-amber-950 shadow-xl backdrop-blur">
-            <kbd className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-100">E</kbd>
+            <InputHint action="interact" className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-100" />
             Porozmawiaj z trollem
           </p>
         </div>
@@ -579,7 +639,7 @@ export function ForestWorldView({
               snap.prompt.tone === "action" ? "bg-amber-100/90 text-amber-950" : "bg-slate-900/80 text-slate-100",
             )}
           >
-            {snap.prompt.key && <kbd className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-100">{snap.prompt.key}</kbd>}
+            {snap.prompt.key && <InputHint action="interact" className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-100" />}
             {snap.prompt.text}
           </p>
         </div>
@@ -636,7 +696,7 @@ export function ForestWorldView({
         )}
       </div>
 
-      {!loading && !error && !locked && !suspended && !trollDialog && (
+      {!loading && !error && !locked && !suspended && !trollDialog && device === "keyboard" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center">
           <p data-testid="forest-click-hint" className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white backdrop-blur">
             Kliknij w scenę, aby sterować myszą
@@ -664,7 +724,7 @@ export function ForestWorldView({
       )}
 
       <Dialog open={windowOpen} onOpenChange={(o) => !o && interactor.closeWindow()}>
-        <DialogContent className="max-w-sm border-amber-200/30 bg-slate-900 text-white" data-testid="chest-window">
+        <DialogContent className="max-w-sm border-amber-200/30 bg-slate-900 text-white" data-testid="chest-window" initialFocus={preferredInitialFocus}>
           <DialogHeader>
             <DialogTitle>Baśniowa skrzynia</DialogTitle>
             <DialogDescription className="text-slate-400">W środku coś leży.</DialogDescription>
@@ -693,12 +753,13 @@ export function ForestWorldView({
             </Button>
             <Button
               data-testid="chest-take"
+              data-gamepad-initial=""
               onClick={() => {
                 interactor.takeFromWindow();
                 setSnap(interactor.snapshot);
               }}
             >
-              Zabierz <kbd className="ml-1 rounded bg-black/25 px-1 text-[10px]">E</kbd>
+              Zabierz <InputHint action="interact" className="ml-1" />
             </Button>
           </div>
         </DialogContent>

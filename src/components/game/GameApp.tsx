@@ -8,6 +8,7 @@ import {
   getClock,
   initialState,
   journalEntries,
+  INVENTORY_SLOTS,
   isSheltered,
   ITEMS,
   reducer,
@@ -42,6 +43,12 @@ import { useGamePause } from "./quest/useGamePause";
 import { ShopInterior } from "./ShopInterior";
 import { WorldMap } from "./WorldMap";
 import { isGameLetterShortcut } from "@/lib/input/shortcuts";
+import { setFreeForest, startBrowserInput } from "@/lib/input/browser";
+import { useInputActions } from "@/components/input/hooks";
+import { PauseMenu } from "./PauseMenu";
+import { ControllerSettingsDialog } from "./ControllerSettingsDialog";
+
+type Panel = "board" | "journal" | "inventory" | "blueprint" | "pause" | "settings";
 
 const ForestWorldView = dynamic(() => import("./ForestWorldView").then((m) => m.ForestWorldView), {
   ssr: false,
@@ -112,7 +119,10 @@ export function GameApp() {
   const [saving, setSaving] = useState(false);
   const [forestLoading, setForestLoading] = useState(false);
   const [forestQuality, setForestQuality] = useState<QualityId>(readQuality);
-  const [panel, setPanel] = useState<"board" | "journal" | "inventory" | "blueprint" | null>(null);
+  const [panel, setPanel] = useState<Panel | null>(null);
+
+  // Wejście (pad, wykrywanie urządzenia, nawigacja po interfejsie): jeden nasłuch na całą aplikację.
+  useEffect(() => startBrowserInput(), []);
 
   const getStore = useCallback((): SaveStore => {
     storeRef.current ??= new LocalStorageSaveStore();
@@ -237,6 +247,9 @@ export function GameApp() {
   useGamePause(dispatch, "ui.panel", "ui.inventory", inventoryOpen);
   const blueprintOpen = panel === "blueprint" && playing && !state.dialog;
   useGamePause(dispatch, "ui.panel", "ui.blueprint", blueprintOpen);
+  const pauseOpen = panel === "pause" && playing && !state.dialog;
+  const settingsOpen = panel === "settings" && playing && !state.dialog;
+  useGamePause(dispatch, "ui.panel", "ui.pause_menu", pauseOpen || settingsOpen);
   // Zdobycie schematu (komunikat z silnika) otwiera okno z wymaganymi materiałami; id komunikatu jest unikalne,
   // więc wczytanie zapisu nie otwiera okna ponownie.
   const toastId = state.toast?.id ?? null;
@@ -257,22 +270,59 @@ export function GameApp() {
     }
   }, []);
 
+  /** Przełączanie paneli (J, I, menu): jedna ścieżka dla klawiatury i pada. */
+  const togglePanel = useCallback((which: "journal" | "inventory" | "pause") => {
+    setPanel((cur) => {
+      if (cur === which) return null;
+      if (which === "pause" && cur === "settings") return null;
+      if (cur !== null) return cur;
+      if (document.querySelector('[data-slot="dialog-content"]')) return cur;
+      document.exitPointerLock?.();
+      return which;
+    });
+  }, []);
+
   useEffect(() => {
     if (!playing) return;
     const onKey = (e: KeyboardEvent) => {
       const which = isGameLetterShortcut(e, "j") ? "journal" : isGameLetterShortcut(e, "i") ? "inventory" : null;
-      if (!which) return;
-      setPanel((cur) => {
-        if (cur === which) return null;
-        if (cur !== null) return cur;
-        if (document.querySelector('[data-slot="dialog-content"]')) return cur;
-        document.exitPointerLock?.();
-        return which;
-      });
+      if (which) togglePanel(which);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [playing]);
+  }, [playing, togglePanel]);
+
+  // Pad: te same panele i ten sam pasek ekwipunku co klawiatura (Y/△ ekwipunek, X/□ dziennik, OPTIONS menu, R1/R2 sloty).
+  useInputActions((e) => {
+    if (e.source !== "gamepad" || !playing) return false;
+    switch (e.action) {
+      case "inventory":
+        togglePanel("inventory");
+        return true;
+      case "journal":
+        togglePanel("journal");
+        return true;
+      case "pause":
+        if (!state.dialog) togglePanel("pause");
+        return true;
+      case "slotPrev":
+      case "slotNext": {
+        if (state.view !== "forest" || panel !== null || state.dialog) return true;
+        const delta = e.action === "slotNext" ? 1 : -1;
+        dispatch({ type: "select", slot: (state.selected + delta + INVENTORY_SLOTS) % INVENTORY_SLOTS });
+        return true;
+      }
+      default:
+        return false;
+    }
+  });
+
+  // Gracz steruje wolnym lasem (bez okien i menu): wtedy D-pad zmienia slot, a nie nawiguje po interfejsie.
+  const freeForest = playing && state.view === "forest" && panel === null && !state.dialog;
+  useEffect(() => {
+    setFreeForest(freeForest);
+    return () => setFreeForest(false);
+  }, [freeForest]);
 
   const closePanel = useCallback(() => setPanel(null), []);
   const openBoard = useCallback(() => setPanel("board"), []);
@@ -280,6 +330,11 @@ export function GameApp() {
     document.exitPointerLock?.();
     setPanel("journal");
   }, []);
+  const openMenu = () => {
+    if (!playing || state.dialog) return;
+    document.exitPointerLock?.();
+    setPanel((cur) => (cur === null ? "pause" : cur));
+  };
   const readBoard = useCallback((id: QuestId) => dispatch({ type: "board.read", id }), []);
   const acceptQuest = useCallback((id: QuestId) => dispatch({ type: "quest.accept", id }), []);
 
@@ -358,7 +413,7 @@ export function GameApp() {
 
   return (
     <div className="relative flex h-full flex-col">
-      <TopBar state={state} sheltered={sheltered} onOpenJournal={openJournal} />
+      <TopBar state={state} sheltered={sheltered} onOpenJournal={openJournal} onOpenMenu={openMenu} />
       <main className="relative min-h-0 flex-1">
         {state.view === "world" && (
           <WorldMap
@@ -432,6 +487,18 @@ export function GameApp() {
       />
       <InventoryPanel open={inventoryOpen} state={state} onClose={closePanel} onReadBlueprint={() => setPanel("blueprint")} />
       <BlueprintDialog open={blueprintOpen} state={state} onClose={closePanel} />
+      <PauseMenu
+        open={pauseOpen}
+        view={state.view}
+        onResume={closePanel}
+        onSettings={() => setPanel("settings")}
+        onSave={saveNow}
+        onLeave={() => {
+          setPanel(null);
+          leave();
+        }}
+      />
+      <ControllerSettingsDialog open={settingsOpen} onClose={() => setPanel("pause")} />
       <InventoryBar state={state} onSelect={select} onEat={eat} />
       {state.dead && <DeathOverlay onRespawn={() => dispatch({ type: "respawn" })} />}
       {saveError && (

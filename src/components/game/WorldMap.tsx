@@ -21,6 +21,7 @@ import {
   type View,
 } from "@/lib/game/engine";
 import { cn } from "@/lib/utils";
+import { preferredInitialFocus } from "@/lib/input/domNavigator";
 import { SceneDefs } from "./scene/Defs";
 import { HouseDrawing, LEVEL_FRAME } from "./scene/houses";
 import { PALETTES } from "./scene/palette";
@@ -77,7 +78,7 @@ function HouseDialog({
 
   return (
     <Dialog open={!!house} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md border-white/10 bg-slate-900 text-white" data-testid="house-dialog">
+      <DialogContent className="max-w-md border-white/10 bg-slate-900 text-white" data-testid="house-dialog" initialFocus={preferredInitialFocus}>
         {house && frame && (
           <>
             <DialogHeader>
@@ -143,7 +144,7 @@ function HouseDialog({
                 Maksymalny poziom – rezydencja jest w pełni rozbudowana.
               </p>
             )}
-            <Button variant="secondary" onClick={onClose}>
+            <Button variant="secondary" data-gamepad-initial="" onClick={onClose}>
               Zamknij
             </Button>
           </>

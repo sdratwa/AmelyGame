@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RIDDLE_BY_ID } from "@/lib/game/content/riddles";
 import type { DialogState } from "@/lib/game/core/state";
+import { preferredInitialFocus } from "@/lib/input/domNavigator";
+import { HintText } from "@/components/input/InputHint";
+import { PadKeyboard } from "@/components/input/PadKeyboard";
 
 export const TROLL_INTRO_LINE = "Hola, hola! Dokąd to? Ta skrzynia jest pod moją opieką.";
 
@@ -37,7 +40,7 @@ export function TrollDialog({ dialog, message, onChoose, onAnswer, onClose }: Tr
         onClose();
       }}
     >
-      <DialogContent showCloseButton={false} className="max-w-md border-emerald-200/30 bg-slate-900 text-white" data-testid="troll-dialog">
+      <DialogContent showCloseButton={false} className="max-w-md border-emerald-200/30 bg-slate-900 text-white" data-testid="troll-dialog" initialFocus={preferredInitialFocus}>
         {dialog?.stage === "intro" && <IntroView onChoose={onChoose} onClose={onClose} />}
         {dialog?.stage === "riddle" && dialog.riddle && <RiddleView key={dialog.riddle} riddleId={dialog.riddle} onAnswer={onAnswer} onClose={onClose} />}
         {!dialog && message && (
@@ -73,12 +76,12 @@ function IntroView({ onChoose, onClose }: { onChoose: (c: "fight" | "talk") => v
         <Button data-testid="troll-choose-fight" variant="destructive" onClick={() => onChoose("fight")}>
           Spróbuję cię pokonać!
         </Button>
-        <Button data-testid="troll-choose-talk" onClick={() => onChoose("talk")}>
+        <Button data-testid="troll-choose-talk" data-gamepad-initial="" onClick={() => onChoose("talk")}>
           Może się dogadamy?
         </Button>
       </div>
       <button type="button" data-testid="troll-leave" onClick={onClose} className="text-left text-xs text-slate-400 underline-offset-2 hover:underline">
-        Odejdź bez rozmowy (Esc)
+        Odejdź bez rozmowy (<HintText action="cancel" fallback="Esc" />)
       </button>
     </>
   );
@@ -125,6 +128,7 @@ function RiddleView({ riddleId, onAnswer, onClose }: { riddleId: string; onAnswe
           Odpowiadam
         </Button>
       </form>
+      <PadKeyboard mode="digits" value={text} maxLength={9} onChange={setText} />
       {hint && riddle && (
         <p data-testid="troll-hint" className="rounded-md bg-white/5 p-2 text-xs text-slate-200">
           Podpowiedź: {riddle.hint}
@@ -135,7 +139,7 @@ function RiddleView({ riddleId, onAnswer, onClose }: { riddleId: string; onAnswe
           Podpowiedź
         </button>
         <button type="button" data-testid="troll-leave" onClick={onClose} className="text-xs text-slate-400 underline-offset-2 hover:underline">
-          Odejdź (Esc)
+          Odejdź (<HintText action="cancel" fallback="Esc" />)
         </button>
       </div>
       <p className="text-xs text-slate-400">Błędna odpowiedź: troll prosi, abyś wrócił za godzinę czasu gry.</p>

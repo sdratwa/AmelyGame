@@ -97,7 +97,7 @@ export function QuestBoardDialog({
             Mieszkańcy szukają pomocy. Czas gry stoi, dopóki czytasz.
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1" tabIndex={0} aria-label="Ogłoszenia">
           {quests.map((q) => (
             <BoardCard key={q.def.id} quest={q} onAccept={onAccept} />
           ))}
