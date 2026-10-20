@@ -284,6 +284,222 @@
         "sha256": "110529734c439b611642577372e36e63444a6af6eb6af1e3c1acfda6a4f1f4d0",
         "seconds": 9.742
       }
+    },
+    "footsteps.light.1": {
+      "id": "footsteps.light.1",
+      "role": "footsteps",
+      "variant": 1,
+      "channels": 1,
+      "loop": false,
+      "seconds": 0.515,
+      "frames": 24720,
+      "files": [
+        {
+          "url": "/audio/footsteps.light.1.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 3128
+        },
+        {
+          "url": "/audio/footsteps.light.1.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 4209
+        }
+      ],
+      "level": {
+        "sourceRmsDb": -49.69,
+        "sourcePeakDb": -24.55,
+        "appliedGainDb": 16.92,
+        "targetRmsDb": -32.77,
+        "rmsDb": -32.77,
+        "peakDb": -7.63,
+        "tailNoiseDb": -51.73,
+        "ogg": {
+          "frames": 24720,
+          "seconds": 0.515,
+          "rmsDb": -33.12,
+          "peakDb": -7.02
+        },
+        "m4a": {
+          "frames": 25600,
+          "seconds": 0.5333,
+          "rmsDb": -33.35,
+          "peakDb": -7.58
+        }
+      },
+      "cut": {
+        "startMs": 105,
+        "impactMs": 120,
+        "keptMs": 515,
+        "sourceSeconds": 1
+      },
+      "source": {
+        "file": "footsteps/light-footstep-1.wav",
+        "bytes": 192078,
+        "sha256": "f7ff46f3cb50ba61027fd2a5c6131c7e3d0ed9308a44fa5ea77b565fb3da068e",
+        "seconds": 1
+      }
+    },
+    "footsteps.light.2": {
+      "id": "footsteps.light.2",
+      "role": "footsteps",
+      "variant": 2,
+      "channels": 1,
+      "loop": false,
+      "seconds": 0.515,
+      "frames": 24720,
+      "files": [
+        {
+          "url": "/audio/footsteps.light.2.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 3160
+        },
+        {
+          "url": "/audio/footsteps.light.2.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 4225
+        }
+      ],
+      "level": {
+        "sourceRmsDb": -40.97,
+        "sourcePeakDb": -14.2,
+        "appliedGainDb": 8.2,
+        "targetRmsDb": -32.77,
+        "rmsDb": -32.77,
+        "peakDb": -6,
+        "tailNoiseDb": -47.71,
+        "ogg": {
+          "frames": 24720,
+          "seconds": 0.515,
+          "rmsDb": -33.43,
+          "peakDb": -8.15
+        },
+        "m4a": {
+          "frames": 25600,
+          "seconds": 0.5333,
+          "rmsDb": -33.07,
+          "peakDb": -5.81
+        }
+      },
+      "cut": {
+        "startMs": 1,
+        "impactMs": 16,
+        "keptMs": 515,
+        "sourceSeconds": 1
+      },
+      "source": {
+        "file": "footsteps/light-footstep-2.wav",
+        "bytes": 192078,
+        "sha256": "7eae7785ccfc9b65ad575fd72319823ef583566f9c31f9658cb288d6a74eace5",
+        "seconds": 1
+      }
+    },
+    "footsteps.light.3": {
+      "id": "footsteps.light.3",
+      "role": "footsteps",
+      "variant": 3,
+      "channels": 1,
+      "loop": false,
+      "seconds": 0.515,
+      "frames": 24720,
+      "files": [
+        {
+          "url": "/audio/footsteps.light.3.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 3100
+        },
+        {
+          "url": "/audio/footsteps.light.3.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 4306
+        }
+      ],
+      "level": {
+        "sourceRmsDb": -43.16,
+        "sourcePeakDb": -19.22,
+        "appliedGainDb": 10.39,
+        "targetRmsDb": -32.77,
+        "rmsDb": -32.77,
+        "peakDb": -8.83,
+        "tailNoiseDb": -48.63,
+        "ogg": {
+          "frames": 24720,
+          "seconds": 0.515,
+          "rmsDb": -33.52,
+          "peakDb": -10.32
+        },
+        "m4a": {
+          "frames": 25600,
+          "seconds": 0.5333,
+          "rmsDb": -33.43,
+          "peakDb": -12.34
+        }
+      },
+      "cut": {
+        "startMs": 93,
+        "impactMs": 108,
+        "keptMs": 515,
+        "sourceSeconds": 1
+      },
+      "source": {
+        "file": "footsteps/light-footstep-3.wav",
+        "bytes": 192078,
+        "sha256": "505f70f1211b0fcf810d06348ecb128e1d55c23577e78d40d19fa65d235e5742",
+        "seconds": 1
+      }
+    },
+    "footsteps.light.4": {
+      "id": "footsteps.light.4",
+      "role": "footsteps",
+      "variant": 4,
+      "channels": 1,
+      "loop": false,
+      "seconds": 0.508,
+      "frames": 24384,
+      "files": [
+        {
+          "url": "/audio/footsteps.light.4.ogg",
+          "type": "audio/ogg; codecs=\"opus\"",
+          "bytes": 3168
+        },
+        {
+          "url": "/audio/footsteps.light.4.m4a",
+          "type": "audio/mp4; codecs=\"mp4a.40.2\"",
+          "bytes": 4274
+        }
+      ],
+      "level": {
+        "sourceRmsDb": -52.33,
+        "sourcePeakDb": -29.33,
+        "appliedGainDb": 19.56,
+        "targetRmsDb": -32.77,
+        "rmsDb": -32.77,
+        "peakDb": -9.77,
+        "tailNoiseDb": -39.15,
+        "ogg": {
+          "frames": 24384,
+          "seconds": 0.508,
+          "rmsDb": -33.71,
+          "peakDb": -11.33
+        },
+        "m4a": {
+          "frames": 24576,
+          "seconds": 0.512,
+          "rmsDb": -32.97,
+          "peakDb": -11.51
+        }
+      },
+      "cut": {
+        "startMs": 0,
+        "impactMs": 8,
+        "keptMs": 508,
+        "sourceSeconds": 1
+      },
+      "source": {
+        "file": "footsteps/light-footstep-4.wav",
+        "bytes": 192078,
+        "sha256": "c03b8e5601757b268ac44de8c85b5af12d0a08ca09cdcbafb3c85cad52a9b199",
+        "seconds": 1
+      }
     }
   }
 }

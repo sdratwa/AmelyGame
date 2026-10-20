@@ -11,9 +11,11 @@
  *  - pętle: krótki crossfade równej mocy końca z początkiem (plik jest wtedy bezszwowy przy `loop = true`),
  *  - efekty: 5 ms wejścia i wyjścia przeciw trzaskom,
  *  - po zakodowaniu: odczyt zwrotny (liczba próbek, skok na szwie pętli) trafia do manifestu.
- * Plik kroków (`mixkit-stepping-on-leaves-in-a-forest-2429.wav`) jest opcjonalny: gdy go nie ma, manifest nie zawiera
- * wpisu `footsteps.leaves`, a gra używa syntetycznego zastępnika. Gdy jest, wykrywane są pojedyncze kroki
- * (`src/lib/audio/onsets.ts`): jeden krok albo sekwencja z podziałem na segmenty.
+ *
+ * Kroki: cztery warianty `assets/source/audio/footsteps/light-footstep-N.wav` (stereo 48 kHz, ok. 1 s, sam krok to początek).
+ * Każdy jest sprowadzany do mono (panner 3D i tak miksuje do mono), przycinany do kroku (`src/lib/audio/stepSamples.ts`:
+ * uderzenie + zapas 15 ms, koniec po zaniknięciu, cosinusowe wyciszenie ogona), a poziomy są wyrównywane jedną stałą poprawką
+ * na próbkę do wspólnego RMS kroku (bez kompresji i bez limitera; szczyt najgłośniejszego <= -6 dBFS). Wynik: `footsteps.light.N`.
  */
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -21,7 +23,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { detectSteps } from "../../src/lib/audio/onsets.ts";
+import { fadeEnds, findStepCut, measureStep, peakOf, planLevels, toMono } from "../../src/lib/audio/stepSamples.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC_DIR = path.join(ROOT, "assets/source/audio");
@@ -38,8 +40,9 @@ const ASSETS = [
   { id: "bird.jungle", file: "mixkit-bird-screeching-in-the-jungle-2436.wav", role: "bird", channels: 1, loop: false, lufs: -17, opus: "64k", aac: "64k" },
   { id: "bird.screech", file: "mixkit-bird-screech-2435.wav", role: "bird", channels: 1, loop: false, lufs: -17, opus: "64k", aac: "64k" },
   { id: "event.wolves", file: "mixkit-wolves-at-scary-forest-2485.wav", role: "event", channels: 1, loop: false, lufs: -19, opus: "64k", aac: "64k" },
-  { id: "footsteps.leaves", file: "mixkit-stepping-on-leaves-in-a-forest-2429.wav", role: "footsteps", channels: 1, loop: false, lufs: -22, opus: "64k", aac: "64k", optional: true, steps: true },
 ];
+
+const STEP_FILES = [1, 2, 3, 4].map((n) => ({ id: `footsteps.light.${n}`, variant: n, file: `footsteps/light-footstep-${n}.wav`, opus: "48k", aac: "48k" }));
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 const round = (v, d = 3) => Math.round(v * 10 ** d) / 10 ** d;
@@ -116,6 +119,71 @@ function readBack(file, channels) {
   return { frames, seconds: frames / RATE, seamJump: round(seam, 5), typicalDelta: round(delta / Math.min(frames - 1, 47999), 5) };
 }
 
+
+function buildFootsteps() {
+  const prepared = STEP_FILES.map((spec) => {
+    const src = path.join(SRC_DIR, spec.file);
+    if (!fs.existsSync(src)) throw new Error(`Brak pliku źródłowego ${src}`);
+    const bytes = fs.readFileSync(src);
+    const stereo = decode(src, 2);
+    const mono = toMono(stereo, 2);
+    const cut = findStepCut(mono, RATE);
+    const step = mono.slice(cut.start, cut.end);
+    fadeEnds(step, RATE);
+    const before = measureStep(step, RATE);
+    const tail = step.slice(Math.max(0, step.length - Math.round(0.12 * RATE)), step.length - Math.round(0.04 * RATE));
+    return { spec, bytes, step, cut, before, sourceSeconds: stereo.length / 2 / RATE, sourcePeakDb: 20 * Math.log10(peakOf(mono) || 1e-9), tailDb: measureStep(tail, RATE).rmsDb };
+  });
+  const plan = planLevels(prepared.map((p) => p.before), -6);
+  for (const [i, p] of prepared.entries()) {
+    const gain = 10 ** (plan.gainDb[i] / 20);
+    for (let k = 0; k < p.step.length; k++) p.step[k] *= gain;
+    const raw = path.join(tmp, `${p.spec.id}.f32`);
+    fs.writeFileSync(raw, toBuffer(p.step));
+    const input = ["-f", "f32le", "-ar", String(RATE), "-ac", "1", "-i", raw];
+    const ogg = path.join(OUT_DIR, `${p.spec.id}.ogg`);
+    const m4a = path.join(OUT_DIR, `${p.spec.id}.m4a`);
+    ffmpeg(["-y", ...input, "-c:a", "libopus", "-b:a", p.spec.opus, "-application", "audio", "-vbr", "on", ogg]);
+    ffmpeg(["-y", ...input, "-c:a", "aac", "-b:a", p.spec.aac, "-movflags", "+faststart", m4a]);
+    const after = measureStep(p.step, RATE);
+    const decoded = (file) => {
+      const d = decode(file, 1);
+      const m = measureStep(d, RATE);
+      return { frames: d.length, seconds: round(d.length / RATE, 4), rmsDb: round(m.rmsDb, 2), peakDb: round(m.peakDb, 2) };
+    };
+    const entry = {
+      id: p.spec.id,
+      role: "footsteps",
+      variant: p.spec.variant,
+      channels: 1,
+      loop: false,
+      seconds: round(p.step.length / RATE),
+      frames: p.step.length,
+      files: [
+        { url: `/audio/${p.spec.id}.ogg`, type: 'audio/ogg; codecs="opus"', bytes: fs.statSync(ogg).size },
+        { url: `/audio/${p.spec.id}.m4a`, type: 'audio/mp4; codecs="mp4a.40.2"', bytes: fs.statSync(m4a).size },
+      ],
+      level: {
+        sourceRmsDb: round(p.before.rmsDb, 2),
+        sourcePeakDb: round(p.sourcePeakDb, 2),
+        appliedGainDb: round(plan.gainDb[i], 2),
+        targetRmsDb: round(plan.targetRmsDb, 2),
+        rmsDb: round(after.rmsDb, 2),
+        peakDb: round(after.peakDb, 2),
+        tailNoiseDb: round(p.tailDb + plan.gainDb[i], 2),
+        ogg: decoded(ogg),
+        m4a: decoded(m4a),
+      },
+      cut: { startMs: round((p.cut.start / RATE) * 1000, 1), impactMs: round((p.cut.impact / RATE) * 1000, 1), keptMs: round((p.step.length / RATE) * 1000, 1), sourceSeconds: round(p.sourceSeconds) },
+      source: { file: `footsteps/${path.basename(p.spec.file)}`, bytes: p.bytes.length, sha256: sha256(p.bytes), seconds: round(p.sourceSeconds) },
+    };
+    manifest.assets[p.spec.id] = entry;
+    console.log(
+      `${p.spec.id.padEnd(18)} ${entry.seconds.toFixed(2)} s  mono  RMS ${p.before.rmsDb.toFixed(1)} -> ${after.rmsDb.toFixed(1)} dBFS (${plan.gainDb[i].toFixed(1)} dB)  szczyt ${after.peakDb.toFixed(1)} dBFS  szum ogona ${entry.level.tailNoiseDb.toFixed(1)} dBFS  ogg ${(entry.files[0].bytes / 1024).toFixed(1)} KB  m4a ${(entry.files[1].bytes / 1024).toFixed(1)} KB`,
+    );
+  }
+}
+
 fs.mkdirSync(OUT_DIR, { recursive: true });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "miasto-audio-"));
 const manifest = { version: 1, sampleRate: RATE, license: LICENSE, assets: {} };
@@ -123,13 +191,7 @@ const manifest = { version: 1, sampleRate: RATE, license: LICENSE, assets: {} };
 try {
   for (const spec of ASSETS) {
     const src = path.join(SRC_DIR, spec.file);
-    if (!fs.existsSync(src)) {
-      if (spec.optional) {
-        console.warn(`Pominięto ${spec.id}: brak ${spec.file} (gra użyje syntetycznego zastępnika).`);
-        continue;
-      }
-      throw new Error(`Brak pliku źródłowego ${src}`);
-    }
+    if (!fs.existsSync(src)) throw new Error(`Brak pliku źródłowego ${src}`);
     const srcBytes = fs.readFileSync(src);
     const measured = loudness(src, spec.channels);
     let gainDb = spec.lufs - measured.lufs;
@@ -171,17 +233,14 @@ try {
       source: { file: spec.file, bytes: srcBytes.length, sha256: sha256(srcBytes), seconds: round(sourceSeconds) },
     };
 
-    if (spec.steps) {
-      const analysis = detectSteps(samples, RATE);
-      entry.steps = analysis.kind === "silent" ? { kind: "single", segments: [{ start: 0, end: entry.seconds }] } : analysis;
-    }
-
     manifest.assets[spec.id] = entry;
     const v = entry.verify;
     console.log(
       `${spec.id.padEnd(18)} ${entry.seconds.toFixed(2)} s  ${spec.channels}ch  ${measured.lufs.toFixed(1)} -> ${spec.lufs} LUFS (${gainDb.toFixed(1)} dB)  ogg ${(entry.files[0].bytes / 1024).toFixed(0)} KB  m4a ${(entry.files[1].bytes / 1024).toFixed(0)} KB  szew ${v.ogg.seamJump} (typ. ${v.ogg.typicalDelta})`,
     );
   }
+
+  buildFootsteps();
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

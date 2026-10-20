@@ -6,12 +6,13 @@ import { BIRD_IDS } from "./wildlife";
 
 const ROOT = path.resolve(__dirname, "../../..");
 const PUBLIC = path.join(ROOT, "public/audio");
+const STEP_IDS = [1, 2, 3, 4].map((n) => `footsteps.light.${n}`);
 const manifest = JSON.parse(fs.readFileSync(path.join(PUBLIC, "audio.json"), "utf8")) as AudioManifest;
 
 describe("zasoby audio", () => {
   it("manifest jest poprawny i zawiera dokładnie wymagane nagrania", () => {
     expect(isAudioManifest(manifest)).toBe(true);
-    for (const id of ["ambience.day", "ambience.night", "event.wolves", ...BIRD_IDS]) expect(manifest.assets[id]).toBeTruthy();
+    for (const id of ["ambience.day", "ambience.night", "event.wolves", ...BIRD_IDS, ...STEP_IDS]) expect(manifest.assets[id]).toBeTruthy();
     const sources = Object.values(manifest.assets).map((a) => (a as unknown as { source: { file: string } }).source.file);
     expect(sources.sort()).toEqual(
       [
@@ -21,6 +22,7 @@ describe("zasoby audio", () => {
         "mixkit-bird-screeching-in-the-jungle-2436.wav",
         "mixkit-bird-screech-2435.wav",
         "mixkit-wolves-at-scary-forest-2485.wav",
+        ...[1, 2, 3, 4].map((n) => `footsteps/light-footstep-${n}.wav`),
       ].sort(),
     );
   });
@@ -56,6 +58,37 @@ describe("zasoby audio", () => {
     }
     expect(manifest.assets["event.wolves"].seconds).toBeGreaterThan(9);
     expect(manifest.assets["event.wolves"].seconds).toBeLessThan(10);
+  });
+
+  it("cztery próbki kroków są mono, krótkie, bez pętli i mają wyrównany poziom RMS", () => {
+    type Level = { appliedGainDb: number; targetRmsDb: number; rmsDb: number; peakDb: number; sourceRmsDb: number; ogg: { rmsDb: number; peakDb: number }; m4a: { rmsDb: number; peakDb: number } };
+    const levels = STEP_IDS.map((id) => {
+      const e = manifest.assets[id];
+      expect(e.role).toBe("footsteps");
+      expect(e.channels).toBe(1);
+      expect(e.loop).toBe(false);
+      expect(e.seconds).toBeGreaterThan(0.2);
+      expect(e.seconds).toBeLessThanOrEqual(0.55);
+      expect(e.files.map((f) => f.type.split(";")[0]).sort()).toEqual(["audio/mp4", "audio/ogg"]);
+      for (const f of e.files) expect(f.bytes).toBeLessThan(20_000);
+      return (e as unknown as { level: Level }).level;
+    });
+    const spread = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
+    expect(spread(levels.map((l) => l.sourceRmsDb))).toBeGreaterThan(4);
+    expect(spread(levels.map((l) => l.rmsDb))).toBeLessThan(0.05);
+    expect(spread(levels.map((l) => l.ogg.rmsDb))).toBeLessThan(1.2);
+    expect(spread(levels.map((l) => l.m4a.rmsDb))).toBeLessThan(1.2);
+    for (const l of levels) {
+      expect(l.rmsDb).toBeCloseTo(l.targetRmsDb, 1);
+      expect(l.peakDb).toBeLessThanOrEqual(-6 + 0.01);
+      expect(l.ogg.peakDb).toBeLessThan(-4);
+      expect(l.m4a.peakDb).toBeLessThan(-4);
+      expect(l.appliedGainDb).toBeLessThan(30);
+    }
+  });
+
+  it("stare nagranie kroków z lasu nie jest już w manifeście ani odtwarzane", () => {
+    expect(manifest.assets["footsteps.leaves"]).toBeUndefined();
   });
 
   it("materiały źródłowe WAV są poza zasobami publicznymi", () => {

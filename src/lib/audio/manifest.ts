@@ -1,5 +1,3 @@
-import type { StepSegment } from "./onsets";
-
 export type AudioFile = { url: string; type: string; bytes: number };
 
 export type AudioAssetEntry = {
@@ -10,7 +8,9 @@ export type AudioAssetEntry = {
   seconds: number;
   frames: number;
   files: AudioFile[];
-  steps?: { kind: "single" | "sequence"; segments: StepSegment[] };
+  /** Kroki: numer wariantu (1-4) i pomiary wyrównania poziomów z potoku `assets:audio`. */
+  variant?: number;
+  level?: { rmsDb: number; peakDb: number; appliedGainDb: number; targetRmsDb: number };
 };
 
 export type AudioManifest = {
@@ -24,7 +24,6 @@ export const MANIFEST_URL = "/audio/audio.json";
 export const AMBIENCE_DAY = "ambience.day";
 export const AMBIENCE_NIGHT = "ambience.night";
 export const WOLVES = "event.wolves";
-export const FOOTSTEPS = "footsteps.leaves";
 
 export function isAudioManifest(value: unknown): value is AudioManifest {
   if (typeof value !== "object" || value === null) return false;
