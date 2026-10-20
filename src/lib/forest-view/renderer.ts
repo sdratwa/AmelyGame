@@ -71,6 +71,9 @@ export type PanelStats = {
   deer?: DeerStats | null;
   /** Błąd wczytania modelu jelenia (gra działa dalej bez niego). */
   deerError?: string | null;
+  /** Most i latarnie (panel dev); null, gdy most nie stoi albo model się nie wczytał. */
+  bridge?: { built: boolean; triangles: number; bays: number; length: number; lamps: number; level: number; lights: number; markers: boolean } | null;
+  bridgeError?: string | null;
 };
 
 export type BenchmarkReport = {
@@ -237,6 +240,7 @@ export class ForestRenderer {
   private bridgeLoad: Promise<void> | null = null;
   private bridgeAnimate = false;
   private bridgeError: string | null = null;
+  private bridgeMarkers = false;
   private npcLayer: NpcLayer | null = null;
   private npcMaterialMode: TrollMaterialMode = "matte";
   private npcError: string | null = null;
@@ -366,6 +370,7 @@ export class ForestRenderer {
     this.hour = hour;
     this.atmosphere = atmosphereAt(hour, this.visual.look.dayModel);
     this.applyAtmosphere();
+    this.bridgeLayer?.setHour(hour);
   }
 
   getHour(): number {
@@ -386,6 +391,19 @@ export class ForestRenderer {
     else this.worldFlags.delete(BRIDGE_FLAG);
     // Pojawienie się z animacją tylko przy zmianie w trakcie sesji (po wczytaniu zapisu most stoi od razu).
     this.applyBridge(this.controller !== null && built && !was);
+  }
+
+  /** Markery deweloperskie pozycji latarni mostu (panel O/F3); widoczne, gdy most stoi. */
+  setBridgeLampMarkers(on: boolean): void {
+    this.bridgeMarkers = on;
+    this.bridgeLayer?.lamps.setMarkers(on);
+  }
+
+  private bridgeStats(): NonNullable<PanelStats["bridge"]> | null {
+    const l = this.bridgeLayer;
+    if (!l) return null;
+    const ls = l.lampStats();
+    return { built: l.isBuilt, triangles: l.triangles, bays: l.layout.bays, length: l.layout.length, lamps: ls.lamps, level: ls.level, lights: ls.lights, markers: ls.markers };
   }
 
   /** Błąd wczytania modelu mostu (kolizje i przejście działają bez niego); null, gdy brak. */
@@ -427,6 +445,8 @@ export class ForestRenderer {
           return;
         }
         const layer = new BridgeLayer(asset, forestBridgeOf(seed), { receiveShadow: this.shadowsOn() });
+        layer.setHour(this.hour);
+        layer.lamps.setMarkers(this.bridgeMarkers);
         this.bridgeLayer = layer;
         this.scene.add(layer.group);
         this.bridgeError = null;
@@ -1268,7 +1288,7 @@ export class ForestRenderer {
       this.updateInstances(time);
       this.updateSun();
       this.chestLayer?.update(dt, s);
-      this.bridgeLayer?.update(dt);
+      this.bridgeLayer?.update(dt, this.camera.position.x, this.camera.position.z);
       // Troll żyje także w trakcie własnego dialogu (stoi w Idle i patrzy na gracza), choć sterowanie graczem jest wstrzymane.
       if (!this.suspended || this.npcLayer?.dialogActive) this.npcLayer?.update(dt, s);
       if (!this.suspended) this.deerLayer?.update(dt, s);
@@ -1437,6 +1457,8 @@ export class ForestRenderer {
       npcError: this.npcError,
       deer: this.deerLayer?.stats() ?? null,
       deerError: this.deerError,
+      bridge: this.bridgeStats(),
+      bridgeError: this.bridgeError,
     });
   }
 }

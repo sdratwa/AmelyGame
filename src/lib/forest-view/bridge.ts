@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { BridgeAsset } from "@/lib/assets/bridge";
 import type { BridgeLayout } from "@/lib/game/world/bridgeLayout";
+import { BridgeLamps, lampLevel, type LampStats } from "./bridgeLamps";
 import { assembleBridge, sliceBridgeSources, triangleCountOf } from "./bridgeModules";
 
 /** Czas pojawiania się mostu (s): krótki, łagodny wzrost z gruntu; wczytany zapis pokazuje most od razu. */
@@ -27,6 +28,8 @@ export class BridgeLayer {
   private built = false;
   private rise = 1;
   private rising = false;
+  private hour = 12;
+  readonly lamps: BridgeLamps;
 
   constructor(
     private readonly asset: BridgeAsset,
@@ -50,6 +53,8 @@ export class BridgeLayer {
     this.mesh.matrixAutoUpdate = false;
     this.group.name = "bridge-layer";
     this.group.add(this.mesh);
+    this.lamps = new BridgeLamps(layout.lamps, layout);
+    this.group.add(this.lamps.group);
     this.group.visible = false;
   }
 
@@ -85,11 +90,27 @@ export class BridgeLayer {
     this.applyRise();
   }
 
-  update(dt: number): void {
-    if (!this.rising) return;
-    this.rise = Math.min(1, this.rise + dt / BRIDGE_RISE_SECONDS);
-    if (this.rise >= 1) this.rising = false;
-    this.applyRise();
+  /** Godzina gry (0-24): steruje latarniami (zmierzch 18-21 włącza, świt 5-8 gasi). */
+  setHour(hour: number): void {
+    this.hour = hour;
+  }
+
+  /** Jasność latarni teraz: 0 przed zbudowaniem i w trakcie pojawiania się mostu. */
+  get lampLevel(): number {
+    return this.built && !this.rising ? lampLevel(this.hour) : 0;
+  }
+
+  lampStats(): LampStats {
+    return this.lamps.stats();
+  }
+
+  update(dt: number, cameraX = 0, cameraZ = 0): void {
+    if (this.rising) {
+      this.rise = Math.min(1, this.rise + dt / BRIDGE_RISE_SECONDS);
+      if (this.rise >= 1) this.rising = false;
+      this.applyRise();
+    }
+    if (this.built) this.lamps.update(this.lampLevel, cameraX, cameraZ);
   }
 
   private applyRise(): void {
@@ -100,6 +121,7 @@ export class BridgeLayer {
   }
 
   dispose(): void {
+    this.lamps.dispose();
     this.geometry.dispose();
     this.asset.dispose();
   }

@@ -80,6 +80,7 @@ function DiagnosticsPanel({
   onSetTrollMaterial,
   onPreviewSteps,
   onSetStepVolume,
+  onToggleLampMarkers,
 }: {
   stats: PanelStats;
   audio: AudioSnapshot | null;
@@ -89,6 +90,7 @@ function DiagnosticsPanel({
   onSetTrollMaterial: (mode: TrollMaterialMode) => void;
   onPreviewSteps: (owner: "player" | "npc") => void;
   onSetStepVolume: (owner: "player" | "npc", value: number) => void;
+  onToggleLampMarkers: (on: boolean) => void;
 }) {
   const s = stats.stream;
   const nearest = nearestCreature(stats);
@@ -142,6 +144,25 @@ function DiagnosticsPanel({
           <TrollMaterialDiagnostics npc={stats.npc} onSetMode={onSetTrollMaterial} />
         </div>
       )}
+      {stats.bridge && (
+        <div data-testid="bridge-diagnostics" className="mt-1 border-t border-white/20 pt-1">
+          <div>
+            Most · {stats.bridge.length.toFixed(1)} m · {stats.bridge.bays} segmentów · {(stats.bridge.triangles / 1000).toFixed(1)} tys. trójkątów
+          </div>
+          <div>
+            latarnie {stats.bridge.lamps} · poziom {stats.bridge.level.toFixed(2)} · aktywne światła {stats.bridge.lights}
+          </div>
+          <button
+            type="button"
+            data-testid="bridge-lamp-markers"
+            onClick={() => onToggleLampMarkers(!stats.bridge?.markers)}
+            className="pointer-events-auto mt-1 rounded bg-fuchsia-500 px-2 py-0.5 text-[11px] font-semibold text-fuchsia-950 hover:bg-fuchsia-400"
+          >
+            Markery latarni: {stats.bridge.markers ? "wyłącz" : "włącz"}
+          </button>
+        </div>
+      )}
+      {stats.bridgeError && <div className="text-red-300">model mostu: {stats.bridgeError}</div>}
       {stats.npcError && <div className="text-red-300">model trolla: {stats.npcError}</div>}
       {stats.deer && (
         <div data-testid="deer-diagnostics" className="mt-1 border-t border-white/20 pt-1">
@@ -400,6 +421,9 @@ export function ForestWorldView({
   const setTrollMaterial = useCallback((mode: TrollMaterialMode) => {
     rendererRef.current?.setNpcMaterialMode(mode);
   }, []);
+  const toggleLampMarkers = useCallback((on: boolean) => {
+    rendererRef.current?.setBridgeLampMarkers(on);
+  }, []);
   const restartEncounter = useCallback(() => {
     if (trollDialogRef.current) return;
     rendererRef.current?.restartNpcEncounter();
@@ -611,7 +635,7 @@ export function ForestWorldView({
           </button>
         )}
         {debug && stats && (
-          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} onPreviewSteps={previewSteps} onSetStepVolume={setStepVolume} />
+          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} onPreviewSteps={previewSteps} onSetStepVolume={setStepVolume} onToggleLampMarkers={toggleLampMarkers} />
         )}
       </div>
 
