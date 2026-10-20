@@ -6,7 +6,7 @@ import type { ForestWorld } from "@/lib/game/world/generators/v2/forest";
 import type { WalkWorld } from "@/lib/game/world/walk";
 import type { Blocker } from "@/lib/npc/patrol";
 import type { DialogOutcome } from "@/lib/npc/encounter";
-import { TrollNpc, type TrollReaction } from "@/lib/npc/troll";
+import { TrollNpc, type TrollReaction, type TrollStep } from "@/lib/npc/troll";
 import { prepareTrollMaterials, type TrollMaterialMode, type TrollMaterialReport, type TrollMaterials } from "@/lib/npc/trollMaterials";
 
 /** Troll dalej niż to od gracza nie jest aktualizowany ani rysowany (animacja szkieletowa kosztuje, a pod nim nie ma gruntu). */
@@ -45,6 +45,9 @@ export type NpcStats = {
   /** Czas przygotowania korekty (ms) i ewentualny powód trybu zapasowego (jednolita chropowatość zamiast mapy). */
   materialBakeMs: number;
   materialFallback: string | null;
+  /** Czy animacja Walk daje teraz kroki (pełna waga, ruch) i ile kroków wyzwolono od wejścia do lasu. */
+  stepping: boolean;
+  steps: number;
 };
 
 /** Miejsce trolla: kotwica W1b i punkt, ku któremu patrzy (pilnowana skrzynia). */
@@ -125,6 +128,11 @@ export class NpcLayer {
     this.troll.setDialogListener(listener);
   }
 
+  /** Odbiorca kroków trolla (kontakt stopy z ziemią w Walk); `null` wyłącza. */
+  onStep(listener: ((step: TrollStep) => void) | null): void {
+    this.troll.setStepListener(listener);
+  }
+
   /** Wynik dialogu: sterowanie tylko zachowaniem i animacją trolla (nie stanem gry). */
   resolveDialog(outcome: DialogOutcome): boolean {
     return this.troll.resolveDialog(outcome);
@@ -181,6 +189,8 @@ export class NpcLayer {
       materialReport: this.materials?.report() ?? null,
       materialBakeMs: this.materials?.bakeMs ?? 0,
       materialFallback: this.materials?.fallbackReason ?? this.materialError,
+      stepping: this.troll.stepping,
+      steps: this.troll.stepsEmitted,
     };
   }
 

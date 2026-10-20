@@ -155,6 +155,11 @@ export class NpcAnimator {
     return out;
   }
 
+  /** Bieżąca waga stanu w przejściu (0 = nie gra); bez alokacji, do czujników w pętli gry. */
+  weightOf(id: string): number {
+    return this.blend.get(id) ?? 0;
+  }
+
   get proceduralWeight(): number {
     return this.procWeight;
   }

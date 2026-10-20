@@ -8,6 +8,7 @@ import { ENCOUNTER, TrollEncounter, type DialogOutcome, type EncounterBody, type
 import { cycleTimes, lowestPointOver, measureStanceSpeed } from "./ground";
 import { Patroller, planPatrolRoute, type Blocker, type Point } from "./patrol";
 import { measureRootMotion, stripRootMotion, verticalAxisOf, worldDrift } from "./rootMotion";
+import { detectFootfalls, FootfallTracker, type Footfall, type FootfallAnalysis } from "./trollSteps";
 
 /** Promień kolizji trolla z graczem (m): korpus ma ok. 1 m w obrysie, ręce mogą wystawać poza niego. */
 export const TROLL_RADIUS = 0.9;
@@ -54,6 +55,8 @@ export type TrollAnimationSet = {
   hipsDrift: Record<string, number>;
   /** Klipy, z których usunięto root motion (puste, gdy plik ma wszystkie animacje w miejscu). */
   stripped: string[];
+  /** Kontakty stóp z ziemią w cyklu Walk (do dźwięku kroków). */
+  footfalls: FootfallAnalysis;
 };
 
 /**
@@ -76,7 +79,15 @@ export function buildTrollAnimations(asset: TrollAsset): TrollAnimationSet {
   });
   const walk = clips.find((c) => c.name === TROLL_CLIPS.walk)!;
   const toes = ["mixamorig:LeftToeBase", "mixamorig:RightToeBase"].map((n) => asset.scene.getObjectByName(sceneNodeName(n))!);
-  return { clips, states: TROLL_STATES, nominalSpeed: measureStanceSpeed(asset.scene, walk, toes, asset.scale), hipsDrift, stripped };
+  const ankles = ["mixamorig:LeftFoot", "mixamorig:RightFoot"].map((n) => asset.scene.getObjectByName(sceneNodeName(n))!) as [THREE.Object3D, THREE.Object3D];
+  return {
+    clips,
+    states: TROLL_STATES,
+    nominalSpeed: measureStanceSpeed(asset.scene, walk, toes, asset.scale),
+    hipsDrift,
+    stripped,
+    footfalls: detectFootfalls(asset.scene, walk, ankles, asset.scale),
+  };
 }
 
 /** Punkty terenu pod stopami (m, układ postaci: x w bok, z do przodu): obie stopy rozstawione szeroko, więc na zboczu liczy się najwyższy z nich. */
@@ -101,6 +112,13 @@ export type TrollNpcOptions = {
 };
 
 export type PatrolMode = "run" | "stop" | "face";
+
+/** Krok trolla (kontakt stopy z ziemią w Walk): pozycja w świecie, stopa i prędkość patrolu w chwili kroku. */
+export type TrollStep = { x: number; z: number; foot: 0 | 1; speed: number };
+
+/** Ruch poniżej tej prędkości patrolu (m/s) nie daje kroków, a waga Walk poniżej tej wartości oznacza trwający crossfade. */
+export const STEP_MIN_SPEED = 0.15;
+export const STEP_MIN_WEIGHT = 0.85;
 
 /** Czynności zlecane przez maszynę spotkania: ruch patrolu, obrót i animacje trolla. */
 class TrollBody implements EncounterBody {
@@ -175,6 +193,9 @@ export class TrollNpc {
   private lastDistance = Infinity;
   private disposed = false;
   private dialogListener: (() => void) | null = null;
+  private stepListener: ((step: TrollStep) => void) | null = null;
+  private readonly stepEvent: TrollStep = { x: 0, z: 0, foot: 0, speed: 0 };
+  private readonly footfalls: FootfallTracker;
 
   constructor(options: TrollNpcOptions) {
     this.asset = options.asset;
@@ -223,6 +244,7 @@ export class TrollNpc {
     this.encounter = new TrollEncounter(this.body(), rngStream(options.seed, "npc.troll.nervous"), {
       onDialogRequested: () => this.dialogListener?.(),
     });
+    this.footfalls = new FootfallTracker(this.animations.footfalls, (f) => this.emitStep(f));
     this.group.name = "troll";
     this.group.scale.setScalar(this.scale);
     this.group.add(asset.scene);
@@ -298,6 +320,31 @@ export class TrollNpc {
     this.dialogListener = listener;
   }
 
+  /** Odbiorca kroków (kontakt stopy z ziemią w Walk). Jeden odbiorca; `null` wyłącza. Po `dispose` nie jest wywoływany. */
+  setStepListener(listener: ((step: TrollStep) => void) | null): void {
+    this.stepListener = listener;
+  }
+
+  /** Czy animacja i ruch dają teraz kroki: stan Walk z pełną wagą (bez crossfade) i ruch patrolu. */
+  get stepping(): boolean {
+    return this.animator.state === "walk" && this.animator.weightOf("walk") >= STEP_MIN_WEIGHT && this.patrol.speed >= STEP_MIN_SPEED;
+  }
+
+  get stepsEmitted(): number {
+    return this.footfalls.emitted;
+  }
+
+  private emitStep(f: Footfall): void {
+    const listener = this.stepListener;
+    if (!listener || this.disposed) return;
+    const e = this.stepEvent;
+    e.x = this.patrol.x;
+    e.z = this.patrol.z;
+    e.foot = f.foot;
+    e.speed = this.patrol.speed;
+    listener(e);
+  }
+
   has(state: string): boolean {
     return this.animator.has(state);
   }
@@ -314,6 +361,7 @@ export class TrollNpc {
     if (this.patrolMode === "run") this.animator.setBase(this.patrol.mode === "walk" ? "walk" : "idle");
     if (this.patrol.mode === "walk") this.animator.setLocomotionSpeed(this.patrol.speed / Math.max(this.animations.nominalSpeed, 1e-6));
     this.animator.update(dt);
+    this.footfalls.update({ active: this.stepping, time: this.animator.stateTime });
     this.syncTransform(dt);
   }
 
@@ -341,6 +389,7 @@ export class TrollNpc {
     if (this.disposed) return;
     this.disposed = true;
     this.dialogListener = null;
+    this.stepListener = null;
     this.encounter.dispose();
     this.animator.dispose();
     this.group.removeFromParent();
