@@ -91,14 +91,15 @@ describe("applyCommand", () => {
     expect(back.events.map((e) => e.type)).toEqual(["player.respawned", "time.pause_changed"]);
   });
 
-  it("wejście do lasu kończy tutorial i emituje zdarzenia", () => {
-    const out = applyCommand(playing({ tutorialDone: false }), { type: "enter", view: "forest" });
-    expect(out.events.map((e) => e.type)).toEqual([
-      "view.entered",
-      "tutorial.completed",
-      "time.pause_changed",
-    ]);
-    const left = applyCommand(out.state, { type: "leave" });
+  it("w tutorialu wejście do lasu jest zablokowane, a przyjęcie zadania kończy tutorial i emituje zdarzenia", () => {
+    const tutorial = playing({ tutorialDone: false });
+    expect(applyCommand(tutorial, { type: "enter", view: "forest" }).events).toEqual([]);
+    const out = applyCommand(tutorial, { type: "quest.accept", id: "quest.bridge_01" });
+    expect(out.events.map((e) => e.type)).toEqual(["quest.accepted", "tutorial.completed", "time.pause_changed"]);
+    expect(out.state.tutorialDone).toBe(true);
+    const entered = applyCommand(out.state, { type: "enter", view: "forest" });
+    expect(entered.events.map((e) => e.type)).toEqual(["view.entered"]);
+    const left = applyCommand(entered.state, { type: "leave" });
     expect(left.events).toEqual([{ type: "view.left", from: "forest" }]);
   });
 

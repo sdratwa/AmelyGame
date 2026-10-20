@@ -1,4 +1,4 @@
-import { QUESTS, type QuestDef, type StageDef } from "../content/quests";
+import { QUEST_BRIDGE_01, QUESTS, RECIPE_BRIDGE_01, type QuestDef, type StageDef } from "../content/quests";
 import type { GameState } from "../core/state";
 import { questProgress, type ObjectiveProgress, type QuestProgress, type QuestStatus } from "./quests";
 
@@ -27,7 +27,9 @@ function toView(state: GameState, def: QuestDef): QuestView | null {
   const stage = active ? (def.stages[progress.currentStage] ?? null) : null;
   const stageProgress = active ? progress.stages[progress.currentStage] : undefined;
   const parallel: ObjectiveProgress[] = [];
-  if (active) {
+  // Wymagane materiały gracz poznaje dopiero ze schematu: przed jego zdobyciem tracker nie zdradza przyszłych etapów.
+  const knowsRecipe = def.id !== QUEST_BRIDGE_01 || (state.ledger.gained[RECIPE_BRIDGE_01.blueprint] ?? 0) >= 1;
+  if (active && knowsRecipe) {
     def.stages.forEach((st, i) => {
       if (i <= progress.currentStage) return;
       st.objectives.forEach((o, k) => {

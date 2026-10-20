@@ -8,7 +8,7 @@ export type MinimapPose = { x: number; z: number; yaw: number };
 
 const FRAME_MS = 50;
 
-type Palette = { ground: string; river: string; riverEdge: string; trail: string; trailMain: string; frame: string; area: string; areaEdge: string };
+type Palette = { ground: string; river: string; riverEdge: string; trail: string; trailMain: string; frame: string; area: string; areaEdge: string; site: string; siteEdge: string };
 
 const PALETTE: Palette = {
   ground: "#3f5a35",
@@ -19,7 +19,11 @@ const PALETTE: Palette = {
   frame: "#d9b36a",
   area: "rgba(255,214,102,0.16)",
   areaEdge: "rgba(255,214,102,0.85)",
+  site: "rgba(120,200,255,0.18)",
+  siteEdge: "rgba(150,215,255,0.95)",
 };
+
+const AREA_LABEL: Record<string, string> = { chest: "?", bridge_site: "🔨", crossing: "", beyond: "→" };
 
 /** Warstwa stała (teren, rzeka, ścieżki, wejście) rysowana raz na seed: klatka mapy tylko ją kopiuje i dokłada gracza. */
 function paintStatic(model: MinimapModel, px: number): HTMLCanvasElement {
@@ -95,7 +99,7 @@ export function Minimap({ seed, state, getPose, size = 200 }: { seed: number; st
     () => searchAreas(state),
     // searchAreas zależy tylko od tych części stanu; reszta (zegar, zdrowie) zmienia się co tick i nie powinna jej przeliczać.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [world, state.quests, state.ledger.gained, state.chests],
+    [world, state.quests, state.ledger.gained, state.chests, state.slots, state.bridge, state.discovered, state.troll.deposit],
   );
   const areasRef = useRef(areas);
   useEffect(() => {
@@ -133,18 +137,20 @@ export function Minimap({ seed, state, getPose, size = 200 }: { seed: number; st
         const r = (a.r / (model.bounds.maxX - model.bounds.minX)) * px;
         ctx.beginPath();
         ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = PALETTE.area;
+        const water = a.kind !== "chest";
+        ctx.fillStyle = water ? PALETTE.site : PALETTE.area;
         ctx.fill();
-        ctx.setLineDash([6 * k, 5 * k]);
+        // Most po zbudowaniu jest dokładnie znany (linia ciągła); pozostałe cele są tylko orientacyjne (linia przerywana).
+        ctx.setLineDash(a.kind === "crossing" ? [] : [6 * k, 5 * k]);
         ctx.lineWidth = 1.6 * k;
-        ctx.strokeStyle = PALETTE.areaEdge;
+        ctx.strokeStyle = water ? PALETTE.siteEdge : PALETTE.areaEdge;
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = PALETTE.areaEdge;
+        ctx.fillStyle = water ? PALETTE.siteEdge : PALETTE.areaEdge;
         ctx.font = `bold ${16 * k}px serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("?", c.x, c.y);
+        ctx.fillText(AREA_LABEL[a.kind] ?? "?", c.x, c.y);
       }
 
       const pose = poseRef.current();

@@ -6,7 +6,7 @@ import type { GameState } from "../core/state";
 import { hydrateState } from "../save/hydrate";
 import { serializeState } from "../save/serialize";
 import { validateSaveV2 } from "../save/validate";
-import { anchorsOf, inForest, near, newPlaying, run } from "../testkit";
+import { anchorsOf, inForest, near, newPlaying, run, unlockToolOrder } from "../testkit";
 import { dispatchWithReactions, reactionsFor, type NpcReaction } from "./npcReactions";
 
 const BRIDGE = "quest.bridge_01" as const;
@@ -33,8 +33,14 @@ describe("adapter reakcji NPC: zdarzenia silnika -> animacja trolla", () => {
     expect(reactionsFor(out.events)).toEqual([{ npc: "troll", kind: "angry", cause: "chest.open_failed" }]);
   });
 
-  it("niezablokowane skrzynie (piła, kilof) nie wywołują gniewu", () => {
-    const s = fresh();
+  it("skrzynie z narzędziami (piła, kilof) nie wywołują gniewu: ani otwarte po zdobyciu schematu, ani zamknięte przed nim", () => {
+    const early = fresh();
+    for (const id of ["chest.bridge.saw", "chest.bridge.pickaxe"] as const) {
+      const out = step(early, { type: "chest.open", id, at: near(chestAt(early, id), 1.2) });
+      expect(out.events.some((e) => e.type === "chest.open_failed" && e.reason === "order"), id).toBe(true);
+      expect(reactionsFor(out.events), id).toEqual([]);
+    }
+    const s = unlockToolOrder(early);
     for (const id of ["chest.bridge.saw", "chest.bridge.pickaxe"] as const) {
       const out = step(s, { type: "chest.open", id, at: near(chestAt(s, id), 1.2) });
       expect(reactionsFor(out.events), id).toEqual([]);
@@ -73,18 +79,19 @@ describe("adapter reakcji NPC: zdarzenia silnika -> animacja trolla", () => {
     expect(state).toEqual(reducer(s, command));
     expect(seen).toHaveLength(1);
 
+    const unlocked = unlockToolOrder(s);
     const ok: Command = { type: "chest.open", id: "chest.bridge.saw", at: near(chestAt(s, "chest.bridge.saw"), 1.2) };
     const onReaction = vi.fn();
-    let state2 = s;
+    let state2 = unlocked;
     dispatchWithReactions(state2, ok, (c) => (state2 = reducer(state2, c)), onReaction);
-    expect(state2).toEqual(reducer(s, ok));
+    expect(state2).toEqual(reducer(unlocked, ok));
     expect(onReaction).not.toHaveBeenCalled();
   });
 });
 
 describe("zapis SaveV2 i stan questa po integracji modeli 3D", () => {
   it("zapis nie zawiera niczego z warstwy prezentacji (animacje, patrol, pivoty pokryw) i zachowuje kształt SaveV2", () => {
-    let s = fresh();
+    let s = unlockToolOrder(fresh());
     s = step(s, { type: "chest.open", id: "chest.bridge.saw", at: near(chestAt(s, "chest.bridge.saw"), 1.2) }).state;
     const save = serializeState(s, 1)!;
     expect(save.version).toBe(2);
@@ -103,7 +110,7 @@ describe("zapis SaveV2 i stan questa po integracji modeli 3D", () => {
   });
 
   it("stany skrzyń są niezależne: otwarcie jednej nie rusza pozostałych (pokrywy w widoku czytają ten sam stan)", () => {
-    let s = fresh();
+    let s = unlockToolOrder(fresh());
     s = step(s, { type: "chest.open", id: "chest.bridge.saw", at: near(chestAt(s, "chest.bridge.saw"), 1.2) }).state;
     expect(s.chests["chest.bridge.saw"]?.opened).toBe(true);
     expect(s.chests["chest.bridge.pickaxe"]).toBeUndefined();

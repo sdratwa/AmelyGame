@@ -7,7 +7,7 @@ import { hydrateState } from "../save/hydrate";
 import { loadGame } from "../save/loader";
 import { MemoryStorage } from "../save/memoryStorage";
 import { LocalStorageSaveStore } from "../save/store";
-import { harvestTargets, inForest, newPlaying, run } from "../testkit";
+import { harvestTargets, inForest, newPlaying, run, unlockToolOrder } from "../testkit";
 import { harvestOf } from "../world/harvest";
 import { forestChestsOf, forestObject, forestWalkOf, syncHarvestedColliders } from "../world/lookup";
 import { countOf } from "./containers";
@@ -58,7 +58,8 @@ function session(initial: GameState) {
   return { h, interactor, fetchChest, harvestNearest };
 }
 
-const fresh = () => inForest(run(newPlaying(SEED), { type: "board.read", id: QUEST_BRIDGE_01 }, { type: "quest.accept", id: QUEST_BRIDGE_01 }));
+/** Kolejność questa: narzędzia dopiero po schemacie, więc stan startowy tego przebiegu ma schemat zapisany "na papierze". */
+const fresh = () => unlockToolOrder(inForest(run(newPlaying(SEED), { type: "board.read", id: QUEST_BRIDGE_01 }, { type: "quest.accept", id: QUEST_BRIDGE_01 })));
 
 describe("M1/C1: grywalny fragment questa w jednym przebiegu (E, ekwipunek, dziennik, zapis)", () => {
   it("skrzynie -> narzędzia -> drewno i kamień wyłącznie przez interakcje; zapis, zamknięcie i kontynuacja zachowują wszystko", async () => {
@@ -69,8 +70,9 @@ describe("M1/C1: grywalny fragment questa w jednym przebiegu (E, ekwipunek, dzie
     expect(countOf(s.h.state.slots, "item.pickaxe")).toBe(1);
     expect(s.h.state.chests["chest.bridge.saw"]).toEqual({ opened: true, taken: true });
     expect(s.h.state.chests["chest.bridge.blueprint"]).toBeUndefined();
-    const stage0 = questProgress(s.h.state, QUEST_BRIDGE_01)!.stages[0];
-    expect(stage0.done).toBe(true);
+    const toolsStage = questProgress(s.h.state, QUEST_BRIDGE_01)!.stages[1];
+    expect(toolsStage.id).toBe("tools");
+    expect(toolsStage.done).toBe(true);
 
     s.harvestNearest("tree", 5, "resource.wood");
     s.harvestNearest("rock", 10, "resource.stone");

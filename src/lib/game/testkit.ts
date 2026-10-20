@@ -38,7 +38,7 @@ import { forestOf } from "./world/lookup";
 import { FOREST_START } from "./world/generators/v2";
 import { ITEMS } from "./content/items";
 import { MAX_HEALTH } from "./core/constants";
-import { countOf } from "./systems/containers";
+import { addToSlots, countOf, gain, spend } from "./systems/containers";
 import { CHEST_CONTENTS } from "./systems/forestQuest";
 
 export type HarvestTarget = { id: string; at: Point2; kind: HarvestKind; size: HarvestSize };
@@ -78,6 +78,23 @@ export function inForest(state: GameState): GameState {
   return run(state, { type: "leave" }, { type: "enter", view: "forest" });
 }
 
+/**
+ * Tylko testy: stan, w którym schemat mostu został już zdobyty i zużyty "na papierze" (księga: zdobyty +1, wydany +1,
+ * bez przedmiotu w ekwipunku). Odblokowuje skrzynie z narzędziami (kolejność questa) bez przechodzenia przez trolla;
+ * księga zostaje spójna z ekwipunkiem.
+ */
+export function unlockToolOrder(state: GameState): GameState {
+  const bp = "item.bridge_blueprint" as const;
+  if ((state.ledger.gained[bp] ?? 0) >= 1) return state;
+  return { ...state, ledger: spend(gain(state.ledger, bp, 1), bp, 1) };
+}
+
+/** Tylko testy: dodaje do ekwipunku przedmiot (z wpisem w księdze), np. materiały bez zbierania w lesie. */
+export function grantItem(state: GameState, id: ItemId, count: number): GameState {
+  const res = addToSlots(state.slots, id, count);
+  return { ...state, slots: res.slots, ledger: gain(state.ledger, id, res.added) };
+}
+
 const healed = (s: GameState): GameState => (s.dead ? s : { ...s, health: MAX_HEALTH });
 
 /**
@@ -106,8 +123,6 @@ export function autoComplete(start: GameState): GameState {
   const getChest = (id: keyof typeof CHEST_CONTENTS) => {
     step({ type: "chest.open", id: id as never, at: chestAt(id) }, { type: "chest.take", id: id as never, at: chestAt(id) });
   };
-  getChest("chest.bridge.pickaxe");
-  getChest("chest.bridge.saw");
 
   for (let attempt = 0; s.troll.phase !== "solved" && attempt < 40; attempt++) {
     if (s.dead) step({ type: "respawn" });
@@ -133,6 +148,9 @@ export function autoComplete(start: GameState): GameState {
   }
   forest();
   getChest("chest.bridge.blueprint");
+  // Kolejność questa: narzędzia dopiero po schemacie.
+  getChest("chest.bridge.pickaxe");
+  getChest("chest.bridge.saw");
   guard(countOf(s.slots, "item.pickaxe") === 1 && countOf(s.slots, "item.saw") === 1, "brak narzędzi");
   guard(countOf(s.slots, "item.bridge_blueprint") === 1, "brak schematu");
 

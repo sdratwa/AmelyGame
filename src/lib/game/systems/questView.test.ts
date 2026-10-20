@@ -36,30 +36,32 @@ describe("UI1: tablica ogłoszeń i dziennik (widoki z silnika)", () => {
     const s = run(newPlaying(), { type: "quest.accept", id: QUEST_BRIDGE_01 });
     const tracked = trackedQuest(s);
     expect(tracked?.def.id).toBe(QUEST_BRIDGE_01);
-    expect(tracked?.stage?.id).toBe("tools");
-    expect(tracked?.objectives.map((o) => o.id)).toEqual(["pickaxe", "saw"]);
+    expect(tracked?.stage?.id).toBe("blueprint");
+    expect(tracked?.objectives.map((o) => o.id)).toEqual(["blueprint"]);
     expect(tracked?.objectives.every((o) => !o.done)).toBe(true);
-    expect(tracked?.hint).toMatch(/las/i);
+    expect(tracked?.hint).toMatch(/troll/i);
     expect(journalEntries(s).active.map((v) => v.def.id)).toEqual([QUEST_BRIDGE_01]);
     expect(boardHasUnread(s)).toBe(false);
   });
 
-  it("postęp surowców jest widoczny jako cele równoległe, także gdy bieżący etap dotyczy czegoś innego", () => {
+  it("tracker nie zdradza materiałów przed zdobyciem schematu; potem pokazuje drewno i kamień jako cele równoległe", () => {
     let s = run(newPlaying(), { type: "quest.accept", id: QUEST_BRIDGE_01 });
-    expect(trackedQuest(s)?.parallel.map((o) => [o.id, o.current, o.target])).toEqual([
-      ["wood", 0, 5],
-      ["stone", 0, 10],
-    ]);
+    expect(trackedQuest(s)?.parallel).toEqual([]);
     s = {
       ...s,
-      slots: slotsFrom(["item.phone", "item.saw", { id: "resource.wood", count: 3 }]),
-      ledger: { gained: { "item.phone": 1, "item.saw": 1, "item.pickaxe": 1, "resource.wood": 3 }, spent: {} },
+      slots: slotsFrom(["item.bridge_blueprint", "item.saw", { id: "resource.wood", count: 3 }]),
+      ledger: { gained: { "item.bridge_blueprint": 1, "item.saw": 1, "resource.wood": 3 }, spent: {} },
     };
     const tracked = trackedQuest(s)!;
-    expect(tracked.stage?.id).toBe("blueprint");
-    expect(tracked.parallel.find((o) => o.id === "wood")).toMatchObject({ current: 3, target: 5, done: false });
+    expect(tracked.stage?.id).toBe("tools");
+    expect(tracked.hint).toMatch(/piły/);
+    expect(tracked.hint).toMatch(/kilof/);
+    expect(tracked.parallel.map((o) => [o.id, o.current, o.target])).toEqual([
+      ["wood", 3, 5],
+      ["stone", 0, 10],
+    ]);
     // Gdy bieżący etap to sam etap materiałów, cele są w głównej liście i nie powtarzają się w równoległych.
-    const mats = { ...s, ledger: { gained: { ...s.ledger.gained, "item.bridge_blueprint": 1 }, spent: {} } };
+    const mats = { ...s, ledger: { gained: { ...s.ledger.gained, "item.pickaxe": 1 }, spent: {} } };
     const t2 = trackedQuest(mats)!;
     expect(t2.stage?.id).toBe("materials");
     expect(t2.objectives.map((o) => o.id)).toEqual(["wood", "stone"]);
@@ -71,9 +73,11 @@ describe("UI1: tablica ogłoszeń i dziennik (widoki z silnika)", () => {
     expect(run(once, { type: "quest.accept", id: QUEST_BRIDGE_01 })).toBe(once);
   });
 
-  it("silnik pozwala przyjąć zadanie w tutorialu (blokadę tablicy daje interfejs), ale nie po śmierci gracza", () => {
+  it("silnik pozwala przyjąć zadanie w tutorialu (i kończy tutorial), ale nie po śmierci gracza", () => {
     const tutorial = { ...newPlaying(), tutorialDone: false };
-    expect(trackedQuest(run(tutorial, { type: "quest.accept", id: QUEST_BRIDGE_01 }))).not.toBeNull();
+    const accepted = run(tutorial, { type: "quest.accept", id: QUEST_BRIDGE_01 });
+    expect(trackedQuest(accepted)).not.toBeNull();
+    expect(accepted.tutorialDone).toBe(true);
     const dead = { ...newPlaying(), dead: true };
     expect(run(dead, { type: "quest.accept", id: QUEST_BRIDGE_01 })).toBe(dead);
   });
@@ -105,7 +109,7 @@ describe("UI1: tablica ogłoszeń i dziennik (widoki z silnika)", () => {
     const back = hydrateState(save);
     expect(back.quests).toEqual(s.quests);
     expect(back.pauses).toEqual([]);
-    expect(trackedQuest(back)?.stage?.id).toBe("tools");
+    expect(trackedQuest(back)?.stage?.id).toBe("blueprint");
     expect(boardHasUnread(back)).toBe(false);
   });
 

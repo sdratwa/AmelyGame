@@ -4,7 +4,7 @@ import { applyCommand } from "../core/apply";
 import type { GameState } from "../core/state";
 import { FOREST_START } from "../world/generators/v2";
 import { forestChestsOf, forestOf } from "../world/lookup";
-import { inForest, newPlaying, run } from "../testkit";
+import { anchorsOf, grantItem, inForest, newPlaying, run, unlockToolOrder } from "../testkit";
 import { arrowRotation, buildMinimapModel, projectToMap, searchAreaFor, searchAreas, SEARCH_AREA_OFFSET, SEARCH_AREA_RADIUS } from "./minimap";
 
 const SEEDS = [1, 2, 3, 7, 42, 99, 777, 2030, 31337, 123456, 4000000000];
@@ -76,13 +76,14 @@ describe("M1: minimapa lasu", () => {
     }
   });
 
-  it("obszary poszukiwań: tylko dla aktywnego zadania, skrzynia leży w kole, ale środek jest przesunięty (nie wskazuje dokładnego punktu)", () => {
+  it("obszary poszukiwań: tylko dla aktywnego zadania; na początku wyłącznie skrzynia ze schematem, leży w kole, ale środek jest przesunięty", () => {
     for (const seed of SEEDS) {
       expect(searchAreas(inForest(newPlaying(seed)))).toEqual([]);
       const s = active(seed);
       const areas = searchAreas(s);
-      expect(areas.map((a) => a.chest).sort()).toEqual(["chest.bridge.pickaxe", "chest.bridge.saw"]);
+      expect(areas.map((a) => a.chest)).toEqual(["chest.bridge.blueprint"]);
       for (const a of areas) {
+        expect(a.kind).toBe("chest");
         const c = forestChestsOf(seed).find((p) => p.id === a.chest)!;
         const d = Math.hypot(a.x - c.x, a.z - c.z);
         expect(a.r).toBe(SEARCH_AREA_RADIUS);
@@ -91,14 +92,17 @@ describe("M1: minimapa lasu", () => {
         expect(d).toBeGreaterThan(0);
         expect(d).toBeLessThanOrEqual(SEARCH_AREA_OFFSET[1] * SEARCH_AREA_RADIUS + 1e-9);
         expect(Math.abs(a.x) <= 150 && Math.abs(a.z) <= 150).toBe(true);
-        expect(searchAreaFor(seed, a.chest, c)).toEqual(a);
+        expect(searchAreaFor(seed, a.chest!, c)).toEqual(a);
       }
     }
   });
 
-  it("obszary znikają po otwarciu skrzyni i po zdobyciu przedmiotu; kolejny etap pokazuje obszar skrzyni ze schematem", () => {
+  it("skrzynie z narzędziami pojawiają się na minimapie dopiero po zdobyciu schematu i znikają po otwarciu skrzyni", () => {
     const seed = 777;
     let s = active(seed);
+    expect(searchAreas(s).map((a) => a.chest)).not.toContain("chest.bridge.saw");
+    s = unlockToolOrder(s);
+    expect(searchAreas(s).map((a) => a.chest).sort()).toEqual(["chest.bridge.pickaxe", "chest.bridge.saw"]);
     const saw = forestChestsOf(seed).find((c) => c.id === "chest.bridge.saw")!;
     const pick = forestChestsOf(seed).find((c) => c.id === "chest.bridge.pickaxe")!;
     s = applyCommand(s, { type: "chest.open", id: "chest.bridge.saw", at: { x: saw.x + 1.5, z: saw.z } }).state;
@@ -106,7 +110,39 @@ describe("M1: minimapa lasu", () => {
     s = applyCommand(s, { type: "chest.take", id: "chest.bridge.saw", at: { x: saw.x + 1.5, z: saw.z } }).state;
     s = applyCommand(s, { type: "chest.open", id: "chest.bridge.pickaxe", at: { x: pick.x + 1.5, z: pick.z } }).state;
     s = applyCommand(s, { type: "chest.take", id: "chest.bridge.pickaxe", at: { x: pick.x + 1.5, z: pick.z } }).state;
-    expect(searchAreas(s).map((a) => a.chest)).toEqual(["chest.bridge.blueprint"]);
+    // Etap materiałów nie ma obszarów na mapie.
+    expect(searchAreas(s)).toEqual([]);
+  });
+
+  it("miejsce budowy pojawia się dopiero po zebraniu materiałów, a po zbudowaniu mostu mapa pokazuje most i obszar za rzeką", () => {
+    for (const seed of [1, 777, 31337]) {
+      let s = grantItem(active(seed), "item.bridge_blueprint", 1);
+      s = grantItem(s, "item.saw", 1);
+      s = grantItem(s, "item.pickaxe", 1);
+      s = grantItem(s, "resource.wood", 4);
+      s = grantItem(s, "resource.stone", 10);
+      expect(searchAreas(s).filter((a) => a.kind !== "chest")).toEqual([]);
+      s = grantItem(s, "resource.wood", 1);
+      const a = anchorsOf(s);
+      const areas = searchAreas(s);
+      expect(areas.map((x) => x.kind)).toEqual(["bridge_site"]);
+      const site = areas[0];
+      const d = Math.hypot(site.x - a.bridge.x, site.z - a.bridge.z);
+      expect(d, `seed ${seed}`).toBeGreaterThan(0);
+      expect(d).toBeLessThanOrEqual(site.r * 0.55 + 1e-9);
+
+      s = run(s, { type: "bridge.build", at: { x: a.bridge.west.x + 0.5, z: a.bridge.west.z } });
+      expect(s.bridge.built).toBe(true);
+      const after = searchAreas(s);
+      expect(after.map((x) => x.kind)).toEqual(["crossing", "beyond"]);
+      const beyond = after[1];
+      expect(Math.hypot(beyond.x - a.beyond.x, beyond.z - a.beyond.z)).toBeGreaterThan(0);
+      expect(Math.hypot(beyond.x - a.beyond.x, beyond.z - a.beyond.z)).toBeLessThan(beyond.r);
+
+      s = run(s, { type: "region.discover", id: a.beyond.region, at: { x: a.beyond.x + 0.5, z: a.beyond.z } });
+      expect(s.quests.completed[QUEST_BRIDGE_01]).toBeTruthy();
+      expect(searchAreas(s)).toEqual([]);
+    }
   });
 
   it("nie przecieka przez powtórne wywołanie: ten sam wynik, zależny tylko od seeda i stanu questa", () => {

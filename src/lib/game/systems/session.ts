@@ -8,7 +8,6 @@ import {
   type GameState,
   type View,
 } from "../core/state";
-import type { GameEvent } from "../core/events";
 import { CURRENT_GEN_VERSION, fingerprintWorld, generateWorld } from "../world";
 import { isForestPose } from "../core/pose";
 
@@ -72,14 +71,9 @@ export function enterView(state: GameState, view: View): CommandResult {
   if (state.phase !== "playing" || state.dead || state.view !== "world") {
     return unchanged(state);
   }
-  if (!state.tutorialDone && view !== "forest") return unchanged(state);
-  const completesTutorial = !state.tutorialDone && view === "forest";
-  const events: GameEvent[] = [{ type: "view.entered", view }];
-  if (completesTutorial) events.push({ type: "tutorial.completed" });
-  return result(
-    { ...state, view, tutorialDone: state.tutorialDone || view === "forest" },
-    ...events,
-  );
+  // Samouczek: dopóki gracz nie przyjmie zadania z tablicy ogłoszeń, nie wchodzi do lasu, sklepu ani domów.
+  if (!state.tutorialDone) return unchanged(state);
+  return result({ ...state, view }, { type: "view.entered", view });
 }
 
 export function leaveView(state: GameState): CommandResult {

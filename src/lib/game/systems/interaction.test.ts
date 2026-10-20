@@ -4,7 +4,7 @@ import { CHEST_RANGE, HARVEST_PROMPT_RANGE, HARVEST_RANGE, CHEST_PROMPT_RANGE } 
 import type { GameState } from "../core/state";
 import { harvestOf } from "../world/harvest";
 import { forestChestsOf, forestObject } from "../world/lookup";
-import { harvestTargets, inForest, newPlaying, run } from "../testkit";
+import { harvestTargets, inForest, newPlaying, run, unlockToolOrder } from "../testkit";
 import { slotsFrom } from "../testkit";
 import { describePrompt, interactionCommand, pickInteraction, type ViewPose } from "./interaction";
 import { countOf } from "./containers";
@@ -25,7 +25,7 @@ const withTools = (s: GameState) => ({ ...s, slots: slotsFrom(["item.phone", "it
 describe("M1/C1: wybór obiektu do interakcji", () => {
   it("skrzynia: podpowiedź w zasięgu ok. 2 m i tylko przy patrzeniu w jej stronę", () => {
     const chest = forestChestsOf(SEED).find((c) => c.id === "chest.bridge.saw")!;
-    const state = forestState();
+    const state = unlockToolOrder(forestState());
     const t = pickInteraction(state, standing(chest, 2));
     expect(t).toMatchObject({ kind: "chest", id: "chest.bridge.saw", action: "open", locked: false });
     expect(describePrompt(state, t!)).toEqual({ key: "E", text: "Otwórz skrzynię", tone: "action" });
@@ -54,6 +54,14 @@ describe("M1/C1: wybór obiektu do interakcji", () => {
     expect(interactionCommand(t, standing(saw, 1.8))).toBeNull();
     const taken = forestState({ chests: { "chest.bridge.saw": { opened: true, taken: true } } });
     expect(pickInteraction(taken, standing(saw, 1.8))).toBeNull();
+
+    // Kolejność questa: skrzynia z narzędziem jest zamknięta, dopóki gracz nie zdobędzie schematu (komunikat o schemacie).
+    const early = forestState();
+    const locked = pickInteraction(early, standing(saw, 1.8))!;
+    expect(locked).toMatchObject({ kind: "chest", locked: true, lockReason: "order" });
+    expect(describePrompt(early, locked)).toMatchObject({ key: null, tone: "blocked" });
+    expect(describePrompt(early, locked).text).toContain("schemat mostu");
+    expect(pickInteraction(unlockToolOrder(early), standing(saw, 1.8))).toMatchObject({ locked: false, lockReason: null });
 
     const blueprint = forestChestsOf(SEED).find((c) => c.id === "chest.bridge.blueprint")!;
     const state = forestState();

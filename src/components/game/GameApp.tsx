@@ -9,6 +9,7 @@ import {
   initialState,
   journalEntries,
   isSheltered,
+  ITEMS,
   reducer,
   trackedQuest,
   type ForestPose,
@@ -32,6 +33,7 @@ import {
   SaveProblemScreen,
   type SaveProblem,
 } from "./Screens";
+import { BlueprintDialog } from "./BlueprintDialog";
 import { InventoryPanel } from "./InventoryPanel";
 import { JournalPanel, type SaveStatus } from "./quest/JournalPanel";
 import { QuestBoardDialog } from "./quest/QuestBoardDialog";
@@ -110,7 +112,7 @@ export function GameApp() {
   const [saving, setSaving] = useState(false);
   const [forestLoading, setForestLoading] = useState(false);
   const [forestQuality, setForestQuality] = useState<QualityId>(readQuality);
-  const [panel, setPanel] = useState<"board" | "journal" | "inventory" | null>(null);
+  const [panel, setPanel] = useState<"board" | "journal" | "inventory" | "blueprint" | null>(null);
 
   const getStore = useCallback((): SaveStore => {
     storeRef.current ??= new LocalStorageSaveStore();
@@ -226,6 +228,17 @@ export function GameApp() {
   useGamePause(dispatch, "ui.panel", "ui.journal", journalOpen);
   const inventoryOpen = panel === "inventory" && playing && !state.dialog;
   useGamePause(dispatch, "ui.panel", "ui.inventory", inventoryOpen);
+  const blueprintOpen = panel === "blueprint" && playing && !state.dialog;
+  useGamePause(dispatch, "ui.panel", "ui.blueprint", blueprintOpen);
+  // Zdobycie schematu (komunikat z silnika) otwiera okno z wymaganymi materiałami; id komunikatu jest unikalne,
+  // więc wczytanie zapisu nie otwiera okna ponownie.
+  const toastId = state.toast?.id ?? null;
+  const toastText = state.toast?.text ?? null;
+  useEffect(() => {
+    if (toastId === null || toastText !== ITEMS["item.bridge_blueprint"].pickupMessage) return;
+    document.exitPointerLock?.();
+    setPanel("blueprint");
+  }, [toastId, toastText]);
   useGamePause(dispatch, "ui.forest", "ui.forest_loading", state.view === "forest" && forestLoading);
 
   const changeForestQuality = useCallback((quality: QualityId) => {
@@ -412,7 +425,8 @@ export function GameApp() {
         onSave={saveNow}
         onClose={closePanel}
       />
-      <InventoryPanel open={inventoryOpen} state={state} onClose={closePanel} />
+      <InventoryPanel open={inventoryOpen} state={state} onClose={closePanel} onReadBlueprint={() => setPanel("blueprint")} />
+      <BlueprintDialog open={blueprintOpen} state={state} onClose={closePanel} />
       <InventoryBar state={state} onSelect={select} onEat={eat} />
       {state.dead && <DeathOverlay onRespawn={() => dispatch({ type: "respawn" })} />}
       {saveError && (

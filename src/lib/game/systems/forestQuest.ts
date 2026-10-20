@@ -21,6 +21,22 @@ export const CHEST_CONTENTS: Readonly<Record<string, ItemId>> = {
   "chest.bridge.blueprint": "item.bridge_blueprint",
 };
 
+/**
+ * Kolejność questa: skrzynie z narzędziami otwierają się dopiero po zdobyciu schematu mostu (dane: skrzynia -> wymagany
+ * przedmiot). Dotyczy tylko jeszcze nieotwartych skrzyń, więc wcześniejsze zapisy i otwarte skrzynie niczego nie tracą.
+ */
+export const CHEST_REQUIRES: Readonly<Record<string, ItemId>> = {
+  "chest.bridge.pickaxe": "item.bridge_blueprint",
+  "chest.bridge.saw": "item.bridge_blueprint",
+};
+
+/** Czy skrzynia czeka na wcześniejszy przedmiot (kolejność questa). */
+export function chestWaitsForItem(state: GameState, id: string): ItemId | null {
+  const need = CHEST_REQUIRES[id];
+  if (!need || state.chests[id]?.opened) return null;
+  return (state.ledger.gained[need] ?? 0) >= 1 ? null : need;
+}
+
 const validAt = (at: unknown): at is At =>
   typeof at === "object" && at !== null && Number.isFinite((at as At).x) && Number.isFinite((at as At).z);
 
@@ -48,6 +64,9 @@ export function openChest(state: GameState, id: ChestId, at: At): CommandResult 
   if (state.chests[id]?.opened) return unchanged(state);
   if (anchors.troll.guards === id && state.troll.phase !== "solved") {
     return fail(state, "Troll pilnuje tej skrzyni. Porozmawiaj z nim.", { type: "chest.open_failed", id, reason: "guarded" });
+  }
+  if (chestWaitsForItem(state, id)) {
+    return fail(state, "Skrzynia jest zamknięta. Najpierw zdobądź schemat mostu: pilnuje go troll.", { type: "chest.open_failed", id, reason: "order" });
   }
   return result(
     withToast({ ...state, chests: { ...state.chests, [id]: { opened: true, taken: false } } }, "Skrzynia otwarta."),
@@ -78,7 +97,7 @@ export function takeChest(state: GameState, id: ChestId, at: At): CommandResult 
         ledger: gain(state.ledger, item, 1),
         chests: { ...state.chests, [id]: { opened: true, taken: true } },
       },
-      `Zdobyto: ${ITEMS[item].name}`,
+      ITEMS[item].pickupMessage ?? `Zdobyto: ${ITEMS[item].name}`,
     ),
     { type: "chest.taken", id, item },
   );

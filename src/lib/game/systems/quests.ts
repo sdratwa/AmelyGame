@@ -78,6 +78,13 @@ export function questProgress(state: GameState, id: QuestId): QuestProgress | nu
     const objectives = st.objectives.map((o) => objectiveProgress(state, o));
     return { id: st.id, title: st.title, objectives, done: objectives.every((o) => !o.visible || o.done) };
   });
+  // Etap złożony wyłącznie ze zdarzeń świata (budowa, przeprawa) po ukończeniu domyka wcześniejsze etapy:
+  // zużycie materiałów przy budowie nie może cofnąć postępu do etapu "Materiały".
+  let lastEventStage = -1;
+  def.stages.forEach((st, i) => {
+    if (stages[i].done && st.objectives.every((o) => o.kind === "flag")) lastEventStage = i;
+  });
+  for (let i = 0; i < lastEventStage; i++) stages[i].done = true;
   const firstOpen = stages.findIndex((s) => !s.done);
   return {
     id,
@@ -111,15 +118,19 @@ export function acceptQuest(state: GameState, id: QuestId): CommandResult {
   if (!def || state.phase !== "playing" || state.dead) return unchanged(state);
   if (questStatus(state, def) !== "available") return unchanged(state);
   const read = state.quests.read.includes(id) ? state.quests.read : [...state.quests.read, id];
+  // Przyjęcie pierwszego zadania kończy samouczek (zegar rusza, las i reszta miasta są dostępne).
+  const completesTutorial = !state.tutorialDone;
   return result(
     withToast(
       {
         ...state,
+        tutorialDone: true,
         quests: { ...state.quests, read, accepted: { ...state.quests.accepted, [id]: { at: state.elapsed } } },
       },
       `Przyjęto zadanie: ${def.title}`,
     ),
     { type: "quest.accepted", id },
+    ...(completesTutorial ? [{ type: "tutorial.completed" as const }] : []),
   );
 }
 

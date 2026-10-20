@@ -202,7 +202,7 @@ export function WorldMap({
           data-testid="tutorial-hint"
           className="pointer-events-none absolute inset-x-3 top-3 z-20 mx-auto max-w-md rounded-2xl bg-amber-300 px-4 py-3 text-center text-sm font-semibold text-amber-950 shadow-xl sm:top-5"
         >
-          Zacznij od lasu – kliknij podświetlone drzewa.
+          Podejdź do tablicy ogłoszeń (wykrzyknik) i przyjmij zadanie. Dopiero potem ruszysz do lasu.
         </div>
       )}
 

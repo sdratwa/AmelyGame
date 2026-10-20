@@ -20,7 +20,7 @@ function need(item: Item, questActive: boolean): number | null {
  * Lista rzeczy gracza (klawisz I): to ten sam ekwipunek co pasek u dołu, tylko w czytelnej formie z nazwami, opisami
  * i liczbami. Niczego nie zmienia i nie ma własnego stanu: wszystko pochodzi ze stanu gry.
  */
-export function InventoryPanel({ open, state, onClose }: { open: boolean; state: GameState; onClose: () => void }) {
+export function InventoryPanel({ open, state, onClose, onReadBlueprint }: { open: boolean; state: GameState; onClose: () => void; onReadBlueprint?: () => void }) {
   const totals = new Map<string, number>();
   for (const s of state.slots) if (s) totals.set(s.id, (totals.get(s.id) ?? 0) + s.count);
   const used = state.slots.filter(Boolean).length;
@@ -65,6 +65,16 @@ export function InventoryPanel({ open, state, onClose }: { open: boolean; state:
                           </span>
                           <span className="block truncate text-xs text-slate-400">{item.description}</span>
                         </span>
+                        {item.category === "blueprint" && onReadBlueprint && (
+                          <button
+                            type="button"
+                            data-testid="inventory-read-blueprint"
+                            onClick={onReadBlueprint}
+                            className="shrink-0 rounded-md bg-amber-300 px-2 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-200"
+                          >
+                            Czytaj
+                          </button>
+                        )}
                         <span
                           data-testid={`inventory-count-${item.id}`}
                           className={cn("shrink-0 text-sm font-bold tabular-nums", needed !== null && count >= needed ? "text-emerald-300" : "text-white")}

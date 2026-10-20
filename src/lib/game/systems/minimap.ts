@@ -5,7 +5,7 @@ import type { GameState } from "../core/state";
 import { FOREST_START_REGION } from "../world/bounds";
 import { FOREST_START } from "../world/generators/v2";
 import { forestChestsOf, forestOf } from "../world/lookup";
-import { CHEST_CONTENTS } from "./forestQuest";
+import { questProgress } from "./quests";
 
 export type MapPoint = { x: number; z: number };
 
@@ -50,33 +50,46 @@ export function buildMinimapModel(seed: number): MinimapModel {
   return model;
 }
 
-/** Orientacyjny obszar poszukiwań skrzyni: koło, w którym leży skrzynia, ale jego środek jest przesunięty. */
-export type SearchArea = { chest: ChestId; x: number; z: number; r: number };
+/**
+ * Orientacyjny obszar na minimapie: koło, w którym leży cel, ale jego środek jest przesunięty (nigdy dokładna pozycja).
+ * `chest` jest ustawione tylko dla obszarów skrzyń.
+ */
+export type SearchAreaKind = "chest" | "bridge_site" | "crossing" | "beyond";
+export type SearchArea = { kind: SearchAreaKind; chest: ChestId | null; x: number; z: number; r: number };
 
 export const SEARCH_AREA_RADIUS = 42;
-/** Przesunięcie środka koła względem skrzyni jako ułamek promienia: nigdy w środku, nigdy blisko krawędzi. */
+/** Miejsce budowy jest dużo mniejszym celem niż polana ze skrzynią: mniejsze koło, wciąż z przesuniętym środkiem. */
+export const BRIDGE_AREA_RADIUS = 26;
+/** Obszar odkrycia za rzeką po zbudowaniu mostu. */
+export const BEYOND_AREA_RADIUS = 40;
+/** Znacznik samego mostu po jego zbudowaniu (most jest już widoczny w świecie, więc zaznaczamy go dokładnie). */
+export const CROSSING_MARK_RADIUS = 9;
+/** Przesunięcie środka koła względem celu jako ułamek promienia: nigdy w środku, nigdy blisko krawędzi. */
 export const SEARCH_AREA_OFFSET: readonly [number, number] = [0.2, 0.55];
 
-/** Obszar poszukiwań jednej skrzyni (deterministyczny z seeda); to jedyna informacja o jej położeniu na mapie. */
-export function searchAreaFor(seed: number, chest: ChestId, at: MapPoint): SearchArea {
-  const rng = rngStream(seed, `minimap.hint.${chest}`);
+/** Środek orientacyjnego koła wokół celu `at` (deterministyczny z seeda i klucza). */
+function offsetCenter(seed: number, key: string, at: MapPoint, radius: number): MapPoint {
+  const rng = rngStream(seed, `minimap.hint.${key}`);
   const angle = rng() * Math.PI * 2;
   const frac = SEARCH_AREA_OFFSET[0] + rng() * (SEARCH_AREA_OFFSET[1] - SEARCH_AREA_OFFSET[0]);
   const b = FOREST_START_REGION.bounds;
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
   return {
-    chest,
-    x: clamp(at.x + Math.cos(angle) * frac * SEARCH_AREA_RADIUS, b.minX, b.maxX),
-    z: clamp(at.z + Math.sin(angle) * frac * SEARCH_AREA_RADIUS, b.minZ, b.maxZ),
-    r: SEARCH_AREA_RADIUS,
+    x: clamp(at.x + Math.cos(angle) * frac * radius, b.minX, b.maxX),
+    z: clamp(at.z + Math.sin(angle) * frac * radius, b.minZ, b.maxZ),
   };
 }
 
-const CHEST_BY_ITEM = new Map(Object.entries(CHEST_CONTENTS).map(([chest, item]) => [item, chest as ChestId]));
+/** Obszar poszukiwań jednej skrzyni (deterministyczny z seeda); to jedyna informacja o jej położeniu na mapie. */
+export function searchAreaFor(seed: number, chest: ChestId, at: MapPoint): SearchArea {
+  return { kind: "chest", chest, ...offsetCenter(seed, chest, at, SEARCH_AREA_RADIUS), r: SEARCH_AREA_RADIUS };
+}
 
 /**
- * Obszary poszukiwań zgodne z aktywnym zadaniem: dla skrzyń, których przedmiot jest celem bieżącego etapu,
- * nie został jeszcze zdobyty, a skrzynia nie była otwarta. Nigdy nie zwraca dokładnych współrzędnych skrzyń.
+ * Obszary minimapy zgodne z BIEŻĄCYM etapem aktywnego zadania (dane etapu `areas`): skrzynie, których przedmiot nie
+ * został zdobyty, a skrzynia nie była otwarta; miejsce budowy dopiero po zebraniu materiałów; po zbudowaniu mostu jego
+ * znacznik i obszar za rzeką. Przyszłe etapy niczego nie pokazują. Nigdy nie zwraca dokładnych współrzędnych celów
+ * (poza gotowym, widocznym mostem).
  */
 export function searchAreas(state: GameState): SearchArea[] {
   if (!state.world) return [];
@@ -85,17 +98,22 @@ export function searchAreas(state: GameState): SearchArea[] {
   for (const [questId] of Object.entries(state.quests.accepted)) {
     if (state.quests.completed[questId]) continue;
     const def = QUEST_BY_ID.get(questId);
-    if (!def) continue;
-    const stage = def.stages.find((st) =>
-      st.objectives.some((o) => (o.kind === "obtained" || o.kind === "holding" ? (state.ledger.gained[o.item] ?? 0) < o.count : false)),
-    );
+    const progress = def ? questProgress(state, questId) : null;
+    if (!def || !progress || progress.status !== "active") continue;
+    const stage = def.stages[progress.currentStage];
     if (!stage) continue;
-    for (const o of stage.objectives) {
-      if (o.kind !== "obtained") continue;
-      const chest = CHEST_BY_ITEM.get(o.item);
-      if (!chest || (state.ledger.gained[o.item] ?? 0) >= o.count || state.chests[chest]?.opened) continue;
-      const placement = forestChestsOf(seed).find((c) => c.id === chest);
-      if (placement && !out.some((a) => a.chest === chest)) out.push(searchAreaFor(seed, chest, placement));
+    const anchors = state.world.anchors;
+    for (const area of stage.areas) {
+      if (area.kind === "chest") {
+        if ((state.ledger.gained[area.item] ?? 0) >= 1 || state.chests[area.chest]?.opened) continue;
+        const placement = forestChestsOf(seed).find((c) => c.id === area.chest);
+        if (placement && !out.some((a) => a.chest === area.chest)) out.push(searchAreaFor(seed, area.chest, placement));
+      } else if (area.kind === "bridge_site" && anchors) {
+        out.push({ kind: "bridge_site", chest: null, ...offsetCenter(seed, "bridge_site", anchors.bridge, BRIDGE_AREA_RADIUS), r: BRIDGE_AREA_RADIUS });
+      } else if (area.kind === "crossing" && anchors) {
+        out.push({ kind: "crossing", chest: null, x: anchors.bridge.x, z: anchors.bridge.z, r: CROSSING_MARK_RADIUS });
+        out.push({ kind: "beyond", chest: null, ...offsetCenter(seed, "beyond", anchors.beyond, BEYOND_AREA_RADIUS), r: BEYOND_AREA_RADIUS });
+      }
     }
   }
   return out;

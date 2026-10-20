@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ForestRenderer, type PanelStats } from "@/lib/forest-view";
 import type { QualityId } from "@/lib/assets";
 import { ITEMS, type Command, type ForestPose, type GameState, type ItemId } from "@/lib/game/engine";
+import { applyCommand } from "@/lib/game/core/apply";
 import { ForestInteractor, type InteractorSnapshot } from "@/lib/game/systems/interactor";
 import { dispatchWithReactions } from "@/lib/game/systems/npcReactions";
 import { forestObject } from "@/lib/game/world/lookup";
@@ -21,6 +22,7 @@ import { AudioDiagnostics, type AudioSnapshot } from "./AudioDiagnostics";
 import { useForestAudio } from "./useForestAudio";
 import { ForestHand } from "./ForestHand";
 import { TrollTestDialog } from "./TrollTestDialog";
+import { TrollDialog } from "./TrollDialog";
 import { TrollMaterialDiagnostics } from "./TrollMaterialDiagnostics";
 import { Minimap } from "./Minimap";
 import { useGamePause } from "./quest/useGamePause";
@@ -227,6 +229,12 @@ export function ForestWorldView({
   const [trollDialog, setTrollDialog] = useState(false);
   const trollDialogRef = useRef(false);
   const [talkable, setTalkable] = useState(false);
+  const [trollMessage, setTrollMessage] = useState<string | null>(null);
+  const trollRequestRef = useRef<() => void>(() => {});
+  const debugRef = useRef(debug);
+  useEffect(() => {
+    debugRef.current = debug;
+  }, [debug]);
   const [pose] = useState(() => safeForestPose(seed, startPose, bridgeBuilt));
   const initial = useRef({ pose, quality, hour, bridgeBuilt, opened: openedChestIds(gameState), harvested: gameState.harvested });
   const stateRef = useRef(gameState);
@@ -282,8 +290,14 @@ export function ForestWorldView({
     rendererRef.current = renderer;
     ready.current = false;
     renderer.onNpcDialog(() => {
-      trollDialogRef.current = true;
-      setTrollDialog(true);
+      // Okno testowe PRAWIDŁOWY/ZŁY tylko w trybie deweloperskim przy otwartym panelu diagnostycznym (O/F3);
+      // w normalnej rozgrywce rozmowę prowadzi silnik gry (zagadki trolla).
+      if (process.env.NODE_ENV !== "production" && debugRef.current) {
+        trollDialogRef.current = true;
+        setTrollDialog(true);
+        return;
+      }
+      trollRequestRef.current();
     });
     const audio = getForestAudio();
     renderer.setStepSink(audio);
@@ -321,8 +335,8 @@ export function ForestWorldView({
   const windowOpen = snap.window !== null;
   useGamePause(dispatch, "ui.panel", "ui.chest", windowOpen);
   useGamePause(dispatch, "ui.panel", "ui.troll_test", trollDialog);
-  const frozen = suspended || windowOpen || trollDialog;
-  const npcDialog = trollDialog || gameState.dialog !== null;
+  const frozen = suspended || windowOpen || trollDialog || trollMessage !== null;
+  const npcDialog = trollDialog || trollMessage !== null || gameState.dialog !== null;
   const saveId = gameState.world?.saveId ?? null;
   const getPose = useCallback(() => rendererRef.current?.getPose() ?? null, []);
   useForestAudio({ elapsed: gameState.elapsed, saveId, dialog: npcDialog, frozen: frozen || npcDialog, getPose });
@@ -334,14 +348,51 @@ export function ForestWorldView({
     g.suspended = frozen;
   }, [frozen]);
   useEffect(() => {
-    if (windowOpen || trollDialog) document.exitPointerLock?.();
-  }, [windowOpen, trollDialog]);
+    if (windowOpen || trollDialog || trollMessage !== null || gameState.dialog) document.exitPointerLock?.();
+  }, [windowOpen, trollDialog, trollMessage, gameState.dialog]);
 
   const resolveTrollDialog = useCallback((outcome: DialogOutcome) => {
     if (!trollDialogRef.current) return;
     trollDialogRef.current = false;
     setTrollDialog(false);
     rendererRef.current?.resolveNpcDialog(outcome);
+  }, []);
+
+  /** Prośba trolla o rozmowę (po animacji Surprised): silnik decyduje, czy rozmowa się odbywa (blokada, rozwiązana zagadka). */
+  const requestTrollTalk = useCallback(() => {
+    const renderer = rendererRef.current;
+    const pose = renderer?.getPose();
+    const state = stateRef.current;
+    if (!renderer || !pose) return;
+    if (state.dialog) return;
+    if (state.troll.phase === "solved") {
+      const taken = state.chests["chest.bridge.blueprint"]?.taken;
+      setTrollMessage(taken ? "Dobrze ci poszło! Powodzenia przy budowie mostu." : "Zagadkę już rozwiązałeś. Skrzynia ze schematem jest dla ciebie otwarta.");
+      return;
+    }
+    const command: Command = { type: "troll.talk", at: { x: pose.x, z: pose.z } };
+    const out = applyCommand(state, command);
+    dispatchRef.current(command);
+    if (!out.state.dialog) renderer.resolveNpcDialog("dismissed");
+  }, []);
+  useEffect(() => {
+    trollRequestRef.current = requestTrollTalk;
+  }, [requestTrollTalk]);
+
+  const chooseTroll = useCallback((choice: "fight" | "talk") => {
+    dispatchRef.current({ type: "troll.choose", choice });
+  }, []);
+  const answerTroll = useCallback((value: number) => {
+    const command: Command = { type: "riddle.answer", value };
+    const out = applyCommand(stateRef.current, command);
+    dispatchRef.current(command);
+    const answered = out.events.find((e) => e.type === "troll.riddle_answered");
+    if (answered && answered.type === "troll.riddle_answered") rendererRef.current?.resolveNpcDialog(answered.correct ? "correct" : "wrong");
+  }, []);
+  const closeTroll = useCallback(() => {
+    if (stateRef.current.dialog) dispatchRef.current({ type: "dialog.close" });
+    setTrollMessage(null);
+    rendererRef.current?.resolveNpcDialog("dismissed");
   }, []);
   const setTrollMaterial = useCallback((mode: TrollMaterialMode) => {
     rendererRef.current?.setNpcMaterialMode(mode);
@@ -403,10 +454,6 @@ export function ForestWorldView({
     getForestAudio().setStepVolumes({ [owner]: value });
   }, []);
 
-  const debugRef = useRef(debug);
-  useEffect(() => {
-    debugRef.current = debug;
-  }, [debug]);
   const suspendedRef = useRef(suspended);
   useEffect(() => {
     suspendedRef.current = suspended;
@@ -493,7 +540,7 @@ export function ForestWorldView({
         <div className="pointer-events-none absolute inset-x-0 top-[58%] z-10 flex justify-center px-4">
           <p data-testid="troll-talk-prompt" className="flex items-center gap-2 rounded-full bg-amber-100/90 px-4 py-2 text-sm font-semibold text-amber-950 shadow-xl backdrop-blur">
             <kbd className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-100">E</kbd>
-            Porozmawiaj z trollem (test)
+            Porozmawiaj z trollem
           </p>
         </div>
       )}
@@ -635,6 +682,7 @@ export function ForestWorldView({
         </DialogContent>
       </Dialog>
 
+      <TrollDialog dialog={gameState.dialog} message={trollMessage} onChoose={chooseTroll} onAnswer={answerTroll} onClose={closeTroll} />
       <TrollTestDialog open={trollDialog} onOutcome={resolveTrollDialog} />
     </section>
   );

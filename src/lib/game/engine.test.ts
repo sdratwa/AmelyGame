@@ -118,13 +118,16 @@ describe("sklep i ekwipunek", () => {
 });
 
 describe("tutorial", () => {
-  it("do czasu wejścia do lasu inne miejsca są zablokowane", () => {
+  it("do czasu przyjęcia zadania z tablicy nic poza tablicą nie jest dostępne", () => {
     let s = playing({ tutorialDone: false });
     s = reducer(s, { type: "enter", view: "shop" });
     expect(s.view).toBe("world");
     s = reducer(s, { type: "enter", view: "forest" });
-    expect(s.view).toBe("forest");
+    expect(s.view).toBe("world");
+    s = reducer(s, { type: "quest.accept", id: "quest.bridge_01" });
     expect(s.tutorialDone).toBe(true);
+    s = reducer(s, { type: "enter", view: "forest" });
+    expect(s.view).toBe("forest");
   });
 });
 

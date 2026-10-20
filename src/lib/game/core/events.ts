@@ -25,7 +25,7 @@ export type GameEvent =
   | { type: "quest.accepted"; id: QuestId }
   | { type: "quest.completed"; id: QuestId; money: number; badge: BadgeId | null }
   | { type: "chest.opened"; id: ChestId }
-  | { type: "chest.open_failed"; id: ChestId; reason: "guarded" }
+  | { type: "chest.open_failed"; id: ChestId; reason: "guarded" | "order" }
   | { type: "chest.taken"; id: ChestId; item: ItemId }
   | { type: "chest.take_failed"; id: ChestId; reason: "inventory_full" }
   | { type: "resource.harvested"; objectId: string; item: ItemId; amount: number }

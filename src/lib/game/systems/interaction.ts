@@ -5,12 +5,13 @@ import type { GameState } from "../core/state";
 import { harvestOf, type HarvestKind, type HarvestSize } from "../world/harvest";
 import { forestChestsOf, forestOf } from "../world/lookup";
 import { countOf } from "./containers";
+import { chestWaitsForItem } from "./forestQuest";
 
 /** Pozycja i kierunek patrzenia gracza w lesie. yaw = 0 patrzy w stronę -Z (jak kamera renderera). */
 export type ViewPose = { x: number; z: number; yaw: number };
 
 export type InteractTarget =
-  | { kind: "chest"; id: ChestId; distance: number; action: "open" | "peek"; locked: boolean }
+  | { kind: "chest"; id: ChestId; distance: number; action: "open" | "peek"; locked: boolean; lockReason: "troll" | "order" | null }
   | { kind: "tree" | "rock"; id: string; distance: number; size: HarvestSize; amount: number };
 
 export type PromptTone = "action" | "blocked";
@@ -55,13 +56,16 @@ export function pickInteraction(state: GameState, pose: ViewPose): InteractTarge
     const angle = angleBetween(pose, chest.x, chest.z);
     const allowed = cone(distance, CHEST_EXTENT);
     if (angle > allowed) continue;
-    const locked = !st?.opened && guarded === chest.id && state.troll.phase !== "solved";
+    const guardedByTroll = !st?.opened && guarded === chest.id && state.troll.phase !== "solved";
+    const waiting = chestWaitsForItem(state, chest.id) !== null;
+    const locked = guardedByTroll || waiting;
     consider((angle / allowed + (distance / CHEST_PROMPT_RANGE) * 0.35) * CHEST_PRIORITY, {
       kind: "chest",
       id: chest.id,
       distance,
       action: st?.opened ? "peek" : "open",
       locked,
+      lockReason: guardedByTroll ? "troll" : waiting ? "order" : null,
     });
   }
 
@@ -90,7 +94,13 @@ export function toolFor(kind: HarvestKind): ItemId {
 /** Tekst podpowiedzi dla celu. Gdy brakuje narzędzia lub skrzynię pilnuje troll, podpowiedź jest komunikatem bez akcji. */
 export function describePrompt(state: GameState, target: InteractTarget): Prompt {
   if (target.kind === "chest") {
-    if (target.locked) return { key: null, text: "Skrzynia jest zamknięta. Pilnuje jej troll.", tone: "blocked" };
+    if (target.locked) {
+      return {
+        key: null,
+        text: target.lockReason === "order" ? "Skrzynia jest zamknięta. Najpierw zdobądź schemat mostu." : "Skrzynia jest zamknięta. Pilnuje jej troll.",
+        tone: "blocked",
+      };
+    }
     return {
       key: "E",
       text: target.action === "open" ? "Otwórz skrzynię" : "Zobacz zawartość skrzyni",

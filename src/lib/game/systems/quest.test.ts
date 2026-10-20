@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ITEMS } from "../content/items";
 import { RIDDLE_BY_ID, RIDDLES } from "../content/riddles";
-import { QUESTS } from "../content/quests";
+import { QUESTS, RECIPE_BRIDGE_01 } from "../content/quests";
+import { BRIDGE_NEED } from "../world/generators/v2/validate";
 import { applyCommand, type Command } from "../core/apply";
 import { SECONDS_PER_DAY, SECONDS_PER_GAME_HOUR } from "../core/constants";
 import { nextDayStart } from "../core/clock";
@@ -11,7 +12,7 @@ import type { GameState } from "../core/state";
 import { hydrateState } from "../save/hydrate";
 import { serializeState } from "../save/serialize";
 import { validateSaveV2 } from "../save/validate";
-import { anchorsOf, autoComplete, harvestTarget, harvestTargets, inForest, near, newPlaying, run } from "../testkit";
+import { anchorsOf, autoComplete, harvestTarget, harvestTargets, inForest, near, newPlaying, run, unlockToolOrder } from "../testkit";
 import { countOf, inventoryProblems } from "./containers";
 import { riddleFor } from "./forestQuest";
 import { forestOf } from "../world/lookup";
@@ -68,7 +69,16 @@ class Game {
   advanceTo(t: number) {
     this.state = inForest({ ...this.state, elapsed: Math.max(this.state.elapsed, t), health: 100 });
   }
+  /**
+   * Kolejność questa: skrzynie z narzędziami otwierają się dopiero po zdobyciu schematu. Większość scenariuszy testowych
+   * dotyczy innych zasad (konfiskata, materiały, zapis), więc dla narzędzi zapisujemy schemat "na papierze" (księga +1/-1,
+   * spójna z ekwipunkiem). Same zasady kolejności testuje blok "kolejność questa" poniżej, przez `do()` bez tego skrótu.
+   */
+  unlockOrder() {
+    this.state = unlockToolOrder(this.state);
+  }
   openAndTake(id: "chest.bridge.pickaxe" | "chest.bridge.saw" | "chest.bridge.blueprint") {
+    if (id !== "chest.bridge.blueprint") this.unlockOrder();
     this.do({ type: "chest.open", id, at: near(this.chest(id)) });
     this.do({ type: "chest.take", id, at: near(this.chest(id)) });
   }
@@ -113,7 +123,7 @@ describe("Q1: tablica i przyjęcie zadania", () => {
 
   it("zawartość zadania jest danymi: 5 etapów, nagroda 5000 zł i odznaka, zapowiedzi bez celów", () => {
     const def = QUESTS.find((q) => q.id === BRIDGE)!;
-    expect(def.stages.map((s) => s.id)).toEqual(["tools", "blueprint", "materials", "build", "cross"]);
+    expect(def.stages.map((s) => s.id)).toEqual(["blueprint", "tools", "materials", "build", "cross"]);
     expect(def.reward).toEqual({ money: 5000, badge: "badge.explorer" });
     expect(QUESTS.filter((q) => q.preview)).toHaveLength(2);
   });
@@ -122,6 +132,7 @@ describe("Q1: tablica i przyjęcie zadania", () => {
 describe("Q1: skrzynie", () => {
   it("otwarcie jest oddzielone od odebrania; z daleka i bez zadania nie da się otworzyć obcej skrzyni", () => {
     const g = new Game();
+    g.unlockOrder();
     const id = "chest.bridge.pickaxe";
     const far = { x: g.chest(id).x + 50, z: g.chest(id).z };
     expect(g.do({ type: "chest.open", id, at: far })).toEqual([]);
@@ -140,6 +151,7 @@ describe("Q1: skrzynie", () => {
     const g = new Game();
     for (let i = 0; i < 7; i++) g.do({ type: "buy", item: "item.water" });
     const id = "chest.bridge.saw";
+    g.unlockOrder();
     g.do({ type: "chest.open", id, at: near(g.chest(id)) });
     const ev = g.do({ type: "chest.take", id, at: near(g.chest(id)) });
     expect(eventTypes(ev)).toEqual(["chest.take_failed"]);
@@ -156,6 +168,60 @@ describe("Q1: skrzynie", () => {
     expect(g.state.chests[id]).toBeUndefined();
     const troll = g.a.troll;
     expect(Math.hypot(troll.x - g.chest(id).x, troll.z - g.chest(id).z)).toBeLessThan(6);
+  });
+});
+
+describe("Q1: kolejność questa (schemat przed narzędziami)", () => {
+  it("skrzynie z narzędziami są zamknięte aż do zdobycia schematu, także po rozwiązaniu zagadki trolla", () => {
+    const g = new Game();
+    g.do({ type: "quest.accept", id: BRIDGE });
+    for (const id of ["chest.bridge.pickaxe", "chest.bridge.saw"] as const) {
+      expect(g.do({ type: "chest.open", id, at: near(g.chest(id)) })).toEqual([{ type: "chest.open_failed", id, reason: "order" }]);
+      expect(g.state.chests[id]).toBeUndefined();
+      expect(g.do({ type: "chest.take", id, at: near(g.chest(id)) })).toEqual([]);
+    }
+    g.do({ type: "troll.talk", at: near(g.a.troll) });
+    g.do({ type: "troll.choose", choice: "talk" });
+    g.do({ type: "riddle.answer", value: RIDDLE_BY_ID.get(g.state.dialog!.riddle!)!.answer });
+    expect(g.state.troll.phase).toBe("solved");
+    const pick = "chest.bridge.pickaxe" as const;
+    expect(eventTypes(g.do({ type: "chest.open", id: pick, at: near(g.chest(pick)) }))).toEqual(["chest.open_failed"]);
+    expect(g.has("item.bridge_blueprint")).toBe(0);
+    // Dopiero faktyczne wzięcie schematu odblokowuje narzędzia (w dowolnej kolejności).
+    g.do({ type: "chest.open", id: "chest.bridge.blueprint", at: near(g.chest("chest.bridge.blueprint")) });
+    expect(eventTypes(g.do({ type: "chest.open", id: pick, at: near(g.chest(pick)) }))).toEqual(["chest.open_failed"]);
+    g.do({ type: "chest.take", id: "chest.bridge.blueprint", at: near(g.chest("chest.bridge.blueprint")) });
+    expect(g.has("item.bridge_blueprint")).toBe(1);
+    expect(g.state.toast?.text).toBe("Zdobyto schemat mostu");
+    for (const id of ["chest.bridge.saw", "chest.bridge.pickaxe"] as const) {
+      expect(eventTypes(g.do({ type: "chest.open", id, at: near(g.chest(id)) }))).toEqual(["chest.opened"]);
+      expect(eventTypes(g.do({ type: "chest.take", id, at: near(g.chest(id)) }))).toEqual(["chest.taken"]);
+    }
+    expect(g.has("item.saw") + g.has("item.pickaxe")).toBe(2);
+  });
+
+  it("etapy zadania idą w kolejności schemat -> narzędzia -> materiały -> budowa -> przeprawa", () => {
+    const g = new Game();
+    g.do({ type: "quest.accept", id: BRIDGE });
+    const stage = () => questProgress(g.state, BRIDGE)!.currentStage;
+    expect(stage()).toBe(0);
+    g.unlockOrder();
+    expect(stage()).toBe(1);
+    g.openAndTake("chest.bridge.saw");
+    g.openAndTake("chest.bridge.pickaxe");
+    expect(stage()).toBe(2);
+    g.harvest("tree", "l", 1);
+    g.stone10();
+    expect(stage()).toBe(3);
+  });
+
+  it("wymagane materiały to jedno źródło danych: przepis zgadza się z walidacją generatora i celami questa", () => {
+    const need = (id: string) => RECIPE_BRIDGE_01.requires.find((r) => r.id === id)!.count;
+    expect(need("resource.wood")).toBe(BRIDGE_NEED.wood);
+    expect(need("resource.stone")).toBe(BRIDGE_NEED.stone);
+    const def = QUESTS.find((q) => q.id === BRIDGE)!;
+    const materials = def.stages.find((s) => s.id === "materials")!;
+    expect(materials.objectives.map((o) => ("count" in o ? o.count : 0))).toEqual([BRIDGE_NEED.wood, BRIDGE_NEED.stone]);
   });
 });
 
@@ -208,11 +274,11 @@ describe("Q1: troll, konfiskata i depozyt", () => {
     g.advanceTo(g.state.elapsed + SECONDS_PER_GAME_HOUR); // godzina nie wystarcza
     expect(eventTypes(g.do({ type: "troll.talk", at: near(g.a.troll) }))).toEqual(["troll.locked"]);
     const progress = questProgress(g.state, BRIDGE)!;
-    const recover = progress.stages[1].objectives.find((o) => o.id === "recover")!;
+    const recover = progress.stages[0].objectives.find((o) => o.id === "recover")!;
     expect(recover.visible).toBe(true);
     expect(recover.done).toBe(false);
     // narzędzia policzone jako "znalezione" mimo konfiskaty (cele monotoniczne)
-    expect(progress.stages[0].done).toBe(true);
+    expect(progress.stages[1].done).toBe(true);
     g.advanceTo(lock);
     expect(eventTypes(g.do({ type: "troll.talk", at: near(g.a.troll) }))).toEqual(["troll.dialog_opened"]);
     expect(g.state.dialog?.stage).toBe("riddle");
@@ -506,6 +572,7 @@ describe("Q1: zapis i wczytanie na każdym etapie zadania (bez duplikatów, stra
     g.do({ type: "board.read", id: BRIDGE });
     g.do({ type: "quest.accept", id: BRIDGE });
     checkpoint(); // po przyjęciu questa
+    g.unlockOrder();
     for (const id of ["chest.bridge.pickaxe", "chest.bridge.saw"] as const) {
       g.do({ type: "chest.open", id, at: near(g.chest(id)) });
       checkpoint(); // po otwarciu każdej skrzyni
@@ -676,6 +743,7 @@ describe("Q1: odrodzenie i dyskretne scenariusze bez softlocka", () => {
       };
       for (let step = 0; step < 90; step++) {
         const a = g.a;
+        if (rnd() < 0.1) g.unlockOrder();
         const cid = pick(chests);
         const ht = pick(targets);
         const commands: Command[] = [

@@ -29,6 +29,8 @@ export type Item = {
   keepOnDeath: boolean;
   /** Gracz może go wyrzucić (zwalnia miejsce); przedmioty questowe nie. */
   discardable: boolean;
+  /** Komunikat po wyjęciu ze skrzyni (domyślnie "Zdobyto: <nazwa>"). */
+  pickupMessage?: string;
 };
 
 export const DEFAULT_MAX_STACK = 20;
@@ -107,6 +109,7 @@ export const ITEMS: Record<ItemId, Item> = {
     heal: 0,
     price: 0,
     description: "Stary plan drewnianego mostu nad rzeką.",
+    pickupMessage: "Zdobyto schemat mostu",
     maxStack: 1,
     protected: false,
     keepOnDeath: true,

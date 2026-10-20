@@ -423,10 +423,21 @@ export const WorldScene = memo(function WorldScene({
     out.push({
       key: "board",
       y: b.y,
-      dim: locked,
+      dim: false,
       node: (
-        <SpotShell testId="tile-board" label="Tablica ogłoszeń" locked={locked} onActivate={onOpenBoard}>
+        <SpotShell testId="tile-board" label="Tablica ogłoszeń" locked={false} onActivate={onOpenBoard}>
           <rect x={b.x - 70 * b.s} y={b.y - 170 * b.s} width={140 * b.s} height={180 * b.s} fill="transparent" />
+          {locked && (
+            <ellipse
+              className="pulse"
+              cx={b.x}
+              cy={b.y - 90 * b.s}
+              rx={170 * b.s}
+              ry={150 * b.s}
+              fill="url(#halo)"
+              pointerEvents="none"
+            />
+          )}
           <g className="lift">
             <NoticeBoard x={b.x} y={b.y} s={b.s} snow={palette.snow} />
           </g>
@@ -438,21 +449,10 @@ export const WorldScene = memo(function WorldScene({
     out.push({
       key: "forest",
       y: f.y,
-      dim: false,
+      dim: locked,
       node: (
-        <SpotShell testId="tile-forest" label="Las" locked={false} onActivate={() => onEnter("forest")}>
+        <SpotShell testId="tile-forest" label="Las" locked={locked} onActivate={() => onEnter("forest")}>
           <rect x={f.x - 240 * f.s} y={f.y - 290 * f.s} width={480 * f.s} height={350 * f.s} fill="transparent" />
-          {locked && (
-            <ellipse
-              className="pulse"
-              cx={f.x}
-              cy={f.y - 90 * f.s}
-              rx={300 * f.s}
-              ry={210 * f.s}
-              fill="url(#halo)"
-              pointerEvents="none"
-            />
-          )}
           <g className="lift" transform={`translate(${f.x} ${f.y}) scale(${f.s})`}>
             <ForestSpotArt palette={palette} />
           </g>
@@ -543,7 +543,11 @@ export const WorldScene = memo(function WorldScene({
             ]}
           />
         </g>
-        <g onClick={() => onEnter("forest")} style={{ cursor: "pointer" }}>
+        <g
+          className={locked ? "tut-dim" : ""}
+          onClick={locked ? undefined : () => onEnter("forest")}
+          style={{ cursor: locked ? "default" : "pointer", pointerEvents: locked ? "none" : "auto" }}
+        >
           <Label
             x={forest.x}
             y={forest.y + 66 * forest.s}
@@ -554,11 +558,7 @@ export const WorldScene = memo(function WorldScene({
             ]}
           />
         </g>
-        <g
-          className={locked ? "tut-dim" : ""}
-          onClick={locked ? undefined : onOpenBoard}
-          style={{ cursor: locked ? "default" : "pointer", pointerEvents: locked ? "none" : "auto" }}
-        >
+        <g onClick={onOpenBoard} style={{ cursor: "pointer" }}>
           <Label
             x={layout.board.x}
             y={layout.board.y + 14 * layout.board.s}
@@ -589,31 +589,14 @@ export const WorldScene = memo(function WorldScene({
           </g>
         ))}
 
-        {!locked && boardUnread && (
-          <g className="bob" pointerEvents="none" data-testid="board-exclamation">
+        {(locked || boardUnread) && (
+          <g className="bob" pointerEvents="none" data-testid={locked ? "tutorial-exclamation" : "board-exclamation"}>
             <circle cx={layout.board.x} cy={layout.board.y - 190 * layout.board.s} r={26} fill="#ffc933" stroke="#fff" strokeWidth="4" />
             <text
               x={layout.board.x}
               y={layout.board.y - 190 * layout.board.s + 13}
               textAnchor="middle"
               fontSize="40"
-              fontWeight="900"
-              fill="#5a3b00"
-              fontFamily="system-ui, sans-serif"
-            >
-              !
-            </text>
-          </g>
-        )}
-
-        {locked && (
-          <g className="bob" pointerEvents="none" data-testid="tutorial-exclamation">
-            <circle cx={forest.x} cy={forest.y - 305 * forest.s} r={34} fill="#ffc933" stroke="#fff" strokeWidth="5" />
-            <text
-              x={forest.x}
-              y={forest.y - 305 * forest.s + 17}
-              textAnchor="middle"
-              fontSize="52"
               fontWeight="900"
               fill="#5a3b00"
               fontFamily="system-ui, sans-serif"

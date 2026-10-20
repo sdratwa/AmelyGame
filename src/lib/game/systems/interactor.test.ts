@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { reducer, type Command } from "../core/apply";
 import type { GameState } from "../core/state";
-import { harvestTargets, inForest, newPlaying, run, slotsFrom } from "../testkit";
+import { harvestTargets, inForest, newPlaying, run, slotsFrom, unlockToolOrder } from "../testkit";
 import { forestChestsOf, forestObject } from "../world/lookup";
 import { countOf } from "./containers";
 import { CHEST_WINDOW_DELAY_MS, ForestInteractor, OPEN_CONFIRM_TIMEOUT_MS } from "./interactor";
@@ -18,7 +18,8 @@ const standing = (target: { x: number; z: number }, d: number, from = 0): ViewPo
 
 function harness(initial?: GameState) {
   const h = {
-    state: initial ?? inForest(run(newPlaying(SEED), { type: "quest.accept", id: "quest.bridge_01" })),
+    // Kolejność questa: narzędzia dopiero po schemacie, więc domyślny stan ma schemat zapisany "na papierze".
+    state: initial ?? unlockToolOrder(inForest(run(newPlaying(SEED), { type: "quest.accept", id: "quest.bridge_01" }))),
     pose: null as ViewPose | null,
     time: 1000,
     dispatched: [] as Command[],
@@ -62,7 +63,7 @@ describe("M1/C1: kontroler interakcji (E, okno skrzyni)", () => {
     expect(countOf(h.state.slots, "item.saw")).toBe(1);
     expect(interactor.poll().window).toBeNull();
     expect(interactor.snapshot.target).toBeNull();
-    expect(questProgress(h.state, "quest.bridge_01")!.stages[0].objectives.find((o) => o.id === "saw")!.done).toBe(true);
+    expect(questProgress(h.state, "quest.bridge_01")!.stages[1].objectives.find((o) => o.id === "saw")!.done).toBe(true);
   });
 
   it("szybkie wielokrotne E nie otwiera ani nie wydaje nagrody dwa razy", () => {
