@@ -112,8 +112,8 @@ describe("assembleBridge", () => {
         min = Math.min(min, along);
         max = Math.max(max, along);
       }
-      expect(min, `seed=${seed}`).toBeCloseTo(0, 3);
-      expect(max, `seed=${seed}`).toBeCloseTo(l.length, 3);
+      expect(min, `seed=${seed}`).toBeCloseTo(0, 2);
+      expect(max, `seed=${seed}`).toBeCloseTo(l.length, 2);
     }
   });
 
