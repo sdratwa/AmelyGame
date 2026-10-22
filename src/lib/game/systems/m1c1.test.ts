@@ -7,7 +7,7 @@ import { hydrateState } from "../save/hydrate";
 import { loadGame } from "../save/loader";
 import { MemoryStorage } from "../save/memoryStorage";
 import { LocalStorageSaveStore } from "../save/store";
-import { harvestTargets, inForest, newPlaying, run, unlockToolOrder } from "../testkit";
+import { harvestTargets, inForest, newPlaying, run, unlockToolOrder, testWorldKey } from "../testkit";
 import { harvestOf } from "../world/harvest";
 import { forestChestsOf, forestObject, forestWalkOf, syncHarvestedColliders } from "../world/lookup";
 import { countOf } from "./containers";
@@ -35,7 +35,7 @@ function session(initial: GameState) {
     now: () => h.time,
   });
   const fetchChest = (id: string) => {
-    const chest = forestChestsOf(SEED).find((c) => c.id === id)!;
+    const chest = forestChestsOf(testWorldKey(SEED)).find((c) => c.id === id)!;
     h.pose = standing(chest, 1.6);
     interactor.poll();
     interactor.press();
@@ -48,7 +48,7 @@ function session(initial: GameState) {
     for (const t of harvestTargets(SEED)) {
       if (countOf(h.state.slots, item) >= need) break;
       if (t.kind !== kind || h.state.harvested.includes(t.id)) continue;
-      const obj = forestObject(SEED, t.id)!;
+      const obj = forestObject(testWorldKey(SEED), t.id)!;
       h.pose = standing(obj, 1.6, 1.1);
       const snap = interactor.poll();
       if (snap.target?.id !== t.id || snap.prompt?.key !== "E") continue;
@@ -109,7 +109,7 @@ describe("M1/C1: grywalny fragment questa w jednym przebiegu (E, ekwipunek, dzie
     expect(countOf(after.h.state.slots, "item.pickaxe")).toBe(1);
     expect(after.h.state.ledger.gained["item.saw"]).toBe(1);
     const gone = s.h.state.harvested[0];
-    const obj = forestObject(SEED, gone)!;
+    const obj = forestObject(testWorldKey(SEED), gone)!;
     after.h.pose = standing(obj, 1.6, 1.1);
     expect(after.interactor.poll().target?.id).not.toBe(gone);
     expect(questProgress(after.h.state, QUEST_BRIDGE_01)!.stages.map((st) => st.done)).toEqual(questProgress(s.h.state, QUEST_BRIDGE_01)!.stages.map((st) => st.done));
@@ -117,7 +117,7 @@ describe("M1/C1: grywalny fragment questa w jednym przebiegu (E, ekwipunek, dzie
 
   it("zapis w trakcie: skrzynia otwarta, lecz niezabrana, wraca otwarta z przedmiotem w środku", async () => {
     const s = session(fresh());
-    const chest = forestChestsOf(SEED).find((c) => c.id === "chest.bridge.pickaxe")!;
+    const chest = forestChestsOf(testWorldKey(SEED)).find((c) => c.id === "chest.bridge.pickaxe")!;
     s.h.pose = standing(chest, 1.6);
     s.interactor.press();
     expect(s.h.state.chests["chest.bridge.pickaxe"]).toEqual({ opened: true, taken: false });
@@ -144,8 +144,8 @@ describe("M1/C1: zasoby na zachodnim brzegu i kolizje zebranych obiektów", () =
   it("na 24 seedach jest dość drzew i skał, by zebrać 5 drewna i 10 kamieni (z zapasem), a surowce mieszczą się w jednym stosie", () => {
     for (let seed = 1; seed <= 24; seed++) {
       const list = harvestTargets(seed);
-      const wood = list.filter((t) => t.kind === "tree").reduce((n, t) => n + (harvestOf(forestObject(seed, t.id)!)?.amount ?? 0), 0);
-      const stone = list.filter((t) => t.kind === "rock").reduce((n, t) => n + (harvestOf(forestObject(seed, t.id)!)?.amount ?? 0), 0);
+      const wood = list.filter((t) => t.kind === "tree").reduce((n, t) => n + (harvestOf(forestObject(testWorldKey(seed), t.id)!)?.amount ?? 0), 0);
+      const stone = list.filter((t) => t.kind === "rock").reduce((n, t) => n + (harvestOf(forestObject(testWorldKey(seed), t.id)!)?.amount ?? 0), 0);
       expect(wood, `drewno, seed ${seed}`).toBeGreaterThanOrEqual(15);
       expect(stone, `kamień, seed ${seed}`).toBeGreaterThanOrEqual(30);
     }
@@ -153,21 +153,21 @@ describe("M1/C1: zasoby na zachodnim brzegu i kolizje zebranych obiektów", () =
 
   it("zebrane drzewo przestaje blokować ruch (kolizja usunięta), a cofnięcie zbioru przywraca ją", () => {
     const tree = harvestTargets(SEED).find((t) => {
-      const o = forestObject(SEED, t.id)!;
+      const o = forestObject(testWorldKey(SEED), t.id)!;
       return t.kind === "tree" && o.collider?.shape === "circle";
     })!;
-    const obj = forestObject(SEED, tree.id)!;
+    const obj = forestObject(testWorldKey(SEED), tree.id)!;
     const r = obj.collider?.shape === "circle" ? obj.collider.r : 0.5;
-    const walk = forestWalkOf(SEED);
+    const walk = forestWalkOf(testWorldKey(SEED));
     const from = { x: obj.x - r - 0.5, z: obj.z };
     const to = { x: obj.x + r + 0.5, z: obj.z };
-    syncHarvestedColliders(SEED, []);
+    syncHarvestedColliders(testWorldKey(SEED), []);
     const blocked = walk.move(from, to);
     expect(Math.hypot(blocked.x - to.x, blocked.z - to.z)).toBeGreaterThan(0.3);
-    syncHarvestedColliders(SEED, [tree.id]);
+    syncHarvestedColliders(testWorldKey(SEED), [tree.id]);
     const open = walk.move(from, to);
     expect(open.x).toBeCloseTo(to.x, 1);
-    syncHarvestedColliders(SEED, []);
+    syncHarvestedColliders(testWorldKey(SEED), []);
     const again = walk.move(from, to);
     expect(Math.hypot(again.x - to.x, again.z - to.z)).toBeGreaterThan(0.3);
   });

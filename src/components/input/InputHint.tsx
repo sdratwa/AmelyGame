@@ -2,14 +2,17 @@
 
 import type { HintAction } from "@/lib/input/actions";
 import { cn } from "@/lib/utils";
-import { useHint } from "./hooks";
+import { hintLabel } from "@/lib/input/prompts";
+import { useInputDevice } from "./hooks";
 
 /**
  * Podpowiedź przycisku zgodna z aktywnym urządzeniem: [E] / [✕] / [A]. Etykieta pochodzi z konfiguracji mapowania,
  * a nie z napisu wpisanego w komponencie. Brak odpowiednika (np. menu na klawiaturze) = nic nie renderujemy.
  */
-export function InputHint({ action, className }: { action: HintAction; className?: string }) {
-  const label = useHint(action);
+export function InputHint({ action, padAction, className }: { action: HintAction; padAction?: HintAction; className?: string }) {
+  const device = useInputDevice();
+  // `padAction`: na padzie ta sama czynność ma inny przycisk (np. okno skrzyni: E na klawiaturze, zatwierdzenie na padzie).
+  const label = hintLabel(device === "keyboard" ? action : (padAction ?? action), device);
   if (!label) return null;
   return (
     <kbd data-testid={`hint-${action}`} className={cn("rounded bg-black/25 px-1 text-[10px] font-semibold", className)}>
@@ -20,6 +23,6 @@ export function InputHint({ action, className }: { action: HintAction; className
 
 /** Sama etykieta jako tekst (do zdań typu "Zamknięcie: J lub Esc"). */
 export function HintText({ action, fallback }: { action: HintAction; fallback?: string }) {
-  const label = useHint(action);
+  const label = hintLabel(action, useInputDevice());
   return <>{label ?? fallback ?? ""}</>;
 }

@@ -4,7 +4,7 @@ import type { ModelBatch } from "./window";
 import { SHADOW_CASTERS, type ForestViewProfile, type ViewKind, type ViewOverrides } from "./profiles";
 
 /** Skład rzadzenia: tylko drobna roślinność; drzewa, skały i krzewy nigdy nie znikają "z gęstości". */
-const THINNED: ReadonlySet<ViewKind> = new Set(["grass", "flower", "plant", "fern", "mushroom"]);
+const THINNED: ReadonlySet<ViewKind> = new Set(["grass", "flower", "plant", "fern", "mushroom", "decor"]);
 
 /** Histereza LOD: powrót do wyższej jakości dopiero po przekroczeniu 92% progu, w którym nastąpiło przełączenie. */
 export const LOD_HYSTERESIS = 0.92;

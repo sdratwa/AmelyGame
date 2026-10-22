@@ -63,3 +63,10 @@ Snapshot pozycji krytycznych pozostaje zapisem pomocniczym (diagnostyka i wejśc
 ## Renderowanie dużego lasu
 
 Jedno `InstancedMesh` na typ obiektu, wypełniane tylko dla okna aktywnych sektorów (np. 7 x 7) wokół gracza; przebudowa przy zmianie sektora lub stanu obiektu. LOD dla dużych modeli, kolizje przez indeks sektorowy (zamiast liniowego skanu). Szczegóły budżetów: [wydajnosc.md](wydajnosc.md).
+
+## Generator v3: las Pro i dwie warstwy (22 października 2026)
+
+- `generators/v3/world.ts`: `generateWorldV3(seed)` = domy i plan lasu jak v2 (te same kotwice questa; teren i plan liczone wersją układu lasu `FOREST_GEN_VERSION = 2`), a `forest.planDigest` łączy odcisk planu z `gameplayDigest`. Wersja świata w zapisie to 3, odcisk różni się od v2 dla tego samego seeda.
+- `gameplayDigest` obejmuje układ ćwiartek (szew, pas przejścia, pominięte strefy), pola profili wpływające na drzewa i skały (gęstości `tree`/`ancient`/`rock`, miksy `tree`/`rock`, `pro.tree`, `rockBig`, `rockDesert`, `formations`), `PRO_TUNING.rocks`, `PRO_TUNING.dunes` oraz gatunki drzew i skał z danymi kolizji. Dane kosmetyczne są poza odciskiem.
+- `ForestOptions.layers`: `"gameplay"` generuje tylko drzewa i skały (szybciej, kolizje i pozyskiwanie), `"all"` dokłada warstwę kosmetyczną. ID, pozycje i kolizje są identyczne w obu trybach (test w `generators/v3/world.test.ts`).
+- `world/lookup.ts`: funkcje lasu przyjmują `WorldKey = number | WorldRef`; sama liczba oznacza generator v2 (zamrożone zapisy i testy), gra przekazuje `{ seed, genVersion }` z `state.world`. `forestOf(ref)` = pełny las do rysowania, `authoritativeForestOf(ref)` = warstwa autorytatywna (kolizje, pozyskiwanie, skrzynie, most, minimapa, walidacja pozycji). Pamięć podręczna kluczowana `genVersion:seed`.

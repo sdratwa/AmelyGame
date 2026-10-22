@@ -1,6 +1,6 @@
 import { canonicalize, hashHex } from "../world/fingerprint";
 import { DEFAULT_SCHEMA, type SchemaConfig } from "./migrate";
-import type { SaveV3 } from "./schema";
+import type { SaveV4 } from "./schema";
 
 export const SAVE_FORMAT = "miasto-save";
 export const ENVELOPE_VERSION = 1;
@@ -8,7 +8,7 @@ export const ENVELOPE_VERSION = 1;
 /** Zapis w pamięci trwałej: koperta z sumą kontrolną nad kanonicznym payloadem. */
 type Envelope = { format: typeof SAVE_FORMAT; envelope: number; checksum: string; payload: unknown };
 
-export function encodeSave(save: SaveV3): string {
+export function encodeSave(save: SaveV4): string {
   const envelope: Envelope = {
     format: SAVE_FORMAT,
     envelope: ENVELOPE_VERSION,
@@ -19,7 +19,7 @@ export function encodeSave(save: SaveV3): string {
 }
 
 export type DecodeResult =
-  | { kind: "ok"; save: SaveV3 }
+  | { kind: "ok"; save: SaveV4 }
   | { kind: "needs_migration"; from: number; payload: unknown }
   | { kind: "unsupported"; version: number; reason: string }
   | { kind: "invalid"; problems: string[] };

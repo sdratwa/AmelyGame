@@ -1,10 +1,11 @@
 import type { House } from "../content/houses";
 import type { ItemStack } from "../content/items";
 import type { BadgeId, RegionId } from "../core/ids";
+import type { CharacterAppearanceV1 } from "@/lib/character/appearance";
 import type { ChestState, ForestPose, Ledger, TrollPhase } from "../core/state";
 
 /** Bieżąca wersja formatu zapisu (SaveVN). Zmiana struktury = nowa wersja + migracja. */
-export const CURRENT_SAVE_VERSION = 3;
+export const CURRENT_SAVE_VERSION = 4;
 
 type LegacySlot = string | null;
 
@@ -41,12 +42,12 @@ export type SaveV1 = {
 };
 
 /**
- * SaveV3 (bieżący): SaveV1 + ekwipunek ze stosami i księgą, zadania, skrzynie, troll z depozytem, pozyskane obiekty,
- * most, odkryte regiony i odznaki. Kotwice świata (pozycje skrzyń itd.) NIE są zapisywane: wynikają z
- * (seed, genVersion) i są chronione odciskiem świata.
+ * SaveV4 (bieżący): SaveV3 + wygląd postaci gracza (`player.appearance`). SaveV3 to SaveV1 + ekwipunek ze stosami i
+ * księgą, zadania, skrzynie, troll z depozytem, pozyskane obiekty, most, odkryte regiony i odznaki. Kotwice świata
+ * (pozycje skrzyń itd.) NIE są zapisywane: wynikają z (seed, genVersion) i są chronione odciskiem świata.
  */
-export type SaveV3 = {
-  version: 3;
+export type SaveV4 = {
+  version: 4;
   saveId: string;
   savedAt: number;
   world: SaveV1["world"];
@@ -62,6 +63,7 @@ export type SaveV3 = {
     ledger: Ledger;
     selected: number;
     forestPose: ForestPose | null;
+    appearance: CharacterAppearanceV1;
   };
   tutorial: { done: boolean };
   houses: House[];
@@ -78,11 +80,20 @@ export type SaveV3 = {
   badges: BadgeId[];
 };
 
+/**
+ * SaveV3 (zamrożony): poprzedni format, identyczny z SaveV4 poza brakiem `player.appearance`. Czytany wyłącznie przez
+ * migrację v3 -> v4, która dodaje domyślny wygląd i nic poza nim.
+ */
+export type SaveV3 = Omit<SaveV4, "version" | "player"> & {
+  version: 3;
+  player: Omit<SaveV4["player"], "appearance">;
+};
+
 /** Stos przedmiotu w zamrożonym formacie V2: id jest zwykłym napisem, bo przedmioty usunięte z gry (telefon) nie są już w `ItemId`. */
 type LegacyStack = { id: string; count: number };
 
 /**
- * SaveV2 (zamrożony): poprzedni format, identyczny z SaveV3 poza tym, że ekwipunek, księga i depozyt mogły zawierać
+ * SaveV2 (zamrożony): format sprzed SaveV3, identyczny z nim poza tym, że ekwipunek, księga i depozyt mogły zawierać
  * telefon (slot 1, `item.phone`). Czytany wyłącznie przez migrację v2 -> v3, która usuwa telefon i nic poza nim.
  */
 export type SaveV2 = Omit<SaveV3, "version" | "player" | "troll"> & {
@@ -95,7 +106,7 @@ export type SaveV2 = Omit<SaveV3, "version" | "player" | "troll"> & {
 };
 
 /** Aktualny format zapisu. */
-export type Save = SaveV3;
+export type Save = SaveV4;
 
 /** Klucze najwyższego poziomu – używane w testach pilnujących rozdziału danych trwałych od sesji. */
 export const SAVE_TOP_LEVEL_KEYS = [

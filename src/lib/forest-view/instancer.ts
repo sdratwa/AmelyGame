@@ -5,10 +5,11 @@ import {
   type AssetLibrary,
   type InstancedModel,
   type ModelAsset,
+  type Placement,
 } from "@/lib/assets";
-import { FOLIAGE, HUE_SWAP_TO_GREEN, MATERIAL_TYPES, STABLE_NORMAL } from "./disposition";
+import { FOLIAGE, HUE_SWAP_TO_GREEN, MATERIAL_TYPES, PRO_FOLIAGE, PRO_MATERIAL_TYPES, STABLE_NORMAL } from "./disposition";
 import { GRADE_UNIFORM_DECL, NOISE_GLSL, NORMAL_UP_FRAGMENT, PHASE_VERTEX, PaletteStore, STABLE_NORMAL_FRAGMENT, gradeFragment } from "./grading";
-import { SHADOW_CASTERS, type ForestViewProfile, type ViewOverrides } from "./profiles";
+import { SHADOW_CASTERS, type ForestViewProfile, type ViewKind, type ViewOverrides } from "./profiles";
 import { createBatchSelector, frustumFor } from "./selector";
 import type { ModelBatch } from "./window";
 
@@ -25,12 +26,19 @@ export function createFoliageUniforms(): FoliageUniforms {
  * normalnych liści ku górze, stabilna normalna cienkich źdźbeł trawy (bez odwracania na tylnej ściance) oraz zamiana czerwonej tekstury starych drzew na zieloną (jak w V2a, gdy paleta nie ma tintu).
  * Idempotentne. Bez `palette` (testy) korekta jest neutralna i daje kolory V2a.
  */
-export function tuneMaterial(material: THREE.Material, uniforms: FoliageUniforms, palette: PaletteStore = new PaletteStore()): void {
+export function tuneMaterial(
+  material: THREE.Material,
+  uniforms: FoliageUniforms,
+  palette: PaletteStore = new PaletteStore(),
+  packColors = false,
+): void {
   const id = String(material.userData.assetMaterialId ?? material.name);
-  if (!(id in MATERIAL_TYPES) || material.userData.forestTuned) return;
-  const foliage = FOLIAGE[id];
-  const swap = HUE_SWAP_TO_GREEN.has(id);
-  const leafy = MATERIAL_TYPES[id] === "foliage";
+  const type = MATERIAL_TYPES[id] ?? PRO_MATERIAL_TYPES[id];
+  if (type === undefined || material.userData.forestTuned) return;
+  const foliage = FOLIAGE[id] ?? PRO_FOLIAGE[id];
+  // `packColors` (prototyp Pro): oryginalne kolory paczki, więc bez zamiany czerwonych liści starych drzew na zielone.
+  const swap = !packColors && HUE_SWAP_TO_GREEN.has(id);
+  const leafy = type === "foliage";
   const stable = STABLE_NORMAL.has(id);
   const grade = palette.get(id);
   material.userData.forestTuned = true;
@@ -63,7 +71,7 @@ export function tuneMaterial(material: THREE.Material, uniforms: FoliageUniforms
       .replace("#include <map_fragment>", `#include <map_fragment>${gradeFragment({ swap, foliage: leafy })}\n${root}`)
       .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>${stable ? STABLE_NORMAL_FRAGMENT : ""}${leafy ? NORMAL_UP_FRAGMENT : ""}`);
   };
-  material.customProgramCacheKey = () => `forest2:${id}`;
+  material.customProgramCacheKey = () => (packColors ? `forest2pro:${id}` : `forest2:${id}`);
   material.needsUpdate = true;
 }
 
@@ -79,7 +87,29 @@ export type InstancerStats = {
   fallbackModels: number;
 };
 
-type Entry = { batch: ModelBatch; asset: ModelAsset; model: InstancedModel };
+/**
+ * Zagłębienie bruku drogi w ziemi (tylko widok, prototyp Pro): płyty `rockpath` i kamyki `pebble` są obniżane o `max` metrów,
+ * a losowość `random` (0-1) rozrzuca głębokość między `max * (1 - random)` a `max` (stabilnie dla danej pozycji).
+ */
+export type PathSink = { max: number; random: number };
+export const PATH_SINK_DEFAULT: PathSink = { max: 0.055, random: 0.22 };
+
+/** Domyślne mnożniki skali rodzajów w widoku prototypu Pro (wybrane przez autora suwakami; 1 = skala z generatora). */
+export const PRO_KIND_SCALE_DEFAULTS: Partial<Record<ViewKind, number>> = { fern: 2.34, plant: 0.9, decor: 1, mushroom: 0.73, bush: 1.31 };
+
+const isPaved = (b: ModelBatch) => b.kind === "path" || b.modelId.startsWith("pebble.");
+
+/** Stabilna liczba z [0, 1) z pozycji (całkowitoliczbowy hash, bez losowania w czasie działania). */
+function hash01(x: number, z: number): number {
+  let h = Math.imul(Math.round(x * 100) | 0, 0x27d4eb2d) ^ Math.imul(Math.round(z * 100) | 0, 0x165667b1);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  return (h >>> 0) / 4294967296;
+}
+
+/** `batch` to partia z zastosowanym mnożnikiem skali rodzaju (widok), `source` to oryginał z generatora. */
+type Entry = { batch: ModelBatch; source: ModelBatch; asset: ModelAsset; model: InstancedModel };
 
 /**
  * Wszystkie instancje okna lasu: po jednym `InstancedModel` na model (instancing V1), a przydział LOD, odcięcie
@@ -89,6 +119,9 @@ export class ForestInstancer {
   readonly group = new THREE.Group();
   readonly uniforms = createFoliageUniforms();
   private entries: Entry[] = [];
+  /** Mnożniki skali instancji wg rodzaju (tylko widok; generator i kolizje bez zmian). Brak wpisu = 1. */
+  private readonly kindScale: Partial<Record<ViewKind, number>> = {};
+  private pathSink: PathSink = { max: 0, random: 0 };
   private readonly assets = new Map<string, ModelAsset>();
   private last: InstancerStats = { visible: 0, total: 0, activeModels: 0, triangles: 0, drawCalls: 0, perLevel: [], fallbackModels: 0 };
 
@@ -98,6 +131,8 @@ export class ForestInstancer {
     readonly profile: ForestViewProfile,
     private overrides: ViewOverrides,
     readonly palette: PaletteStore = new PaletteStore(),
+    /** Prototyp Pro: oryginalne kolory paczki (bez zamiany czerwieni na zieleń). */
+    private readonly packColors = false,
   ) {
     this.group.name = "forest-instances";
   }
@@ -116,7 +151,7 @@ export class ForestInstancer {
     const loaded = await Promise.all(wanted.map(async (id) => ({ id, asset: await this.library.loadOrFallback(id) })));
     for (const { id, asset } of loaded) {
       if (asset.fallback) failed.push(asset.id);
-      for (const lod of asset.levels) for (const part of lod.parts) tuneMaterial(part.material, this.uniforms, this.palette);
+      for (const lod of asset.levels) for (const part of lod.parts) tuneMaterial(part.material, this.uniforms, this.palette, this.packColors);
       this.assets.set(id, asset);
     }
     return failed;
@@ -132,19 +167,73 @@ export class ForestInstancer {
       model.dispose();
     }
     this.entries = [];
-    const wantShadow = this.profile.shadows.enabled && this.overrides.shadows;
-    for (const batch of batches) {
-      const asset = this.assets.get(batch.modelId);
-      if (!asset) throw new Error(`Model ${batch.modelId} nie został załadowany (preload)`);
-      const casts = SHADOW_CASTERS.has(batch.kind);
-      const model = createInstancedModel(asset, batch.placements, {
-        profile: this.profile.assets,
-        castShadow: wantShadow && casts,
-        receiveShadow: wantShadow,
-      });
-      this.group.add(model.group);
-      this.entries.push({ batch, asset, model });
+    for (const source of batches) {
+      const asset = this.assets.get(source.modelId);
+      if (!asset) throw new Error(`Model ${source.modelId} nie został załadowany (preload)`);
+      const entry = this.makeEntry(source, asset);
+      this.group.add(entry.model.group);
+      this.entries.push(entry);
     }
+  }
+
+  private scaledBatch(source: ModelBatch): ModelBatch {
+    const sinkMax = isPaved(source) ? this.pathSink.max : 0;
+    const k = this.kindScale[source.kind] ?? 1;
+    if (k === 1 && sinkMax <= 0) return source;
+    if (sinkMax > 0) {
+      const r = this.pathSink.random;
+      return {
+        ...source,
+        placements: source.placements.map((p) => ({ ...p, y: p.y - sinkMax * (1 - r * hash01(p.x, p.z)) })),
+      };
+    }
+    const mul = (s: Placement["scale"]): Placement["scale"] => (s === undefined ? k : typeof s === "number" ? s * k : [s[0] * k, s[1] * k, s[2] * k]);
+    return {
+      ...source,
+      placements: source.placements.map((p) => ({ ...p, scale: mul(p.scale) })),
+      radius: source.radius.map((r) => r * k),
+      centerY: source.centerY.map((c) => c * k),
+    };
+  }
+
+  private makeEntry(source: ModelBatch, asset: ModelAsset): Entry {
+    const wantShadow = this.profile.shadows.enabled && this.overrides.shadows;
+    const batch = this.scaledBatch(source);
+    const casts = SHADOW_CASTERS.has(batch.kind);
+    const model = createInstancedModel(asset, batch.placements, {
+      profile: this.profile.assets,
+      castShadow: wantShadow && casts,
+      receiveShadow: wantShadow,
+    });
+    return { batch, source, asset, model };
+  }
+
+  /**
+   * Mnoży skalę wszystkich instancji danego rodzaju (np. trawy, kwiatów) bez przebudowy świata; przebudowuje tylko bufory
+   * instancji tego rodzaju. Wołać po `setBatches`/`init`; wartość zostaje zapamiętana dla kolejnych `setBatches`.
+   */
+  setKindScale(kind: ViewKind, scale: number): void {
+    const k = Math.max(0.05, Math.min(4, scale));
+    if ((this.kindScale[kind] ?? 1) === k) return;
+    this.kindScale[kind] = k;
+    this.rebuildEntries((b) => b.kind === kind);
+  }
+
+  /** Zagłębienie płyt bruku i kamyków drogi w ziemi (patrz `PathSink`); przebudowuje tylko ich bufory instancji. */
+  setPathSink(sink: PathSink): void {
+    this.pathSink = { max: Math.max(0, Math.min(0.5, sink.max)), random: Math.max(0, Math.min(1, sink.random)) };
+    this.rebuildEntries(isPaved);
+  }
+
+  private rebuildEntries(match: (b: ModelBatch) => boolean): void {
+    this.entries = this.entries.map((e) => {
+      if (!match(e.source)) return e;
+      this.group.remove(e.model.group);
+      e.model.dispose();
+      const next = this.makeEntry(e.source, e.asset);
+      this.group.add(next.model.group);
+      return next;
+    });
   }
 
   setOverrides(overrides: ViewOverrides): void {

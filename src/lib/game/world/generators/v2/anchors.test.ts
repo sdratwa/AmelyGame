@@ -10,8 +10,9 @@ const seedAt = (i: number) => (Math.imul(i + 1, 2654435761) ^ 0x9e3779b9) >>> 0;
 const report = process.env.W1B_REPORT === "1";
 
 describe("W1b: generator świata v2 (zapisywalny)", () => {
-  it("jest bieżącą wersją, deterministyczny i ma stabilny odcisk dla znanych seedów", () => {
-    expect(CURRENT_GEN_VERSION).toBe(2);
+  it("jest zarejestrowany, deterministyczny i ma stabilny odcisk dla znanych seedów", () => {
+    // v2 jest zamrożony i nadal zapisywalny; nowe gry używają v3 (patrz generators/v3/world.test.ts).
+    expect(CURRENT_GEN_VERSION).toBeGreaterThanOrEqual(2);
     for (const seed of [1, 2030, 777, 4000000000]) {
       expect(generateWorld(seed, 2)).toEqual(generateWorld(seed, 2));
       expect(fingerprintWorld(generateWorld(seed, 2))).toBe(fingerprintWorld(generateWorld(seed, 2)));

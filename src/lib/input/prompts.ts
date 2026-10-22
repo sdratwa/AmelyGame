@@ -28,6 +28,8 @@ const FOREST_HELP: readonly { actions: HintAction[]; text: string }[] = [
   { actions: ["move"], text: "ruch" },
   { actions: ["look"], text: "rozglądanie" },
   { actions: ["sprint"], text: "bieg (trzymaj z ruchem)" },
+  { actions: ["jump"], text: "skok" },
+  { actions: ["crouch"], text: "kucanie" },
   { actions: ["interact"], text: "interakcja" },
   { actions: ["inventory"], text: "ekwipunek" },
   { actions: ["journal"], text: "dziennik" },

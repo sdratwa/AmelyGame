@@ -4,7 +4,7 @@ import { BUILD_PROMPT_RANGE, CHEST_RANGE, HARVEST_PROMPT_RANGE, HARVEST_RANGE, C
 import type { GameState } from "../core/state";
 import { harvestOf } from "../world/harvest";
 import { forestChestsOf, forestObject } from "../world/lookup";
-import { anchorsOf, grantItem, harvestTargets, inForest, newPlaying, run, unlockToolOrder } from "../testkit";
+import { anchorsOf, grantItem, harvestTargets, inForest, newPlaying, run, unlockToolOrder, testWorldKey } from "../testkit";
 import { slotsFrom } from "../testkit";
 import { describePrompt, interactionCommand, pickInteraction, type ViewPose } from "./interaction";
 import { countOf } from "./containers";
@@ -24,7 +24,7 @@ const withTools = (s: GameState) => ({ ...s, slots: slotsFrom(["item.saw", "item
 
 describe("M1/C1: wybór obiektu do interakcji", () => {
   it("skrzynia: podpowiedź w zasięgu ok. 2 m i tylko przy patrzeniu w jej stronę", () => {
-    const chest = forestChestsOf(SEED).find((c) => c.id === "chest.bridge.saw")!;
+    const chest = forestChestsOf(testWorldKey(SEED)).find((c) => c.id === "chest.bridge.saw")!;
     const state = unlockToolOrder(forestState());
     const t = pickInteraction(state, standing(chest, 2));
     expect(t).toMatchObject({ kind: "chest", id: "chest.bridge.saw", action: "open", locked: false });
@@ -39,14 +39,14 @@ describe("M1/C1: wybór obiektu do interakcji", () => {
   it("dystans: poza zasięgiem podpowiedzi nie ma celu, a zasięg podpowiedzi jest mniejszy od zasięgu silnika", () => {
     expect(CHEST_PROMPT_RANGE).toBeLessThan(CHEST_RANGE);
     expect(HARVEST_PROMPT_RANGE).toBeLessThan(HARVEST_RANGE);
-    const chest = forestChestsOf(SEED)[0];
+    const chest = forestChestsOf(testWorldKey(SEED))[0];
     const state = forestState();
     expect(pickInteraction(state, standing(chest, CHEST_PROMPT_RANGE - 0.05))?.kind).toBe("chest");
     expect(pickInteraction(state, standing(chest, CHEST_PROMPT_RANGE + 0.2))).toBeNull();
   });
 
   it("stan skrzyni: otwarta z przedmiotem pokazuje zawartość, pusta nie jest celem, a skrzynię pilnowaną przez trolla opisuje blokada", () => {
-    const saw = forestChestsOf(SEED).find((c) => c.id === "chest.bridge.saw")!;
+    const saw = forestChestsOf(testWorldKey(SEED)).find((c) => c.id === "chest.bridge.saw")!;
     const opened = forestState({ chests: { "chest.bridge.saw": { opened: true, taken: false } } });
     const t = pickInteraction(opened, standing(saw, 1.8))!;
     expect(t).toMatchObject({ kind: "chest", action: "peek" });
@@ -63,7 +63,7 @@ describe("M1/C1: wybór obiektu do interakcji", () => {
     expect(describePrompt(early, locked).text).toContain("schemat mostu");
     expect(pickInteraction(unlockToolOrder(early), standing(saw, 1.8))).toMatchObject({ locked: false, lockReason: null });
 
-    const blueprint = forestChestsOf(SEED).find((c) => c.id === "chest.bridge.blueprint")!;
+    const blueprint = forestChestsOf(testWorldKey(SEED)).find((c) => c.id === "chest.bridge.blueprint")!;
     const state = forestState();
     const g = pickInteraction(state, standing(blueprint, 1.8))!;
     expect(g).toMatchObject({ kind: "chest", locked: true });
@@ -82,16 +82,16 @@ describe("M1/C1: wybór obiektu do interakcji", () => {
     const rock = targets.find((t) => t.kind === "rock" && t.size === "m")!;
     const state = forestState();
     for (const target of [tree, rock]) {
-      const obj = forestObject(SEED, target.id)!;
+      const obj = forestObject(testWorldKey(SEED), target.id)!;
       const pose = standing(obj, 2.2);
       // Wokół może stać inny obiekt bliżej celownika; sprawdzamy, że wybór jest poprawnym obiektem tego rodzaju w zasięgu.
       const picked = pickInteraction(state, pose);
       expect(picked?.kind, target.id).toBeDefined();
-      const info = harvestOf(forestObject(SEED, picked!.id)!)!;
+      const info = harvestOf(forestObject(testWorldKey(SEED), picked!.id)!)!;
       expect(info.kind).toBe(picked!.kind);
     }
     // Wyspa: brak narzędzia -> komunikat bez klawisza; z narzędziem -> akcja z ilością.
-    const obj = forestObject(SEED, tree.id)!;
+    const obj = forestObject(testWorldKey(SEED), tree.id)!;
     const pose = standing(obj, 2);
     const noTool = pickInteraction(state, pose)!;
     if (noTool.kind === "tree") expect(describePrompt(state, noTool)).toMatchObject({ key: null, tone: "blocked", text: expect.stringContaining("piły") });
@@ -107,7 +107,7 @@ describe("M1/C1: wybór obiektu do interakcji", () => {
   it("zawsze, gdy podpowiedź jest widoczna, silnik przyjmie komendę (dystans podpowiedzi < dystans silnika); po przyjęciu cel znika i nie da się powtórzyć", () => {
     let checked = 0;
     for (const tgt of harvestTargets(SEED).slice(0, 60)) {
-      const obj = forestObject(SEED, tgt.id)!;
+      const obj = forestObject(testWorldKey(SEED), tgt.id)!;
       const equipped = withTools(forestState());
       const pose = standing(obj, 2);
       const picked = pickInteraction(equipped, pose);
@@ -125,7 +125,7 @@ describe("M1/C1: wybór obiektu do interakcji", () => {
   });
 
   it("poza lasem, po śmierci albo przy złych danych nie ma celu; brak narzędzia nie zmienia stanu przy wymuszonej komendzie", () => {
-    const chest = forestChestsOf(SEED)[0];
+    const chest = forestChestsOf(testWorldKey(SEED))[0];
     const pose = standing(chest, 2);
     const world = run(forestState(), { type: "leave" });
     expect(pickInteraction(world, pose)).toBeNull();
@@ -162,5 +162,22 @@ describe("Most: miejsce budowy jako cel interakcji", () => {
     expect(pickInteraction(forestState(), far)?.kind).not.toBe("bridge_site");
     const built = { ...grantItem(forestState(), "item.bridge_blueprint", 1), bridge: { ...forestState().bridge, built: true } } as GameState;
     expect(pickInteraction(built, { x: w.x + 1, z: w.z, yaw: 0 })?.kind).not.toBe("bridge_site");
+  });
+});
+
+describe("TPP2: wybór celu względem postaci", () => {
+  it("bez wymogu czystej linii wynik jest taki sam jak dotąd (tryb pierwszoosobowy)", () => {
+    const chest = forestChestsOf(testWorldKey(SEED)).find((c) => c.id === "chest.bridge.saw")!;
+    const state = unlockToolOrder(forestState());
+    const pose = standing(chest, 2);
+    expect(pickInteraction(state, pose, { requireClearReach: false })).toEqual(pickInteraction(state, pose));
+  });
+
+  it("zasięg i stożek liczą się od pozycji postaci, a kierunek od yaw kamery: cel za plecami nie jest wybierany", () => {
+    const chest = forestChestsOf(testWorldKey(SEED)).find((c) => c.id === "chest.bridge.saw")!;
+    const state = unlockToolOrder(forestState());
+    const front = standing(chest, 2);
+    // kamera odwrócona (patrzy od skrzyni): brak celu mimo bliskości postaci
+    expect(pickInteraction(state, { ...front, yaw: front.yaw + Math.PI }, { requireClearReach: true })).toBeNull();
   });
 });

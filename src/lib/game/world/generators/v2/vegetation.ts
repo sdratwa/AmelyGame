@@ -4,14 +4,16 @@ import { valueNoise2 } from "../../noise";
 import { makeObject, type WorldObject } from "../../objects";
 import type { HeightField } from "../../terrain";
 import type { ForestGeometry } from "./geometry";
+import { buildPaving } from "./paving";
 import type { DensityLayer, EnvironmentProfile, ProfileTable } from "./profiles";
+import type { PavingOptions, ProRockTuning, ProTuning } from "./pro";
 import {
   ROCK_CLASSES,
   ROCK_CLASS_IDS,
   ROCK_JITTER,
   ROCK_MAX_TILT,
   SPECIES,
-  speciesOfGroup,
+  groupIndex,
   type LayerId,
   type RockClass,
   type Species,
@@ -157,6 +159,20 @@ export type VegetationOptions = {
   profiles: ProfileTable;
   /** Dodatkowy margines okien (m), tylko do testów poprawności marginesów: wynik nie może zależeć od jego wartości. */
   halo?: number;
+  /**
+   * Tryb deweloperski prototypu Pro: katalog gatunków (np. `SPECIES_ALL`) zamiast zamrożonej tabeli v2. Brak = generator v2
+   * bez żadnej zmiany wyniku (dodatkowe losowania i reguły działają wyłącznie, gdy katalog jest podany).
+   */
+  catalog?: readonly Species[];
+  /** Tryb Pro: brukowanie drogi (wymaga `catalog` z grupami `rockpath` i `pebble`). */
+  paving?: PavingOptions;
+  /** Tryb Pro: strojenie trawy w kępach, formacji skalnych (wymaga `catalog`). Brak = zachowanie sprzed poprawki. */
+  tuning?: ProTuning;
+  /**
+   * `gameplay`: tylko warstwa autorytatywna (drzewa, drzewa stare, skały), bez roślinności kosmetycznej, grzybów, płatków,
+   * kamyków i bruku. Domyślnie wszystko (`all`). Identyfikatory i pozycje drzew i skał są takie same w obu trybach.
+   */
+  layers?: "gameplay" | "all";
 };
 
 type Draft = { c: Cand; kind: string };
@@ -166,6 +182,12 @@ export class VegetationGenerator {
   private readonly noiseSeed: Record<string, [number, number]> = {};
   private readonly moistSeed: number;
   private readonly mushroomSeed: number;
+  private readonly decorSeed: number;
+  private readonly pavingSeed: number;
+  private pavingCache: Cand[] | null = null;
+  private readonly ext: boolean;
+  /** Największy promień kolizji skały (m): tryb Pro ma duże głazy i formacje, więc okna rzadzenia są szersze. */
+  private readonly rockReach: number;
   private readonly weights: Float64Array;
   private readonly treeCells = new Map<number, Cand[]>();
   private readonly ancientCells = new Map<number, Cand[]>();
@@ -185,19 +207,22 @@ export class VegetationGenerator {
     }
     this.moistSeed = key("moisture");
     this.mushroomSeed = key("mushroom_rings");
+    this.decorSeed = key("decor");
+    this.pavingSeed = key("paving");
+    this.ext = o.catalog !== undefined;
+    this.rockReach = this.ext ? Math.max(3.6, 2.461 * (o.tuning?.rocks.scale[1] ?? 0) * (1 + ROCK_JITTER.x)) : 2.1;
     this.weights = new Float64Array(o.geometry.weightCount);
     this.halo = o.halo ?? 0;
     const { nx, nz } = sectorCount(o.region);
     this.nx = nx;
     this.nz = nz;
     this.profiles = o.geometry.weightProfiles;
-    for (const sp of SPECIES) {
-      if (!this.speciesByGroup.has(sp.group)) this.speciesByGroup.set(sp.group, speciesOfGroup(sp.group));
-    }
+    for (const [group, list] of groupIndex(o.catalog ?? SPECIES)) this.speciesByGroup.set(group, list);
   }
 
   /** Czyści pamięć podręczną komórek (wynik się nie zmienia, tylko jest liczony od nowa). */
   clearCache(): void {
+    this.pavingCache = null;
     this.treeCells.clear();
     this.ancientCells.clear();
     this.rockCells.clear();
@@ -215,8 +240,8 @@ export class VegetationGenerator {
     return s;
   }
 
-  private cluster(layer: keyof typeof CLUSTER, x: number, z: number): number {
-    const c = CLUSTER[layer];
+  private cluster(layer: keyof typeof CLUSTER, x: number, z: number, override?: ClusterCfg): number {
+    const c = override ?? CLUSTER[layer];
     const ns = this.noiseSeed[layer];
     const n1 = valueNoise2(ns[0], x / c.s1, z / c.s1);
     const base = (c.floor + (1 - c.floor) * smooth((n1 - c.lo) / (c.hi - c.lo))) / (c.floor + (1 - c.floor) * c.m0);
@@ -258,6 +283,47 @@ export class VegetationGenerator {
     return keys[keys.length - 1];
   }
 
+  /** Wybór grupy drzew w trybie Pro: grupy bazowe jak w v2 (te same wagi) plus grupy Pro o wadze z profilu (tylko dodatnie). */
+  private pickTreeGroup(u: number, wB: number, wP: number): SpeciesGroup {
+    const rec: Record<string, number> = { broadleaf: wB, pine: wP };
+    const extra: [SpeciesGroup, number][] = [
+      ["birch", this.mixed((p) => p.pro?.tree?.birch ?? 0)],
+      ["giantpine", this.mixed((p) => p.pro?.tree?.giantpine ?? 0)],
+      ["tallthick", this.mixed((p) => p.pro?.tree?.tallthick ?? 0)],
+      ["blossom", this.mixed((p) => p.pro?.tree?.blossom ?? 0)],
+      ["dead", this.mixed((p) => p.pro?.tree?.dead ?? 0)],
+    ];
+    for (const [g, w] of extra) if (w > 0) rec[g] = w;
+    return this.pickGroup(rec, u) as SpeciesGroup;
+  }
+
+  /** Gatunek skały w trybie Pro: duże głazy (tylko klasa L) i warianty pustynne wg udziałów z profilu. */
+  private pickRockSpecies(cls: RockClass, uModel: number, uDesert: number): Species {
+    const big = cls === "l" ? this.mixed((p) => p.pro?.rockBig ?? 0) : 0;
+    const desert = this.mixed((p) => p.pro?.rockDesert ?? 0);
+    let isBig = false;
+    let u = uModel;
+    if (big > 0) {
+      if (uModel < big) {
+        isBig = true;
+        u = uModel / big;
+      } else u = (uModel - big) / (1 - big);
+    }
+    const isDesert = uDesert < desert;
+    const group: SpeciesGroup = isBig ? (isDesert ? "rockbigdesert" : "rockbig") : isDesert ? "rockdesert" : "rock";
+    return this.pickSpecies(group, Math.min(0.999999, u));
+  }
+
+  /** Wagi grup grzybów w trybie Pro (pospolity = 1). */
+  private mushroomWeights(): Record<string, number> {
+    const rec: Record<string, number> = { mushroom: 1 };
+    const cap = this.mixed((p) => p.pro?.mushroom?.mushroomcap ?? 0);
+    const bracket = this.mixed((p) => p.pro?.mushroom?.bracket ?? 0);
+    if (cap > 0) rec.mushroomcap = cap;
+    if (bracket > 0) rec.bracket = bracket;
+    return rec;
+  }
+
   // ----- drzewa -----
 
   private treeCell(cx: number, cz: number, ancient: boolean): Cand[] {
@@ -294,7 +360,8 @@ export class VegetationGenerator {
         const moist = this.moisture(x, z);
         const wB = this.mixed((p) => p.mix.tree.broadleaf) * (0.6 + 0.9 * moist);
         const wP = this.mixed((p) => p.mix.tree.pine) * Math.max(0.4, Math.min(1.8, 1 + 0.18 * h)) * (1.3 - 0.6 * moist);
-        sp = this.pickSpecies(uSp * (wB + wP) < wB ? "broadleaf" : "pine", uVar);
+        const group: SpeciesGroup = this.ext ? this.pickTreeGroup(uSp, wB, wP) : uSp * (wB + wP) < wB ? "broadleaf" : "pine";
+        sp = this.pickSpecies(group, uVar);
       }
       const scale = q3(lerp(sp.scale[0], sp.scale[1], uScale));
       const collR = sp.collider! * scale;
@@ -380,12 +447,18 @@ export class VegetationGenerator {
       const z0 = q3((cz + rng()) * cfg.cell);
       const uAcc = rng();
       const uCount = rng();
+      const uForm = this.ext ? rng() : 0;
       geo.profileWeights(x0, z0, this.weights);
       const lambda = (this.mixDensity("rock") / 100 / meanMembers) * this.cluster("rock", x0, z0);
       if (uAcc * maxI >= lambda * 4) continue;
       const lambdaSlope = lambda * (1 + Math.min(this.slopeTan(x0, z0), 0.65) * 4.5);
       if (uAcc * maxI >= lambdaSlope) continue;
       const count = cfg.members[0] + Math.floor(uCount * (cfg.members[1] - cfg.members[0] + 1));
+      const rockTuning = this.ext ? this.o.tuning?.rocks : undefined;
+      if (rockTuning && uForm < this.mixed((p) => p.pro?.formations ?? 0)) {
+        this.pushFormation(out, cx, cz, k, x0, z0, rockTuning);
+        continue;
+      }
       let anchorClass = 2;
       for (let m = 0; m < count; m++) {
         const mr = mulberry32(cellSeed(this.layerSeed.rock, cx, cz, (k + 1) * 16 + m));
@@ -406,6 +479,7 @@ export class VegetationGenerator {
         const uTx = mr();
         const uTz = mr();
         const uMark = mr();
+        const uDesert = this.ext ? mr() : 0;
         if (!this.inRegion(x, z, 0.6)) continue;
         geo.profileWeights(x, z, this.weights);
         const cls = this.pickGroup(
@@ -419,7 +493,7 @@ export class VegetationGenerator {
         const clsIndex = Math.min(ROCK_CLASS_IDS.indexOf(cls), m === 0 ? 2 : anchorClass);
         if (m === 0) anchorClass = clsIndex;
         const rockClass = ROCK_CLASS_IDS[clsIndex];
-        const sp = this.pickSpecies("rock", uModel);
+        const sp = this.ext ? this.pickRockSpecies(rockClass, uModel, uDesert) : this.pickSpecies("rock", uModel);
         const base = lerp(ROCK_CLASSES[rockClass].scale[0], ROCK_CLASSES[rockClass].scale[1], uScale);
         const sx = q3(base * (1 + (ux * 2 - 1) * ROCK_JITTER.x));
         const sy = q3(base * (1 + (uy * 2 - 1) * ROCK_JITTER.y));
@@ -448,10 +522,77 @@ export class VegetationGenerator {
     return out;
   }
 
+  /**
+   * Formacja skalna (tryb Pro): kotwica i 2-4 głazy stykające się z nią i ze sobą (odstęp = suma promieni kolizji + 0,3-1,1 m),
+   * więc zwykłe rzadzenie Matérn zostawia całą grupę. Skład (zwykłe/pustynne) wg profilu w punkcie kotwicy.
+   * Losowania są tylko z generatorów komórki, więc wynik nie zależy od okna ani kolejności sektorów.
+   */
+  private pushFormation(out: Cand[], cx: number, cz: number, k: number, x0: number, z0: number, t: ProRockTuning): void {
+    const geo = this.o.geometry;
+    const cr = mulberry32(cellSeed(this.layerSeed.rock, cx, cz, 4000 + k));
+    const count = t.members[0] + Math.floor(cr() * (t.members[1] - t.members[0] + 1));
+    const desert = this.mixed((p) => p.pro?.rockDesert ?? 0);
+    let anchorR = 0;
+    for (let m = 0; m < count; m++) {
+      const mr = mulberry32(cellSeed(this.layerSeed.rock, cx, cz, 5000 + (k + 1) * 16 + m));
+      const [dx, dz] = unitDisc(mr);
+      const uSpecies = mr();
+      const uBig = mr();
+      const uScale = mr();
+      const ux = mr();
+      const uy = mr();
+      const uz = mr();
+      const uYaw = mr();
+      const uTx = mr();
+      const uTz = mr();
+      const uMark = mr();
+      const uDesert = mr();
+      const uDist = mr();
+      const big = m === 0 || uBig >= t.mediumShare;
+      const isDesert = uDesert < desert;
+      const group: SpeciesGroup = big ? (isDesert ? "rockbigdesert" : "rockbig") : isDesert ? "rockdesert" : "rock";
+      const sp = this.pickSpecies(group, Math.min(0.999999, uSpecies));
+      const base = m === 0 ? lerp(t.scale[0], t.scale[1], uScale) : lerp(t.scale[0] * 0.55, t.scale[1] * 0.8, uScale) * (big ? 1 : 0.9);
+      const sx = q3(base * (1 + (ux * 2 - 1) * ROCK_JITTER.x));
+      const sy = q3(base * (1 + (uy * 2 - 1) * ROCK_JITTER.y));
+      const sz = q3(base * (1 + (uz * 2 - 1) * ROCK_JITTER.z));
+      const collR = sp.collider! * ((sx + sz) / 2);
+      let x = x0;
+      let z = z0;
+      if (m === 0) anchorR = collR;
+      else {
+        const len = Math.sqrt(dx * dx + dz * dz);
+        const dist = anchorR + collR + 0.3 + uDist * 0.8;
+        x = q3(x0 + (dx / len) * dist);
+        z = q3(z0 + (dz / len) * dist);
+      }
+      if (!this.inRegion(x, z, 0.6)) continue;
+      if (geo.inKeepClear(x, z, collR)) continue;
+      if (geo.waterGap(x, z) < collR + 0.2) continue;
+      if (geo.trailGap(x, z) < collR + 0.6) continue;
+      out.push({
+        x,
+        z,
+        sp,
+        scale: base,
+        yaw: q3(uYaw * TWO_PI),
+        mark: uMark,
+        r: collR + 0.1,
+        collR,
+        scaleXYZ: [sx, sy, sz],
+        tilt: [q3((uTx * 2 - 1) * ROCK_MAX_TILT), q3((uTz * 2 - 1) * ROCK_MAX_TILT)],
+        rockClass: "l",
+        seed: 0,
+      });
+    }
+  }
+
   /** Skały w `area` po rzadzeniu i usunięciu tych, które nachodzą na drzewa. Wymaga drzew z okna `area` + 4 m. */
   private rocksIn(area: Bounds, trees: Grid): Cand[] {
-    const win = expand(area, 4.5);
-    const cwin = expand(area, 8);
+    const winMargin = this.ext ? Math.max(7.5, 2 * this.rockReach + 0.4) : 4.5;
+    const win = expand(area, winMargin);
+    // Formacja sięga do 2 promieni kolizji od kotwicy, więc komórki sprawdzamy odpowiednio dalej.
+    const cwin = expand(area, this.ext ? winMargin + Math.max(3.5, 2 * this.rockReach + 1.6) : 8);
     const c = LAYERS.rock.cell;
     const pool = new Grid(8);
     const all: Cand[] = [];
@@ -469,7 +610,7 @@ export class VegetationGenerator {
     for (const cand of all) {
       if (!inside(area, cand.x, cand.z)) continue;
       let removed = false;
-      pool.near(cand.x, cand.z, cand.collR + 2.3, (other) => {
+      pool.near(cand.x, cand.z, cand.collR + (this.ext ? this.rockReach + 0.3 : 2.3), (other) => {
         if (other === cand || other.mark >= cand.mark) return;
         const dx = other.x - cand.x;
         const dz = other.z - cand.z;
@@ -498,16 +639,32 @@ export class VegetationGenerator {
 
   private groupWeights(layer: "bush" | "plant" | "grass"): Record<string, number> {
     switch (layer) {
-      case "bush":
-        return { plain: this.mixed((p) => p.mix.bush.plain), flowering: this.mixed((p) => p.mix.bush.flowering) };
+      case "bush": {
+        const rec: Record<string, number> = { plain: this.mixed((p) => p.mix.bush.plain), flowering: this.mixed((p) => p.mix.bush.flowering) };
+        if (this.ext) {
+          const big = this.mixed((p) => p.pro?.bush?.bushbig ?? 0);
+          const long = this.mixed((p) => p.pro?.bush?.bushlong ?? 0);
+          if (big > 0) rec.bushbig = big;
+          if (long > 0) rec.bushlong = long;
+        }
+        return rec;
+      }
       case "plant":
         return {
           leafy: this.mixed((p) => p.mix.plant.leafy),
           ground: this.mixed((p) => p.mix.plant.ground),
           clover: this.mixed((p) => p.mix.plant.clover),
         };
-      case "grass":
-        return { common: this.mixed((p) => p.mix.grass.common), wispy: this.mixed((p) => p.mix.grass.wispy) };
+      case "grass": {
+        const rec: Record<string, number> = { common: this.mixed((p) => p.mix.grass.common), wispy: this.mixed((p) => p.mix.grass.wispy) };
+        if (this.ext) {
+          const wide = this.mixed((p) => p.pro?.grass?.wide ?? 0);
+          const wheat = this.mixed((p) => p.pro?.grass?.wheat ?? 0);
+          if (wide > 0) rec.wide = wide;
+          if (wheat > 0) rec.wheat = wheat;
+        }
+        return rec;
+      }
     }
   }
 
@@ -516,7 +673,9 @@ export class VegetationGenerator {
    * terenowych (woda, ścieżki, polany), ale przed zderzeniem z drzewami i skałami.
    */
   private smallCandidates(layer: "bush" | "fern" | "plant" | "grass" | "flower", area: Bounds): Cand[] {
-    const cfg = LAYERS[layer];
+    // Tryb Pro: trawa w zwartych kępach (Preview_1/2) zamiast pojedynczych kępek.
+    const clump = layer === "grass" && this.ext ? (this.o.tuning?.grass ?? null) : null;
+    const cfg: LayerConfig = clump ? { cell: clump.cell, perCell: clump.perCell, members: clump.members, spread: clump.spread } : LAYERS[layer];
     const geo = this.o.geometry;
     const out: Cand[] = [];
     const maxI = cfg.perCell / (cfg.cell * cfg.cell);
@@ -532,9 +691,10 @@ export class VegetationGenerator {
           const z0 = q3((iz + rng()) * cfg.cell);
           const uAcc = rng();
           const uCount = rng();
+          const uDominant = clump ? rng() : 0;
           if (!inside(win, x0, z0)) continue;
           geo.profileWeights(x0, z0, this.weights);
-          const lambda = (this.mixDensity(layer) / 100 / meanMembers) * this.cluster(clusterLayer, x0, z0);
+          const lambda = (this.mixDensity(layer) / 100 / meanMembers) * this.cluster(clusterLayer, x0, z0, clump?.cluster);
           if (uAcc * maxI >= lambda * envMax) continue;
           let env = 1;
           if (layer === "fern") env = 0.4 + 1.6 * this.moisture(x0, z0);
@@ -543,6 +703,8 @@ export class VegetationGenerator {
           else if (layer === "bush") env = 1 - smooth((this.slopeTan(x0, z0) - 0.45) / 0.3);
           if (uAcc * maxI >= lambda * env) continue;
           const count = cfg.members[0] + Math.floor(uCount * (cfg.members[1] - cfg.members[0] + 1));
+          // Gatunek dominujący kępy: z wag profilu w środku kępy (wagi są ustawione powyżej, przed pętlą członków).
+          const dominantGroup = clump ? (this.pickGroup(this.groupWeights("grass"), uDominant) as SpeciesGroup) : null;
           for (let m = 0; m < count; m++) {
             const mr = mulberry32(cellSeed(this.layerSeed[layer], ix, iz, (k + 1) * 16 + m));
             let x = x0;
@@ -565,9 +727,16 @@ export class VegetationGenerator {
               sp = this.pickSpecies("flower", uVar);
             } else {
               geo.profileWeights(x, z, this.weights);
-              sp = this.pickSpecies(this.pickGroup(this.groupWeights(layer), uGroup) as SpeciesGroup, uVar);
+              let group: SpeciesGroup;
+              if (clump && dominantGroup !== null) {
+                group =
+                  uGroup < clump.dominant
+                    ? dominantGroup
+                    : (this.pickGroup(this.groupWeights(layer), Math.min(0.999999, (uGroup - clump.dominant) / (1 - clump.dominant))) as SpeciesGroup);
+              } else group = this.pickGroup(this.groupWeights(layer), uGroup) as SpeciesGroup;
+              sp = this.pickSpecies(group, uVar);
             }
-            const scale = q3(lerp(sp.scale[0], sp.scale[1], uScale));
+            const scale = q3(lerp(sp.scale[0], sp.scale[1], uScale) * (clump ? clump.scale : 1) * (layer === "flower" && this.ext ? (this.o.tuning?.flowerScale ?? 1) : 1));
             const water = geo.waterGap(x, z);
             const trail = geo.trailGap(x, z);
             if (layer === "bush") {
@@ -577,7 +746,8 @@ export class VegetationGenerator {
             } else if (layer === "plant") {
               if (water < 0.2 || trail < 0) continue;
             } else if (layer === "grass") {
-              if (water < 0.1 || trail < -0.1) continue;
+              // Trawa nie rośnie na ścieżce (Pro: także na jej krawędzi); zwykły generator zachowuje dawny margines.
+              if (water < 0.1 || trail < (this.ext ? 0.05 : -0.1)) continue;
             } else if (water < 0.3 || trail < 0.1) continue;
             out.push({ x, z, sp, scale, yaw: q3(uYaw * TWO_PI), mark: uMark, r: layer === "bush" ? sp.crown * scale : 0, collR: 0, seed: 0 });
           }
@@ -606,7 +776,11 @@ export class VegetationGenerator {
       const cxd = ax / al;
       const czd = az / al;
       const dist0 = t.collR + 0.5 + rng() * 0.6;
-      const sp = this.pickSpecies("mushroom", 0);
+      let sp = this.pickSpecies("mushroom", 0);
+      if (this.ext) {
+        const g = this.pickGroup(this.mushroomWeights(), rng()) as SpeciesGroup;
+        sp = this.pickSpecies(g, rng());
+      }
       for (let m = 0; m < count; m++) {
         const [dx, dz] = unitDisc(rng);
         const uScale = rng();
@@ -616,6 +790,91 @@ export class VegetationGenerator {
         if (!this.inRegion(x, z, 0.25) || geo.waterGap(x, z) < 0.5 || geo.trailGap(x, z) < 0.3) continue;
         const scale = q3(lerp(sp.scale[0], sp.scale[1], uScale));
         out.push({ x, z, sp, scale, yaw: q3(uYaw * TWO_PI), mark: 0, r: 0, collR: 0, seed: 0 });
+      }
+    }
+    return out;
+  }
+
+  /** Bruk drogi (tryb Pro): liczony raz dla całej drogi, potem filtrowany per sektor. */
+  private pavingItems(): readonly Cand[] {
+    if (this.pavingCache) return this.pavingCache;
+    const opts = this.o.paving;
+    const trail = opts ? this.o.geometry.trails.find((t) => t.id === opts.trailId) : undefined;
+    const slabs = this.speciesByGroup.get("rockpath") ?? [];
+    const pebbles = this.speciesByGroup.get("pebble") ?? [];
+    this.pavingCache =
+      opts && trail
+        ? buildPaving(trail.points, opts, slabs, pebbles, this.pavingSeed).map((it) => ({
+            x: it.x,
+            z: it.z,
+            sp: it.sp,
+            scale: it.scale,
+            yaw: it.yaw,
+            mark: 0,
+            r: 0,
+            collR: 0,
+            seed: 0,
+          }))
+        : [];
+    return this.pavingCache;
+  }
+
+  /** Płatki pod drzewami kwitnącymi (tryb Pro): kępa wokół pnia, deterministyczna z pozycji drzewa. */
+  private petals(trees: readonly Cand[], area: Bounds): Cand[] {
+    const out: Cand[] = [];
+    const geo = this.o.geometry;
+    const list = this.speciesByGroup.get("petal");
+    if (!list) return out;
+    for (const t of trees) {
+      if (t.sp.group !== "blossom" || !inside(area, t.x, t.z)) continue;
+      geo.profileWeights(t.x, t.z, this.weights);
+      const chance = this.mixed((p) => p.pro?.petals ?? 0);
+      const rng = mulberry32(cellSeed(this.decorSeed, Math.round(t.x * 10), Math.round(t.z * 10), 1));
+      if (rng() >= chance) continue;
+      const count = 8 + Math.floor(rng() * 9);
+      const reach = t.sp.crown * t.scale * 1.5;
+      for (let m = 0; m < count; m++) {
+        const [dx, dz] = unitDisc(rng);
+        const uVar = rng();
+        const uScale = rng();
+        const uYaw = rng();
+        const x = q3(t.x + dx * reach);
+        const z = q3(t.z + dz * reach);
+        // sqrt zamiast hypot: wynik sqrt jest dokładnie określony w każdym silniku JS (test determinizmu zabrania hypot).
+        if (Math.sqrt(dx * dx * reach * reach + dz * dz * reach * reach) < t.collR + 0.25) continue;
+        if (!this.inRegion(x, z, 0.25) || geo.waterGap(x, z) < 0.2 || geo.trailGap(x, z) < 0.1) continue;
+        const sp = list[Math.min(list.length - 1, Math.floor(uVar * list.length))];
+        out.push({ x, z, sp, scale: q3(lerp(0.8, 1.2, uScale)), yaw: q3(uYaw * TWO_PI), mark: 0, r: 0, collR: 0, seed: 0 });
+      }
+    }
+    return out;
+  }
+
+  /** Kamyki wokół skał (tryb Pro): kępa przy podstawie skały, deterministyczna z pozycji skały. */
+  private pebbles(rocks: readonly Cand[], area: Bounds): Cand[] {
+    const out: Cand[] = [];
+    const geo = this.o.geometry;
+    const list = this.speciesByGroup.get("pebble");
+    if (!list) return out;
+    for (const r of rocks) {
+      if (!inside(area, r.x, r.z)) continue;
+      geo.profileWeights(r.x, r.z, this.weights);
+      const chance = this.mixed((p) => p.pro?.pebbles ?? 0);
+      const rng = mulberry32(cellSeed(this.decorSeed, Math.round(r.x * 10), Math.round(r.z * 10), 2));
+      if (rng() >= chance) continue;
+      const count = 3 + Math.floor(rng() * 6);
+      for (let m = 0; m < count; m++) {
+        const [ax, az] = unitDisc(rng);
+        const al = Math.sqrt(ax * ax + az * az);
+        const dist = r.collR * 0.9 + 0.25 + rng() * 1.8;
+        const uVar = rng();
+        const uScale = rng();
+        const uYaw = rng();
+        const x = q3(r.x + (ax / al) * dist);
+        const z = q3(r.z + (az / al) * dist);
+        if (!this.inRegion(x, z, 0.25) || geo.waterGap(x, z) < 0.2 || geo.trailGap(x, z) < 0.3) continue;
+        const sp = list[Math.min(list.length - 1, Math.floor(uVar * list.length))];
+        out.push({ x, z, sp, scale: q3(lerp(0.7, 1.6, uScale)), yaw: q3(uYaw * TWO_PI), mark: 0, r: 0, collR: 0, seed: 0 });
       }
     }
     return out;
@@ -632,10 +891,11 @@ export class VegetationGenerator {
       return sx === ix && sz === iz;
     };
     const halo = this.halo;
-    const treeList = this.treesIn(expand(B, 8 + halo));
+    // Tryb Pro: większe okna, bo głazy Rock_Big (promień kolizji do 3,2 m) i korony Pro (do 4,3 m) sięgają dalej niż w v2.
+    const treeList = this.treesIn(expand(B, 8 + halo + (this.ext ? 6 : 0)));
     const treeGrid = new Grid(8);
     for (const t of treeList) treeGrid.add(t);
-    const rockList = this.rocksIn(expand(B, 3 + halo), treeGrid);
+    const rockList = this.rocksIn(expand(B, 3 + halo + (this.ext ? 4 : 0)), treeGrid);
     const rockGrid = new Grid(8);
     for (const r of rockList) rockGrid.add(r);
 
@@ -651,7 +911,7 @@ export class VegetationGenerator {
         }
       };
       treeGrid.near(c.x, c.z, radius + 1.4, test);
-      if (!hit) rockGrid.near(c.x, c.z, radius + 2.0, test);
+      if (!hit) rockGrid.near(c.x, c.z, radius + (this.ext ? this.rockReach + 0.2 : 2.0), test);
       return hit;
     };
 
@@ -659,36 +919,45 @@ export class VegetationGenerator {
     for (const t of treeList) if (own(t.x, t.z)) drafts.push({ c: t, kind: t.sp.kind });
     for (const r of rockList) if (own(r.x, r.z)) drafts.push({ c: r, kind: "rock" });
 
-    const area = expand(B, 2.6 + halo);
-    const bushPool = new Grid(4);
-    const bushes = this.smallCandidates("bush", expand(B, 2.5 + halo));
-    for (const b of bushes) bushPool.add(b);
-    for (const b of bushes) {
-      if (!own(b.x, b.z)) continue;
-      let removed = false;
-      bushPool.near(b.x, b.z, b.r + 1.4, (o) => {
-        if (o === b || o.mark >= b.mark) return;
-        const dx = o.x - b.x;
-        const dz = o.z - b.z;
-        const rr = o.r + b.r;
-        if (dx * dx + dz * dz < rr * rr) {
-          removed = true;
-          return true;
-        }
-      });
-      if (!removed && !blocked(b, b.sp.footprint * b.scale * 0.45)) drafts.push({ c: b, kind: "bush" });
-    }
-    for (const layer of ["fern", "plant", "grass"] as const) {
-      for (const c of this.smallCandidates(layer, B)) {
-        if (!own(c.x, c.z)) continue;
-        if (!blocked(c, c.sp.footprint * c.scale * 0.3)) drafts.push({ c, kind: c.sp.kind });
+    // Warstwa kosmetyczna (nie wchodzi do odcisku świata): tryb `gameplay` ją pomija, a ID i wyniki drzew i skał zostają
+    // bez zmian, bo ID są numerowane osobno dla każdego rodzaju, a kandydaci kosmetyczni zależą od drzew i skał, nie odwrotnie.
+    if (this.o.layers !== "gameplay") {
+      const area = expand(B, 2.6 + halo);
+      const bushPool = new Grid(4);
+      const bushes = this.smallCandidates("bush", expand(B, 2.5 + halo));
+      for (const b of bushes) bushPool.add(b);
+      for (const b of bushes) {
+        if (!own(b.x, b.z)) continue;
+        let removed = false;
+        bushPool.near(b.x, b.z, b.r + 1.4, (o) => {
+          if (o === b || o.mark >= b.mark) return;
+          const dx = o.x - b.x;
+          const dz = o.z - b.z;
+          const rr = o.r + b.r;
+          if (dx * dx + dz * dz < rr * rr) {
+            removed = true;
+            return true;
+          }
+        });
+        if (!removed && !blocked(b, b.sp.footprint * b.scale * 0.45)) drafts.push({ c: b, kind: "bush" });
       }
-    }
-    for (const c of this.smallCandidates("flower", B)) {
-      if (own(c.x, c.z) && !blocked(c, c.sp.footprint * c.scale * 0.3)) drafts.push({ c, kind: c.sp.kind });
-    }
-    for (const c of this.mushrooms(treeList, area)) {
-      if (own(c.x, c.z) && !blocked(c, c.sp.footprint * c.scale * 0.3)) drafts.push({ c, kind: "mushroom" });
+      for (const layer of ["fern", "plant", "grass"] as const) {
+        for (const c of this.smallCandidates(layer, B)) {
+          if (!own(c.x, c.z)) continue;
+          if (!blocked(c, c.sp.footprint * c.scale * 0.3)) drafts.push({ c, kind: c.sp.kind });
+        }
+      }
+      for (const c of this.smallCandidates("flower", B)) {
+        if (own(c.x, c.z) && !blocked(c, c.sp.footprint * c.scale * 0.3)) drafts.push({ c, kind: c.sp.kind });
+      }
+      for (const c of this.mushrooms(treeList, area)) {
+        if (own(c.x, c.z) && !blocked(c, c.sp.footprint * c.scale * 0.3)) drafts.push({ c, kind: "mushroom" });
+      }
+      if (this.ext) {
+        for (const c of this.petals(treeList, area)) if (own(c.x, c.z)) drafts.push({ c, kind: c.sp.kind });
+        for (const c of this.pebbles(rockList, area)) if (own(c.x, c.z)) drafts.push({ c, kind: c.sp.kind });
+        for (const c of this.pavingItems()) if (own(c.x, c.z)) drafts.push({ c, kind: c.sp.kind });
+      }
     }
 
     const byKind = new Map<string, Draft[]>();

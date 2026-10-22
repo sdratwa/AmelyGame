@@ -12,6 +12,7 @@ import { dispatchWithReactions } from "@/lib/game/systems/npcReactions";
 import { forestObject } from "@/lib/game/world/lookup";
 import { harvestOf } from "@/lib/game/world/harvest";
 import { safeForestPose } from "@/lib/game/world/generators/v2";
+import { resolveTppConfig } from "@/lib/tpp/storedDefaults";
 import { cn } from "@/lib/utils";
 import { FOREST_CONTROLS, isDiagnosticsShortcut, isGameLetterShortcut } from "@/lib/input/shortcuts";
 import { getInputHub, rumble } from "@/lib/input/browser";
@@ -29,6 +30,9 @@ import { TrollTestDialog } from "./TrollTestDialog";
 import { TrollDialog } from "./TrollDialog";
 import { BridgeBuildDialog } from "./BridgeBuildDialog";
 import { TrollMaterialDiagnostics } from "./TrollMaterialDiagnostics";
+import { AppearanceControls } from "@/components/character/AppearanceControls";
+import type { AppearanceStats } from "@/lib/forest-view";
+import type { CharacterAppearanceV1 } from "@/lib/character";
 import { Minimap } from "./Minimap";
 import { useGamePause } from "./quest/useGamePause";
 import type { DialogOutcome } from "@/lib/npc/encounter";
@@ -84,6 +88,9 @@ function DiagnosticsPanel({
   onPreviewSteps,
   onSetStepVolume,
   onToggleLampMarkers,
+  appearance,
+  appearanceStats,
+  onChangeAppearance,
 }: {
   stats: PanelStats;
   audio: AudioSnapshot | null;
@@ -94,6 +101,9 @@ function DiagnosticsPanel({
   onPreviewSteps: (owner: "player" | "npc") => void;
   onSetStepVolume: (owner: "player" | "npc", value: number) => void;
   onToggleLampMarkers: (on: boolean) => void;
+  appearance: CharacterAppearanceV1;
+  appearanceStats: AppearanceStats | null;
+  onChangeAppearance: (next: CharacterAppearanceV1) => void;
 }) {
   const s = stats.stream;
   const nearest = nearestCreature(stats);
@@ -189,6 +199,22 @@ function DiagnosticsPanel({
         </div>
       )}
       {stats.deerError && <div className="text-red-300">model jelenia: {stats.deerError}</div>}
+      <div data-testid="appearance-diagnostics" className="mt-1 border-t border-white/20 pt-1">
+        <div>Wygląd (dev) · zapisywany w grze</div>
+        <AppearanceControls appearance={appearance} onChange={onChangeAppearance} compact />
+        {appearanceStats ? (
+          <div>
+            trójkąty: włosy {appearanceStats.triangles.hair} · góra {appearanceStats.triangles.top} · dół {appearanceStats.triangles.bottom} · ciało {appearanceStats.triangles.body} (ukryte {appearanceStats.triangles.bodyHidden}) · +{appearanceStats.extraDrawCalls} draw calls
+          </div>
+        ) : (
+          <div>model postaci niedostępny</div>
+        )}
+        {appearanceStats?.missing.map((m) => (
+          <div key={m.id} className="text-amber-300">
+            {m.id}: {m.reason}
+          </div>
+        ))}
+      </div>
       <AudioDiagnostics
         snapshot={audio}
         onSetHour={onSetHour}
@@ -265,8 +291,9 @@ export function ForestWorldView({
   useEffect(() => {
     debugRef.current = debug;
   }, [debug]);
-  const [pose] = useState(() => safeForestPose(seed, startPose, bridgeBuilt));
-  const initial = useRef({ pose, quality, hour, bridgeBuilt, opened: openedChestIds(gameState), harvested: gameState.harvested });
+  const genVersion = gameState.world?.genVersion ?? 2;
+  const [pose] = useState(() => safeForestPose({ seed, genVersion }, startPose, bridgeBuilt));
+  const initial = useRef({ pose, quality, hour, bridgeBuilt, opened: openedChestIds(gameState), harvested: gameState.harvested, appearance: gameState.appearance });
   const stateRef = useRef(gameState);
   const dispatchRef = useRef(dispatch);
   const [snap, setSnap] = useState<InteractorSnapshot>(NO_INTERACTION);
@@ -274,6 +301,7 @@ export function ForestWorldView({
   const device = useInputDevice();
   const [interactor] = useState(() => new ForestInteractor());
   const harvestedSeen = useRef(gameState.harvested.length);
+  const changeAppearance = useCallback((next: CharacterAppearanceV1) => dispatchRef.current({ type: "appearance.set", appearance: next }), []);
   const ready = useRef(false);
   const callbacks = useRef({ onPose, onLeave });
   const guard = useRef({ suspended, suspendedEnd: 0, unlockedAt: 0, locked: false });
@@ -296,6 +324,7 @@ export function ForestWorldView({
           (reaction) => rendererRef.current?.reactNpc(reaction.npc, reaction.kind),
         ),
       getPose: () => rendererRef.current?.getPose() ?? null,
+      requireClearReach: () => rendererRef.current?.isThirdPerson ?? false,
       now: () => performance.now(),
     });
   }, [interactor]);
@@ -310,7 +339,17 @@ export function ForestWorldView({
         container,
         quality: init.quality,
         hour: init.hour,
-        stream: { seed, pose: init.pose, bridgeBuilt: init.bridgeBuilt, opened: init.opened, harvested: init.harvested },
+        stream: {
+          seed,
+          genVersion,
+          pose: init.pose,
+          bridgeBuilt: init.bridgeBuilt,
+          opened: init.opened,
+          harvested: init.harvested,
+          // Domyślny widok rozgrywki: postać w trzeciej osobie (ta sama konfiguracja co w /dev/third-person).
+          thirdPerson: { config: resolveTppConfig() },
+          appearance: init.appearance,
+        },
         onStats: setStats,
       });
     } catch (e) {
@@ -349,7 +388,7 @@ export function ForestWorldView({
       trollDialogRef.current = false;
       renderer.dispose();
     };
-  }, [seed]);
+  }, [seed, genVersion]);
 
   const loading = !fatal && (stats === null || stats.loading !== null) && !stats?.error;
   useEffect(() => {
@@ -363,6 +402,8 @@ export function ForestWorldView({
   useEffect(() => rendererRef.current?.setHour(hour), [hour]);
   useEffect(() => rendererRef.current?.setQuality(quality), [quality]);
   useEffect(() => rendererRef.current?.setBridgeBuilt(bridgeBuilt), [bridgeBuilt]);
+  // Zmiana wyglądu w trakcie gry (panel deweloperski): wymiana elementów bez restartu świata, kontrolera i animacji.
+  useEffect(() => rendererRef.current?.setPlayerAppearance(gameState.appearance), [gameState.appearance]);
 
   const windowOpen = snap.window !== null;
   useGamePause(dispatch, "ui.panel", "ui.chest", windowOpen);
@@ -449,12 +490,12 @@ export function ForestWorldView({
     if (!renderer) return;
     renderer.setHarvested(gameState.harvested);
     for (const id of gameState.harvested.slice(harvestedSeen.current)) {
-      const obj = forestObject(seed, id);
+      const obj = forestObject({ seed, genVersion }, id);
       const info = obj ? harvestOf(obj) : null;
       if (obj && info) renderer.burst(info.kind === "tree" ? "wood" : "stone", obj.x, obj.y + (info.kind === "tree" ? 1.4 : 0.5), obj.z);
     }
     harvestedSeen.current = gameState.harvested.length;
-  }, [gameState.harvested, seed]);
+  }, [gameState.harvested, seed, genVersion]);
 
   // Delikatna wibracja pada (opcjonalna): otwarcie skrzyni, zabranie przedmiotu ze skrzyni, ukończenie mostu.
   const rumbleSeen = useRef({ opened: openedChestIds(gameState).length, taken: takenChestCount(gameState), bridge: bridgeBuilt });
@@ -692,7 +733,7 @@ export function ForestWorldView({
           </button>
         )}
         {debug && stats && (
-          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} onPreviewSteps={previewSteps} onSetStepVolume={setStepVolume} onToggleLampMarkers={toggleLampMarkers} />
+          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} onPreviewSteps={previewSteps} onSetStepVolume={setStepVolume} onToggleLampMarkers={toggleLampMarkers} appearance={gameState.appearance} appearanceStats={stats.appearance ?? null} onChangeAppearance={changeAppearance} />
         )}
       </div>
 
@@ -759,7 +800,7 @@ export function ForestWorldView({
                 setSnap(interactor.snapshot);
               }}
             >
-              Zabierz <InputHint action="interact" className="ml-1" />
+              Zabierz <InputHint action="interact" padAction="confirm" className="ml-1" />
             </Button>
           </div>
         </DialogContent>

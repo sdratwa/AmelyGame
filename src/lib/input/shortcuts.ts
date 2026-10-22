@@ -73,6 +73,8 @@ export type ControlEntry = { keys: string[]; label: string };
 export const FOREST_CONTROLS: readonly ControlEntry[] = [
   { keys: ["W", "A", "S", "D"], label: "ruch" },
   { keys: ["Shift"], label: "bieg" },
+  { keys: ["Spacja"], label: "skok" },
+  { keys: ["C"], label: "kucanie" },
   { keys: ["E"], label: "interakcja" },
   { keys: ["I"], label: "ekwipunek" },
   { keys: ["J"], label: "dziennik" },

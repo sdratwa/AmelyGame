@@ -48,6 +48,9 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 - F1 (las 3D w grze): zrobione, czeka na ocenę autora w przeglądarce; patrz [las-w-grze-f1.md](las-w-grze-f1.md).
 - M1 + C1 (minimapa, skrzynie, E, ekwipunek, zbieranie): zrobione, czeka na ocenę autora w przeglądarce; patrz [m1-c1-skrzynie-minimapa.md](m1-c1-skrzynie-minimapa.md). T1 (troll), R1 (most) nie rozpoczęte. Animowany troll z testowym dialogiem (bez zagadek): zrobiony, czeka na ocenę autora w przeglądarce; patrol [troll-spotkanie.md](troll-spotkanie.md).
 
+- [prototyp-lasu-pro.md](prototyp-lasu-pro.md): prototyp lasu 300 x 300 m z paczką Quaternius Pro (122 modele), 4 strefy, bruk drogi głównej, test FPS przez strefy; trasa `/dev/forest-pro`; kod napisany, testy i przeglądarka nie były uruchamiane.
+- [postac-wyglad.md](postac-wyglad.md): AVATAR1, personalizacja dziewczynki (fryzury, góra, dół, kolory), rejestr elementów, SaveV4, kreator `/dev/character-creator`; kod napisany, testy i przeglądarka nie były uruchamiane.
+- [tpp-sterowanie.md](tpp-sterowanie.md): TPP1 i TPP2 (TPP jest domyślnym sterowaniem w grze), sterowanie dziewczynką z GLB w trzeciej osobie (9 animacji, kamera, kapsuła, panel dev); trasa `/dev/third-person`; kod napisany, testy i przeglądarka nie były uruchamiane.
 - [jelen.md](jelen.md): animowany jeleń w lesie (pierwszy zwierzak): zasób, animacje, głowa, zachowanie, położenie, F3, wydajność.
 - [modele-skrzynia-troll.md](modele-skrzynia-troll.md): finalne modele skrzyni i trolla, animacje, koszt renderowania.
 - [troll-materialy.md](troll-materialy.md): matowe materiały trolla (przyczyna połysku i migotania oczu, klasy powierzchni, przełącznik ORIGINAL/MATTE w panelu O).

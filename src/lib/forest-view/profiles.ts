@@ -1,9 +1,9 @@
 import { QUALITY_PROFILES, type QualityId, type QualityProfile } from "@/lib/assets";
 
 /** Kategorie obiektów z punktu widzenia widoczności (odcięcia odległościowe i rzadzenie). */
-export type ViewKind = "tree" | "rock" | "bush" | "fern" | "plant" | "grass" | "flower" | "mushroom";
+export type ViewKind = "tree" | "rock" | "bush" | "fern" | "plant" | "grass" | "flower" | "mushroom" | "decor" | "path";
 
-export const VIEW_KINDS: readonly ViewKind[] = ["tree", "rock", "bush", "fern", "plant", "grass", "flower", "mushroom"];
+export const VIEW_KINDS: readonly ViewKind[] = ["tree", "rock", "bush", "fern", "plant", "grass", "flower", "mushroom", "decor", "path"];
 
 /** Obiekty rzucające cień (reszta tylko go odbiera): tanie dla GPU i bez znaczenia wizualnego dla niskiej roślinności. */
 export const SHADOW_CASTERS: ReadonlySet<ViewKind> = new Set(["tree", "rock", "bush"]);
@@ -18,6 +18,12 @@ export function viewKindOf(kind: string): ViewKind {
     case "flower":
     case "mushroom":
       return kind;
+    // Paczka Pro (prototyp /dev/forest-pro): kamyki i płatki to drobne ozdoby, płyty brukowe to osobna kategoria widoczna dalej.
+    case "pebble":
+    case "petal":
+      return "decor";
+    case "rockpath":
+      return "path";
     default:
       return "plant";
   }
@@ -62,6 +68,8 @@ const dist = (tree: number, small: number): Record<ViewKind, number> => ({
   grass: small,
   flower: small * 1.2,
   mushroom: small * 0.9,
+  decor: small * 0.75,
+  path: small * 1.7,
 });
 
 export const VIEW_PROFILES: Record<QualityId, ForestViewProfile> = {

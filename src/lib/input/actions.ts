@@ -70,6 +70,8 @@ export type HintAction =
   | "move"
   | "look"
   | "sprint"
+  | "jump"
+  | "crouch"
   | "navigate";
 
 /** Urządzenie, według którego dobieramy podpowiedzi. */

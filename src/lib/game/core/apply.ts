@@ -28,12 +28,14 @@ import {
   worldReady,
 } from "../systems/session";
 import { devSetClock } from "../systems/devClock";
+import { setAppearance } from "../systems/appearance";
+import type { CharacterAppearanceV1 } from "@/lib/character/appearance";
 import { tick } from "../systems/vitals";
 import type { GameEvent } from "./events";
 import { addPause, clearPauseOwner, pauseReasons, removePause } from "./pause";
 import { result, unchanged, type CommandResult } from "./result";
 import { hydrateState } from "../save/hydrate";
-import type { SaveV3 } from "../save/schema";
+import type { SaveV4 } from "../save/schema";
 import type { ForestPose, GameState, View } from "./state";
 
 /**
@@ -44,8 +46,9 @@ export type Command =
   | { type: "setName"; name: string }
   | { type: "startLoading"; seed: number; saveId: string }
   | { type: "worldReady" }
-  | { type: "game.load"; save: SaveV3 }
+  | { type: "game.load"; save: SaveV4 }
   | { type: "forest.pose"; pose: ForestPose }
+  | { type: "appearance.set"; appearance: CharacterAppearanceV1 }
   | { type: "tick"; dt: number }
   | { type: "enter"; view: View }
   | { type: "leave" }
@@ -89,6 +92,8 @@ function execute(state: GameState, command: Command): CommandResult {
       return result(hydrateState(command.save), { type: "game.loaded", saveId: command.save.saveId });
     case "forest.pose":
       return setForestPose(state, command.pose);
+    case "appearance.set":
+      return setAppearance(state, command.appearance);
     case "tick":
       return tick(state, command.dt);
     case "enter":

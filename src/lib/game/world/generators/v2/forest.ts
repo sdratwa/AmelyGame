@@ -12,9 +12,11 @@ import type { FeatureMap } from "../../features";
 import type { WorldObject } from "../../objects";
 import { buildWorld, prepareWorld, type BuiltWorld, type WorldPlan, type WorldRecipe } from "../../pipeline";
 import type { Terrain } from "../../terrain";
+import { withDunes } from "./dunes";
 import { ForestGeometry } from "./geometry";
 import { FOREST_START, planForest } from "./plan";
-import { DEFAULT_PROFILES, type ProfileId, type ProfileTable } from "./profiles";
+import { DEFAULT_PROFILES, type AnyProfileId, type ProfileTable } from "./profiles";
+import type { ProOptions } from "./pro";
 import { validateForest } from "./validate";
 import { VegetationGenerator } from "./vegetation";
 
@@ -26,6 +28,13 @@ export type ForestOptions = {
   profiles?: ProfileTable;
   /** Tylko testy: dodatkowy margines okien rozsiewu (wynik nie może od niego zależeć). */
   halo?: number;
+  /**
+   * Tryb deweloperski prototypu Pro (`/dev/forest-pro`): wszystkie modele paczki Pro, 4 strefy-ćwiartki i bruk drogi głównej.
+   * Domyślnie wyłączony: bez tej opcji wynik jest bit w bit taki jak w zamrożonym generatorze v2.
+   */
+  pro?: ProOptions;
+  /** `gameplay`: tylko warstwa autorytatywna świata (drzewa i skały z ich ID i kolizjami); domyślnie `all`. */
+  layers?: "gameplay" | "all";
 };
 
 export type ForestSector = {
@@ -91,6 +100,13 @@ export type ForestWorldInit = {
   region?: RegionDef;
   profiles?: ProfileTable;
   halo?: number;
+  pro?: ProOptions;
+  /**
+   * Tylko z `pro`: dodaj wydmy (`tuning.dunes`) do terenu. Używa tego `createForest`; potok `buildWorld` (walidacja) liczy na
+   * terenie bazowym, więc go nie włącza.
+   */
+  dunes?: boolean;
+  layers?: "gameplay" | "all";
 };
 
 /**
@@ -107,6 +123,8 @@ export class ForestWorld {
   readonly features: FeatureMap;
   readonly geometry: ForestGeometry;
   readonly profiles: ProfileTable;
+  /** Opcje trybu Pro (null = zwykły generator v2). */
+  readonly pro: ProOptions | null;
   readonly sectorGrid: { nx: number; nz: number };
   private readonly vegetation: VegetationGenerator;
   private readonly cache = new Map<number, ForestSector>();
@@ -117,11 +135,13 @@ export class ForestWorld {
     this.seed = init.seed >>> 0;
     this.variant = init.variant;
     this.region = init.region ?? FOREST_START_REGION;
-    this.terrain = init.terrain;
     this.plan = init.plan;
     this.features = init.features;
     this.profiles = init.profiles ?? DEFAULT_PROFILES;
-    this.geometry = new ForestGeometry(init.plan, this.region, this.profiles);
+    this.pro = init.pro ?? null;
+    this.geometry = new ForestGeometry(init.plan, this.region, this.profiles, this.pro?.quadrants);
+    const dunes = init.dunes ? this.pro?.tuning?.dunes : undefined;
+    this.terrain = dunes ? withDunes(init.terrain, this.geometry, this.seed, dunes) : init.terrain;
     this.sectorGrid = sectorCount(this.region);
     this.vegetation = new VegetationGenerator({
       seed: this.seed,
@@ -131,6 +151,10 @@ export class ForestWorld {
       geometry: this.geometry,
       profiles: this.profiles,
       halo: init.halo,
+      catalog: this.pro?.catalog,
+      paving: this.pro?.paving ?? undefined,
+      tuning: this.pro?.tuning,
+      layers: init.layers,
     });
   }
 
@@ -233,7 +257,7 @@ export class ForestWorld {
   }
 
   /** Rodzaj powierzchni pod punktem (dla dźwięku, śladów i minimapy): woda, ścieżka lub teren, plus profil środowiska. */
-  surfaceAt(x: number, z: number): { surface: "water" | "path" | "ground"; y: number; profile: ProfileId } {
+  surfaceAt(x: number, z: number): { surface: "water" | "path" | "ground"; y: number; profile: AnyProfileId } {
     const water = this.geometry.waterGap(x, z);
     const trail = this.geometry.trailGap(x, z);
     return {
@@ -260,6 +284,8 @@ export function forestRecipe(options: ForestOptions = {}, onForest?: (forest: Fo
         features: ctx.features,
         profiles: options.profiles,
         halo: options.halo,
+        pro: options.pro,
+        layers: options.layers,
       });
       onForest?.(forest);
       return forest.allObjects();
@@ -280,6 +306,9 @@ export function createForest(seed: number, options: ForestOptions = {}): ForestW
     features: prepared.features,
     profiles: options.profiles,
     halo: options.halo,
+    pro: options.pro,
+    dunes: true,
+    layers: options.layers,
   });
 }
 

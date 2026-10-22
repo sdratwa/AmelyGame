@@ -1,7 +1,7 @@
 import type { GameState } from "../core/state";
 import { canonicalize } from "../world/fingerprint";
 import { serializeState } from "./serialize";
-import type { SaveV3 } from "./schema";
+import type { SaveV4 } from "./schema";
 import type { SaveOutcome, SaveStore } from "./store";
 
 type Timers = {
@@ -18,7 +18,7 @@ export type AutosaverOptions = {
   timers?: Timers;
   onResult?: (outcome: SaveOutcome) => void;
   /** Zapis, z którego wystartowała sesja – nie zapisujemy go ponownie bez zmian. */
-  initial?: SaveV3;
+  initial?: SaveV4;
 };
 
 const defaultTimers: Timers = {

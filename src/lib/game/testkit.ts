@@ -34,7 +34,8 @@ export const near = (p: Point2, dx = 0.5, dz = 0): Point2 => ({ x: p.x + dx, z: 
 
 import { RIDDLE_BY_ID } from "./content/riddles";
 import { harvestOf, type HarvestKind, type HarvestSize } from "./world/harvest";
-import { forestOf } from "./world/lookup";
+import { authoritativeForestOf, type WorldKey } from "./world/lookup";
+import { CURRENT_GEN_VERSION } from "./world/registry";
 import { FOREST_START } from "./world/generators/v2";
 import { ITEMS } from "./content/items";
 import { MAX_HEALTH } from "./core/constants";
@@ -43,13 +44,19 @@ import { CHEST_CONTENTS } from "./systems/forestQuest";
 
 export type HarvestTarget = { id: string; at: Point2; kind: HarvestKind; size: HarvestSize };
 
-const targetCache = new Map<number, HarvestTarget[]>();
+const targetCache = new Map<string, HarvestTarget[]>();
 
-/** Tylko testy: prawdziwe drzewa i skały z lasu danego seeda (zachodni brzeg, od najbliższych startu). */
-export function harvestTargets(seed: number): HarvestTarget[] {
-  const hit = targetCache.get(seed);
+/** Sam numer = seed świata w bieżącej wersji generatora (jak `newPlaying`); świat z innej wersji podaj jako `WorldRef`. */
+export const testWorldKey = (key: WorldKey): Exclude<WorldKey, number> =>
+  typeof key === "number" ? { seed: key, genVersion: CURRENT_GEN_VERSION } : key;
+
+/** Tylko testy: prawdziwe drzewa i skały z lasu danego świata (zachodni brzeg, od najbliższych startu). */
+export function harvestTargets(key: WorldKey): HarvestTarget[] {
+  const ref = testWorldKey(key);
+  const cacheKey = `${ref.genVersion}:${ref.seed}`;
+  const hit = targetCache.get(cacheKey);
   if (hit) return hit;
-  const forest = forestOf(seed);
+  const forest = authoritativeForestOf(ref);
   const out: HarvestTarget[] = [];
   for (const sector of forest.allSectors()) {
     for (const o of sector.objects) {
@@ -61,14 +68,14 @@ export function harvestTargets(seed: number): HarvestTarget[] {
     }
   }
   out.sort((a, b) => Math.hypot(a.at.x - FOREST_START.x, a.at.z - FOREST_START.z) - Math.hypot(b.at.x - FOREST_START.x, b.at.z - FOREST_START.z) || (a.id < b.id ? -1 : 1));
-  targetCache.set(seed, out);
+  targetCache.set(cacheKey, out);
   return out;
 }
 
 /** n-ta (cyklicznie) pozycja z listy celów danego rodzaju i rozmiaru. */
-export function harvestTarget(seed: number, kind: HarvestKind, size: HarvestSize, n: number): HarvestTarget {
+export function harvestTarget(seed: WorldKey, kind: HarvestKind, size: HarvestSize, n: number): HarvestTarget {
   const list = harvestTargets(seed).filter((t) => t.kind === kind && t.size === size);
-  if (list.length === 0) throw new Error(`brak celów ${kind}/${size} w seedzie ${seed}`);
+  if (list.length === 0) throw new Error(`brak celów ${kind}/${size} w świecie ${JSON.stringify(testWorldKey(seed))}`);
   return list[n % list.length];
 }
 
@@ -154,7 +161,7 @@ export function autoComplete(start: GameState): GameState {
   guard(countOf(s.slots, "item.pickaxe") === 1 && countOf(s.slots, "item.saw") === 1, "brak narzędzi");
   guard(countOf(s.slots, "item.bridge_blueprint") === 1, "brak schematu");
 
-  const seed = s.world!.seed;
+  const seed = { seed: s.world!.seed, genVersion: s.world!.genVersion };
   const gather = (kind: HarvestKind, item: "resource.wood" | "resource.stone", need: number) => {
     const list = harvestTargets(seed).filter((t) => t.kind === kind && !s.harvested.includes(t.id));
     for (const t of list) {

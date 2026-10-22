@@ -227,6 +227,16 @@ export const MIASTO_DEFAULT_CONFIG: VisualConfig = {
   look: ORIGINAL_CONFIG.look,
 };
 
+/**
+ * Domyślny wygląd prototypu Pro (`/dev/forest-pro`), wybrany przez autora: preset ORIGINAL z gęstością mgły 1,5 (względem
+ * presetu to "zmieniony"); powiązane domyślne: godzina 12 i jakość HIGH w `ForestPrototype`.
+ */
+export const PRO_DEFAULT_CONFIG: VisualConfig = {
+  preset: "ORIGINAL",
+  tuning: { ...NEUTRAL_TUNING, fogDensity: 1.5 },
+  look: ORIGINAL_CONFIG.look,
+};
+
 export const PRESETS: Record<PresetId, VisualConfig> = {
   MIASTO_DEFAULT: MIASTO_DEFAULT_CONFIG,
   ORIGINAL: ORIGINAL_CONFIG,

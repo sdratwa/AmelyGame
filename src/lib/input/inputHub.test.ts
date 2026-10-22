@@ -31,13 +31,18 @@ function setup(ui = false) {
 }
 
 describe("InputHub: akcje jednorazowe", () => {
-  it("Cross w grze = interakcja, w interfejsie = zatwierdzenie", () => {
+  it("Cross w grze nie wysyła akcji (to skok TPP), w interfejsie = zatwierdzenie; Square w grze = interakcja", () => {
     const s = setup(false);
     s.frame();
     s.pad.press(BTN.cross);
     s.frame();
-    expect(s.events).toEqual(["interact"]);
+    expect(s.events).toEqual([]);
     s.pad.release(BTN.cross);
+    s.frame();
+    s.pad.press(BTN.square);
+    s.frame();
+    expect(s.events).toEqual(["interact"]);
+    s.pad.release(BTN.square);
     s.frame();
     s.mode.ui = true;
     s.pad.press(BTN.cross);
@@ -48,15 +53,15 @@ describe("InputHub: akcje jednorazowe", () => {
   it("jedno naciśnięcie = jedna akcja: przytrzymanie nie powtarza interakcji", () => {
     const s = setup(false);
     s.frame();
-    s.pad.press(BTN.cross);
+    s.pad.press(BTN.square);
     for (let i = 0; i < 30; i++) s.frame();
     expect(s.events).toEqual(["interact"]);
   });
 
-  it("Triangle, Square, L1, Options w grze", () => {
+  it("Triangle, L2, L1, Options w grze", () => {
     const s = setup(false);
     s.frame();
-    for (const b of [BTN.triangle, BTN.square, BTN.l1, BTN.options]) {
+    for (const b of [BTN.triangle, BTN.l2, BTN.l1, BTN.options]) {
       s.pad.press(b);
       s.frame();
       s.pad.release(b);
@@ -99,7 +104,7 @@ describe("InputHub: akcje jednorazowe", () => {
       return true;
     }, 10);
     s.frame();
-    s.pad.press(BTN.cross);
+    s.pad.press(BTN.square);
     s.frame();
     expect(seenHigh).toEqual(["interact"]);
     expect(s.events).toEqual([]);
@@ -113,7 +118,7 @@ describe("InputHub: akcje jednorazowe", () => {
     });
     off();
     s.frame();
-    s.pad.press(BTN.cross);
+    s.pad.press(BTN.square);
     s.frame();
     expect(got).toEqual([]);
   });
@@ -121,7 +126,7 @@ describe("InputHub: akcje jednorazowe", () => {
   it("wielokrotne pump z tym samym czasem czyta pada raz (kilka pętli w jednej klatce)", () => {
     const s = setup(false);
     s.hub.pump(100);
-    s.pad.press(BTN.cross);
+    s.pad.press(BTN.square);
     s.hub.pump(116);
     s.hub.pump(116);
     expect(s.events).toEqual(["interact"]);

@@ -1,10 +1,12 @@
 import type { Bounds } from "@/lib/game/world/bounds";
-import { SPECIES_BY_MODEL, type ForestWorld } from "@/lib/game/world/generators/v2";
+import { PRO_GROUND, SPECIES_ALL_BY_MODEL as SPECIES_BY_MODEL, type ForestWorld } from "@/lib/game/world/generators/v2";
 import type { RiverRequest } from "@/lib/game/world/pipeline";
 import type { HeightField } from "@/lib/game/world/terrain";
 import type { WorldObject } from "@/lib/game/world/objects";
 
 export type GroundMeshData = {
+  /** Tryb Pro: waga pustyni w wierzchołkach (atrybut `aDesert` shadera gruntu: fale piasku); brak poza trybem Pro. */
+  desert?: Float32Array;
   positions: Float32Array;
   normals: Float32Array;
   uvs: Float32Array;
@@ -14,7 +16,7 @@ export type GroundMeshData = {
 };
 
 /** Siatka gruntu okna: wysokości z `terrain.height`, normalne z `terrain.normal` (ten sam teren co kolizje W0). */
-export function buildGroundMesh(terrain: HeightField, bounds: Bounds, cell: number): GroundMeshData {
+export function buildGroundMesh(terrain: HeightField, bounds: Bounds, cell: number, desertAt?: (x: number, z: number) => number): GroundMeshData {
   const w = bounds.maxX - bounds.minX;
   const h = bounds.maxZ - bounds.minZ;
   const nx = Math.max(1, Math.round(w / cell));
@@ -24,6 +26,7 @@ export function buildGroundMesh(terrain: HeightField, bounds: Bounds, cell: numb
   const positions = new Float32Array(vx * vz * 3);
   const normals = new Float32Array(vx * vz * 3);
   const uvs = new Float32Array(vx * vz * 2);
+  const desert = desertAt ? new Float32Array(vx * vz) : undefined;
   for (let j = 0; j < vz; j++) {
     for (let i = 0; i < vx; i++) {
       const x = bounds.minX + (w * i) / nx;
@@ -38,6 +41,7 @@ export function buildGroundMesh(terrain: HeightField, bounds: Bounds, cell: numb
       normals[k * 3 + 2] = n.z;
       uvs[k * 2] = i / nx;
       uvs[k * 2 + 1] = j / nz;
+      if (desert && desertAt) desert[k] = desertAt(x, z);
     }
   }
   const indices = new Uint32Array(nx * nz * 6);
@@ -56,7 +60,7 @@ export function buildGroundMesh(terrain: HeightField, bounds: Bounds, cell: numb
       indices[t++] = d;
     }
   }
-  return { positions, normals, uvs, indices, vertexCount: vx * vz, triangleCount: nx * nz * 2 };
+  return { desert, positions, normals, uvs, indices, vertexCount: vx * vz, triangleCount: nx * nz * 2 };
 }
 
 /** Wstęga lustra wody w obrębie okna (jeśli rzeka je przecina). Poziom wody = dno koryta + głębokość z planu. */
@@ -159,6 +163,15 @@ const FLECKS: readonly Rgb[] = [
   [96, 56, 34],
 ];
 
+// Paleta prototypu Pro (strefy A: jesień, C: pustynia; brukowana droga). Używana tylko, gdy w świecie są profile `pro_*`.
+const AUTUMN_GRASS: Rgb = [150, 136, 58];
+const AUTUMN_LEAVES: Rgb = [166, 96, 40];
+// Piasek jaśniejszy i cieplejszy niż wcześniej (Preview_3); cienie fal i pęknięć dorysowuje shader gruntu.
+const DESERT_SAND: Rgb = [228, 200, 148];
+const DESERT_DARK: Rgb = [198, 162, 110];
+const PAVE_A: Rgb = [128, 124, 114];
+const PAVE_B: Rgb = [156, 150, 138];
+
 const FIELD_CELL = 0.5;
 
 type Fields = {
@@ -170,6 +183,11 @@ type Fields = {
   dense: Float32Array;
   sunny: Float32Array;
   riverside: Float32Array;
+  /** Wagi stref prototypu Pro (jesienna, pustynna); zera poza trybem Pro. */
+  autumn: Float32Array;
+  desert: Float32Array;
+  /** Czy świat ma profile `pro_*` (wtedy działa paleta Pro i malowanie bruku). */
+  pro: boolean;
 };
 
 type FieldBuilder = { fields: Fields; step: (rows: number) => boolean };
@@ -187,10 +205,14 @@ function createFieldBuilder(forest: ForestWorld, bounds: Bounds): FieldBuilder {
     dense: new Float32Array(total),
     sunny: new Float32Array(total),
     riverside: new Float32Array(total),
+    autumn: new Float32Array(total),
+    desert: new Float32Array(total),
+    pro: false,
   };
   const geo = forest.geometry;
   const w = new Float64Array(geo.weightCount);
   const ids = geo.weightProfiles.map((p) => p.id);
+  f.pro = ids.some((id) => id.startsWith("pro_"));
   let j = 0;
   const fillRow = (row: number) => {
     for (let i = 0; i < n; i++) {
@@ -207,6 +229,14 @@ function createFieldBuilder(forest: ForestWorld, bounds: Bounds): FieldBuilder {
         else if (ids[p] === "dense_forest") f.dense[k] += w[p];
         else if (ids[p] === "sunny_forest") f.sunny[k] += w[p];
         else if (ids[p] === "riverside") f.riverside[k] += w[p];
+        else if (ids[p] === "pro_conifer") f.dense[k] += w[p] * 0.9;
+        else if (ids[p] === "pro_autumn") {
+          f.autumn[k] += w[p];
+          f.sunny[k] += w[p] * 0.7;
+        } else if (ids[p] === "pro_desert") {
+          f.desert[k] += w[p];
+          f.sunny[k] += w[p] * 0.6;
+        }
       }
     }
   };
@@ -232,13 +262,14 @@ function sampleField(arr: Float32Array, n: number, fx: number, fz: number): numb
   return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
 }
 
-type Brushes = { litter: Uint8Array; shade: Uint8Array; needles: Uint8Array };
+type Brushes = { litter: Uint8Array; shade: Uint8Array; needles: Uint8Array; paved: Uint8Array };
 
 /** Malowanie pędzlami pod obiektami: ściółka i cień pod koronami, ciemny kontakt przy skałach i krzewach (wtopienie w grunt). */
 function paintBrushes(objects: readonly WorldObject[], bounds: Bounds, size: number, mpp: number, seed: number): Brushes {
   const litter = new Uint8Array(size * size);
   const shade = new Uint8Array(size * size);
   const needles = new Uint8Array(size * size);
+  const paved = new Uint8Array(size * size);
   const stamp = (target: Uint8Array, cx: number, cz: number, radius: number, power: number, strength: number, dapple: number) => {
     const px = (cx - bounds.minX) / mpp;
     const pz = (cz - bounds.minZ) / mpp;
@@ -265,7 +296,7 @@ function paintBrushes(objects: readonly WorldObject[], bounds: Bounds, size: num
     const crown = SPECIES_BY_MODEL.get(id)?.crown ?? 1;
     if (o.x < bounds.minX - 6 || o.x > bounds.maxX + 6 || o.z < bounds.minZ - 6 || o.z > bounds.maxZ + 6) continue;
     if (o.kind === "tree") {
-      if (o.variant?.startsWith("pine")) stamp(needles, o.x, o.z, crown * scale * 1.6 + 0.9, 1.1, 0.95, 0.35);
+      if (o.variant?.startsWith("pine") || o.variant?.startsWith("giantpine") || o.variant?.startsWith("tallthick")) stamp(needles, o.x, o.z, crown * scale * 1.6 + 0.9, 1.1, 0.95, 0.35);
       stamp(litter, o.x, o.z, crown * scale * 1.5 + 0.8, 1.4, 0.95, 0.3);
       stamp(shade, o.x, o.z, 0.9 * scale + 0.4, 1.2, 0.9, 0);
       stamp(shade, o.x, o.z, crown * scale * 1.7, 1.6, 0.3, 0.6);
@@ -273,11 +304,57 @@ function paintBrushes(objects: readonly WorldObject[], bounds: Bounds, size: num
       const r = (o.collider?.shape === "circle" ? o.collider.r : 1) * 1.25;
       stamp(shade, o.x, o.z, r, 0.7, 0.85, 0);
       stamp(litter, o.x, o.z, r * 1.2, 1, 0.5, 0.3);
+    } else if (o.kind === "rockpath") {
+      stamp(paved, o.x, o.z, (SPECIES_BY_MODEL.get(id)?.footprint ?? 1) * scale * 0.95, 0.45, 1, 0.12);
     } else if (o.kind === "bush" || o.kind === "fern") {
       stamp(shade, o.x, o.z, (SPECIES_BY_MODEL.get(id)?.footprint ?? 0.8) * scale * 0.9, 1, 0.45, 0);
     }
   }
-  return { litter, shade, needles };
+  return { litter, shade, needles, paved };
+}
+
+/**
+ * Waga pustyni (profil `pro_desert`, 0-1) w punkcie; null poza trybem Pro. Używana do atrybutu wierzchołków gruntu (fale piasku).
+ */
+export function desertWeightFn(forest: ForestWorld): ((x: number, z: number) => number) | null {
+  const geo = forest.geometry;
+  const ids = geo.weightProfiles.map((p) => p.id);
+  const at = ids.indexOf("pro_desert");
+  if (at < 0) return null;
+  const w = new Float64Array(geo.weightCount);
+  return (x, z) => {
+    geo.profileWeights(x, z, w);
+    return Math.min(1, w[at]);
+  };
+}
+
+/**
+ * Maska spękanej ziemi (kanał alfa tekstury gruntu, tylko tryb Pro): duże płaty w pustyni (szum o skali `crackPatchScale`)
+ * oraz ścieżki w każdej strefie; bruk i brzegi wody bez pęknięć. Sam wzór pęknięć rysuje shader gruntu.
+ */
+function crackAlpha(x: number, z: number, seed: number, desert: number, pathAmt: number, paved: number): number {
+  const sc = PRO_GROUND.crackPatchScale;
+  const wx = x + (vnoise(x / 7, z / 7, seed + 31) - 0.5) * 6;
+  const wz = z + (vnoise(x / 7 + 4.3, z / 7 - 2.1, seed + 32) - 0.5) * 6;
+  const n = vnoise(wx / sc, wz / sc, seed + 21) * 0.78 + vnoise(wx / (sc * 0.3), wz / (sc * 0.3), seed + 22) * 0.22;
+  const t = PRO_GROUND.crackPatchThreshold;
+  const patch = smooth(t - 0.07, t + 0.07, n) * smooth(0.3, 0.75, desert);
+  const mask = Math.max(patch, pathAmt * 0.9) * (1 - Math.min(1, paved * 0.9));
+  return Math.round(Math.min(1, mask) * 255);
+}
+
+/** Paleta stref Pro: jesienne złoto i ściółka w A, piaszczysty grunt w C. */
+function proGround(color: Rgb, autumn: number, desert: number, nMid: number, nSmall: number): [number, number, number] {
+  let c: Rgb = color;
+  if (autumn > 0.001) {
+    const warm = lerp3(AUTUMN_GRASS, AUTUMN_LEAVES, smooth(0.35, 0.75, nSmall));
+    c = lerp3(c, warm, Math.min(1, autumn * (0.55 + 0.25 * nMid)));
+  }
+  if (desert > 0.001) {
+    const sand = lerp3(DESERT_DARK, DESERT_SAND, Math.min(1, nMid * 0.7 + nSmall * 0.4));
+    c = lerp3(c, sand, Math.min(1, desert * 0.94));
+  }
+  return [c[0], c[1], c[2]];
 }
 
 export type GroundStyle = "v2a" | "natural";
@@ -305,7 +382,7 @@ export function createGroundBuilder(inputs: GroundInputs): GroundBuilder {
   const fieldBuilder = createFieldBuilder(forest, bounds);
   const fields = fieldBuilder.fields;
   const seed = (forest.seed ^ 0x51ed270b) | 0;
-  let brushes: Brushes = { litter: new Uint8Array(0), shade: new Uint8Array(0), needles: new Uint8Array(0) };
+  let brushes: Brushes = { litter: new Uint8Array(0), shade: new Uint8Array(0), needles: new Uint8Array(0), paved: new Uint8Array(0) };
   let phase: 0 | 1 | 2 = 0;
   const data = new Uint8Array(size * size * 4);
   let row = 0;
@@ -344,6 +421,8 @@ export function createGroundBuilder(inputs: GroundInputs): GroundBuilder {
       const earthAmt = smooth(0.34, 0.62, slope) * (0.5 + 0.5 * nSmall);
       color = lerp3(color, EARTH, earthAmt);
 
+      if (fields.pro) color = proGround(color, sampleField(fields.autumn, fields.n, fx, fz), sampleField(fields.desert, fields.n, fx, fz), nMid, nSmall);
+
       const wet = smooth(5.5, 0.3, water);
       color = lerp3(color, MUD, wet * 0.65 * (0.6 + 0.4 * nMid));
       const gravel = smooth(1.8, -0.1, water);
@@ -361,14 +440,17 @@ export function createGroundBuilder(inputs: GroundInputs): GroundBuilder {
         color = lerp3(color, GRASS_DARK, fringe);
       }
 
+      if (fields.pro && brushes.paved[k] > 0) color = lerp3(color, lerp3(PAVE_A, PAVE_B, nSmall), (brushes.paved[k] / 255) * 0.9);
+
       const shade = 1 - 0.38 * (brushes.shade[k] / 255);
       const speck = (grain - 0.5) * 16 + (nFine - 0.5) * 18;
       const blade = pathAmt < 0.3 && grain > 0.985 ? 22 : grain < 0.01 ? -20 : 0;
       const o = k * 4;
+      const alpha = fields.pro ? crackAlpha(x, z, seed, sampleField(fields.desert, fields.n, fx, fz), pathAmt, brushes.paved[k] / 255) : 255;
       data[o] = Math.max(0, Math.min(255, color[0] * shade + speck + blade));
       data[o + 1] = Math.max(0, Math.min(255, color[1] * shade + speck + blade));
       data[o + 2] = Math.max(0, Math.min(255, color[2] * shade + speck * 0.8 + blade * 0.6));
-      data[o + 3] = 255;
+      data[o + 3] = alpha;
     }
   };
 
@@ -416,6 +498,8 @@ export function createGroundBuilder(inputs: GroundInputs): GroundBuilder {
       const earthAmt = smooth(0.34, 0.62, slope) * (0.5 + 0.5 * nSmall);
       color = lerp3(color, N_EARTH, earthAmt);
 
+      if (fields.pro) color = proGround(color, sampleField(fields.autumn, fields.n, fx, fz), sampleField(fields.desert, fields.n, fx, fz), nMid, nSmall);
+
       const wet = smooth(5.5, 0.3, water);
       color = lerp3(color, MUD, wet * 0.65 * (0.6 + 0.4 * nMid));
       const gravel = smooth(1.8, -0.1, water);
@@ -431,6 +515,8 @@ export function createGroundBuilder(inputs: GroundInputs): GroundBuilder {
         if (grain > 0.96 && trail < 0.3) dirt = lerp3(dirt, PEBBLE, 0.75);
         color = lerp3(color, dirt, pathAmt * 0.96);
       }
+
+      if (fields.pro && brushes.paved[k] > 0) color = lerp3(color, lerp3(PAVE_A, PAVE_B, nSmall), (brushes.paved[k] / 255) * 0.9);
 
       const shade = 1 - 0.34 * (brushes.shade[k] / 255) - 0.1 * dense;
       let fleck = 0;
@@ -453,7 +539,7 @@ export function createGroundBuilder(inputs: GroundInputs): GroundBuilder {
       data[o] = Math.max(0, Math.min(255, r));
       data[o + 1] = Math.max(0, Math.min(255, g));
       data[o + 2] = Math.max(0, Math.min(255, b));
-      data[o + 3] = 255;
+      data[o + 3] = fields.pro ? crackAlpha(x, z, seed, sampleField(fields.desert, fields.n, fx, fz), pathAmt, brushes.paved[k] / 255) : 255;
     }
   };
 

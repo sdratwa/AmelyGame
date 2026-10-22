@@ -3,10 +3,11 @@
  * Każdy model używany w grze musi mieć w nim wpis (id, licencja, trójkąty, kolizja, LOD, status).
  */
 
-export type AssetCategory = "tree" | "bush" | "undergrowth" | "grass" | "flower" | "mushroom" | "rock";
+/** `decor` = kamyki i płatki (drobne ozdoby), `path` = płyty brukowe (tylko paczka Pro). */
+export type AssetCategory = "tree" | "bush" | "undergrowth" | "grass" | "flower" | "mushroom" | "rock" | "decor" | "path";
 
 export const ASSET_CATEGORIES: readonly AssetCategory[] = [
-  "tree", "bush", "undergrowth", "grass", "flower", "mushroom", "rock",
+  "tree", "bush", "undergrowth", "grass", "flower", "mushroom", "rock", "decor", "path",
 ];
 
 /** Uproszczona kolizja modelu w metrach, dla instancji o skali 1 (uwzględnia `baseScale`). Brak = da się przejść. */

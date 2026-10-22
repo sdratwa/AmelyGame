@@ -3,7 +3,8 @@ import { objectToPlacement } from "@/lib/assets";
 import { sectorId, FOREST_START_REGION, type Bounds, type RegionDef } from "@/lib/game/world/bounds";
 import {
   FOREST_START,
-  SPECIES_BY_MODEL,
+  PRO_OPTIONS,
+  SPECIES_ALL_BY_MODEL as SPECIES_BY_MODEL,
   createForest,
   pickShowcaseSectors,
   type ForestSector,
@@ -72,6 +73,8 @@ export type WindowOptions = {
   /** Promień okna w sektorach: 1 = 3 x 3 (zwykły prototyp), 3 = 7 x 7 (tryb obciążeniowy). */
   radius?: number;
   walkMargin?: number;
+  /** Tryb deweloperski Pro (`/dev/forest-pro`): wszystkie modele paczki Pro, 4 strefy i bruk drogi. Domyślnie wyłączony. */
+  pro?: boolean;
 };
 
 export function parseSectorParam(text: string | null | undefined): { ix: number; iz: number } | null {
@@ -134,12 +137,12 @@ export function pickStart(forest: ForestWorld, sector: ForestSector, walk: WalkW
 }
 
 /** Grupuje obiekty wg modelu w partie instancji z danymi do LOD/odcinania; ukryte odmiany (disposition) są pomijane. */
-export function batchesFor(objects: readonly WorldObject[]): { batches: ModelBatch[]; instanceCount: number; hiddenCount: number } {
+export function batchesFor(objects: readonly WorldObject[], showAll = false): { batches: ModelBatch[]; instanceCount: number; hiddenCount: number } {
   const grouped = new Map<string, WorldObject[]>();
   let hiddenCount = 0;
   for (const o of objects) {
     const id = o.variant ? `${o.kind}.${o.variant}` : o.kind;
-    if (lookOf(id).mode === "hide") {
+    if (!showAll && lookOf(id).mode === "hide") {
       hiddenCount++;
       continue;
     }
@@ -225,9 +228,14 @@ export function mergeBatches(parts: readonly (readonly ModelBatch[])[]): ModelBa
 /** Okno lasu dla prototypu V2a: wszystko pochodzi z generatora W1a (teren, rozmieszczenie, kolizje). */
 export function buildForestWindow(options: WindowOptions = {}): ForestWindow {
   const seed = options.seed ?? DEFAULT_SEED;
-  const forest = createForest(seed);
-  const showcase = pickShowcaseSectors(forest, 6);
-  const wanted = options.sector ? clampSector(forest, options.sector) : { ix: showcase[0].ix, iz: showcase[0].iz };
+  const forest = createForest(seed, options.pro ? { pro: PRO_OPTIONS } : {});
+  // W trybie Pro nie szukamy sektorów wzorcowych (to oznaczałoby wygenerowanie całego lasu osobnym przebiegiem metryk).
+  const showcase = options.pro ? [] : pickShowcaseSectors(forest, 6);
+  const wanted = options.sector
+    ? clampSector(forest, options.sector)
+    : options.pro
+      ? forest.sectorCoordClamped(FOREST_START.x, FOREST_START.z)
+      : { ix: showcase[0].ix, iz: showcase[0].iz };
   const radius = options.radius ?? 1;
   const { nx, nz } = forest.sectorGrid;
   const xr = windowRange(wanted.ix, radius, nx);
@@ -260,7 +268,7 @@ export function buildForestWindow(options: WindowOptions = {}): ForestWindow {
       if (o.collider) colliders.push(o);
     }
   }
-  const { batches, instanceCount, hiddenCount } = batchesFor(objects);
+  const { batches, instanceCount, hiddenCount } = batchesFor(objects, options.pro === true);
 
   const walkRegion: RegionDef = { ...FOREST_START_REGION, bounds: walkBounds };
   const walk = new WalkWorld({

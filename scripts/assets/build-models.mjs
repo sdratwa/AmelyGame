@@ -26,7 +26,7 @@ import { compactPrimitive, dedup, meshopt, prune, weld } from "@gltf-transform/f
 import { MeshoptEncoder, MeshoptDecoder, MeshoptSimplifier } from "meshoptimizer";
 import sharp from "sharp";
 import {
-  BARK_MATERIALS, DEFAULT_SOURCE_DIR, MESH, MODELS, PACK, PIPELINE_VERSION, SCALE_CLASSES, TEXTURE,
+  BARK_MATERIALS, DEFAULT_SOURCE_DIR, EXTRA_MATERIALS, MESH, MODELS, PACK, PIPELINE_VERSION, SCALE_CLASSES, TEXTURE,
   VERTEX_COLOR_AO_MATERIALS,
 } from "./config.mjs";
 
@@ -61,8 +61,8 @@ function resolveSource() {
     dir = tmp;
   }
   const gltfDir = fs.existsSync(path.join(dir, "glTF")) ? path.join(dir, "glTF") : dir;
-  const licenseFile = [path.join(dir, "License_Standard.txt"), path.join(gltfDir, "License_Standard.txt")].find(fs.existsSync);
-  if (!licenseFile) throw new Error("Brak License_Standard.txt w katalogu oryginałów.");
+  const licenseFile = [path.join(dir, "License_Pro.txt"), path.join(gltfDir, "License_Pro.txt")].find(fs.existsSync);
+  if (!licenseFile) throw new Error("Brak License_Pro.txt w katalogu oryginałów.");
   return { gltfDir, licenseFile };
 }
 
@@ -96,6 +96,7 @@ function measure(doc) {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   const bark = [];
+  const barkAbove = [];
   for (const mesh of doc.getRoot().listMeshes()) {
     for (const prim of mesh.listPrimitives()) {
       const pos = prim.getAttribute("POSITION");
@@ -108,15 +109,22 @@ function measure(doc) {
           max[k] = Math.max(max[k], v[k]);
         }
         if (isBark && v[1] >= 0.2 && v[1] <= 0.5) bark.push(Math.hypot(v[0], v[2]));
+        if (isBark && v[1] >= 0.2) barkAbove.push([v[1], Math.hypot(v[0], v[2])]);
       }
     }
   }
   // Początek układu modeli leży w podstawie pnia; promień = 80. percentyl odległości punktów kory na wysokości 0,2-0,5 m, poniżej dolnych gałęzi sosen
   // (pomija odstające gałęzie).
+  // Gdy w tym pasie jest mało wierzchołków (np. brzozy, olbrzymie sosny i martwe drzewa z paczki Pro mają pierścienie kory co ok. 1 m),
+  // bierzemy najniższy pierścień powyżej 0,2 m (poniżej pierwszych konarów) i jego medianę.
   let trunkRadius = null;
-  if (bark.length > 0) {
+  if (bark.length >= 8) {
     bark.sort((a, b) => a - b);
     trunkRadius = bark[Math.floor(bark.length * 0.8)];
+  } else if (barkAbove.length > 0) {
+    const y0 = Math.min(...barkAbove.map(([y]) => y));
+    const ring = barkAbove.filter(([y]) => y <= y0 + 0.3).map(([, r]) => r).sort((a, b) => a - b);
+    trunkRadius = ring[Math.floor(ring.length / 2)];
   }
   return { min, max, trunkRadius };
 }
@@ -126,8 +134,10 @@ function materialSignature(m) {
   const normal = m.getNormalTexture();
   return {
     name: m.getName(),
-    alphaMode: m.getAlphaMode(),
-    alphaCutoff: m.getAlphaMode() === "MASK" ? round(m.getAlphaCutoff(), 3) : null,
+    // Liście wiśni w oryginale mają tryb BLEND; w grze ich nie mieszamy (sortowanie tysięcy kart psuje obraz i kosztuje),
+    // więc traktujemy je jak pozostałe liście: odcięcie alfa (MASK, próg 0,5).
+    alphaMode: m.getAlphaMode() === "BLEND" ? "MASK" : m.getAlphaMode(),
+    alphaCutoff: m.getAlphaMode() === "MASK" ? round(m.getAlphaCutoff(), 3) : m.getAlphaMode() === "BLEND" ? 0.5 : null,
     doubleSided: m.getDoubleSided(),
     baseColorFactor: m.getBaseColorFactor().map((v) => round(v, 3)),
     metallic: round(m.getMetallicFactor(), 3),
@@ -236,11 +246,14 @@ function simplifyPrimitives(doc, { ratio, error }) {
   }
 }
 
-function primitiveSignature(doc) {
-  return doc.getRoot().listMeshes().flatMap((m) => m.listPrimitives().map((p) => p.getMaterial().getName())).sort().join(",");
+function primitiveSignature(doc, rename) {
+  return doc.getRoot().listMeshes().flatMap((m) => m.listPrimitives().map((p) => {
+    const name = p.getMaterial().getName();
+    return rename?.[name] ?? name;
+  })).sort().join(",");
 }
 
-function assertGeometryIntact(doc, srcPath, modelId) {
+function assertGeometryIntact(doc, srcPath, modelId, rename) {
   for (const mesh of doc.getRoot().listMeshes()) {
     for (const prim of mesh.listPrimitives()) {
       for (const sem of ["POSITION", "NORMAL", "TEXCOORD_0"]) {
@@ -249,17 +262,21 @@ function assertGeometryIntact(doc, srcPath, modelId) {
     }
   }
   const expected = srcSignatures.get(srcPath);
-  if (expected !== primitiveSignature(doc)) {
-    throw new Error(`${modelId}: materiały po optymalizacji (${primitiveSignature(doc)}) różnią się od źródła (${expected})`);
+  const expectedRenamed = rename ? expected.split(",").map((n) => rename[n] ?? n).sort().join(",") : expected;
+  if (expectedRenamed !== primitiveSignature(doc)) {
+    throw new Error(`${modelId}: materiały po optymalizacji (${primitiveSignature(doc)}) różnią się od źródła (${expectedRenamed})`);
   }
 }
 
 const srcSignatures = new Map();
 
-async function buildGlb(io, srcPath, modelId, lod) {
+async function buildGlb(io, srcPath, modelId, lod, rename) {
   const doc = await io.read(srcPath);
   srcSignatures.set(srcPath, primitiveSignature(doc));
   stripToGeometry(doc, modelId);
+  if (rename) {
+    for (const m of doc.getRoot().listMaterials()) if (rename[m.getName()]) m.setName(rename[m.getName()]);
+  }
   if (lod) {
     await doc.transform(weld());
     simplifyPrimitives(doc, lod);
@@ -267,7 +284,7 @@ async function buildGlb(io, srcPath, modelId, lod) {
   // UV zostają mimo braku tekstur w GLB (tekstury są współdzielone poza plikiem); materiały nie mogą się zlać po zdjęciu tekstur.
   const steps = [prune({ keepAttributes: true }), dedup({ propertyTypes: [PropertyType.ACCESSOR] }), meshopt({ encoder: MeshoptEncoder, level: "high", ...MESH })];
   await doc.transform(...steps);
-  assertGeometryIntact(doc, srcPath, modelId);
+  assertGeometryIntact(doc, srcPath, modelId, rename);
   const glb = await io.writeBinary(doc);
   return { glb, ...docStats(doc), bounds: measure(doc) };
 }
@@ -289,7 +306,7 @@ async function main() {
   const hashFile = (rel) => {
     sourceHashes[rel] = sha256(fs.readFileSync(path.join(gltfDir, rel)));
   };
-  sourceHashes["License_Standard.txt"] = sha256(fs.readFileSync(licenseFile));
+  sourceHashes["License_Pro.txt"] = sha256(fs.readFileSync(licenseFile));
 
   const origDocs = new Map();
   const materials = new Map();
@@ -307,6 +324,11 @@ async function main() {
       }
       materials.set(sig.name, sig);
     }
+  }
+  for (const extra of EXTRA_MATERIALS) {
+    const base = materials.get(extra.base);
+    if (!base) throw new Error(`Materiał dodatkowy ${extra.name}: brak materiału bazowego ${extra.base}`);
+    materials.set(extra.name, { ...base, name: extra.name, albedoUri: extra.albedoUri });
   }
   const textureUris = new Set();
   for (const sig of materials.values()) {
@@ -380,13 +402,13 @@ async function main() {
     const orig = origDocs.get(cfg.id);
     const origBounds = measure(orig);
     const origStats = docStats(orig);
-    const lod0 = await buildGlb(io, srcPath, cfg.id, null);
+    const lod0 = await buildGlb(io, srcPath, cfg.id, null, cfg.materialRename);
     const file0 = `glb/${cfg.id}.glb`;
     fs.writeFileSync(path.join(OUT, file0), lod0.glb);
 
     const s = cfg.baseScale;
     const size = origBounds.max.map((v, i) => round((v - origBounds.min[i]) * s, 3));
-    const usedMats = [...new Set(orig.getRoot().listMeshes().flatMap((m) => m.listPrimitives().map((p) => p.getMaterial().getName().toLowerCase())))];
+    const usedMats = [...new Set(orig.getRoot().listMeshes().flatMap((m) => m.listPrimitives().map((p) => (cfg.materialRename?.[p.getMaterial().getName()] ?? p.getMaterial().getName()).toLowerCase())))];
 
     let collision = null;
     if (cfg.collision === "trunk") {
@@ -399,7 +421,7 @@ async function main() {
 
     const levels = [{ level: 0, file: file0, triangles: lod0.triangles, vertices: lod0.vertices, drawCalls: lod0.drawCalls, bytes: lod0.glb.length, minDistance: 0 }];
     if (cfg.lod) {
-      const lod1 = await buildGlb(io, srcPath, cfg.id, cfg.lod);
+      const lod1 = await buildGlb(io, srcPath, cfg.id, cfg.lod, cfg.materialRename);
       const file1 = `glb/${cfg.id}.lod1.glb`;
       fs.writeFileSync(path.join(OUT, file1), lod1.glb);
       const drift = lod1.bounds.max.map((v, i) => Math.abs(v - lod0.bounds.max[i]) + Math.abs(lod1.bounds.min[i] - lod0.bounds.min[i]));
@@ -456,7 +478,7 @@ async function main() {
       textures: { fullMax: TEXTURE.fullMax, lowMax: TEXTURE.lowMax, format: "webp" },
       sourceHashesFile: "scripts/assets/source-hashes.json",
     },
-    packs: [{ ...PACK, textFileSha256: sourceHashes["License_Standard.txt"] }],
+    packs: [{ ...PACK, textFileSha256: sourceHashes["License_Pro.txt"] }],
     scaleClasses: SCALE_CLASSES,
     textures,
     materials: materialEntries,

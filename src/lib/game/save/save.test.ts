@@ -8,10 +8,11 @@ import { loadGame, verifyWorld } from "./loader";
 import { migratePayload, type SchemaConfig } from "./migrate";
 import { MemoryStorage } from "./memoryStorage";
 import { createNewGameParams } from "./newGame";
-import { SAVE_TOP_LEVEL_KEYS, type SaveV3 } from "./schema";
+import { SAVE_TOP_LEVEL_KEYS, type SaveV4 } from "./schema";
 import { serializeState } from "./serialize";
 import { LocalStorageSaveStore, type KeyValueStorage, type SaveOutcome, type SaveStore } from "./store";
-import { validateSaveV3 } from "./validate";
+import { validateSaveV4 } from "./validate";
+import { DEFAULT_APPEARANCE } from "@/lib/character/appearance";
 import { canonicalize, fingerprintOf, hashHex } from "../world/fingerprint";
 
 function run(state: GameState, ...commands: Command[]): GameState {
@@ -49,7 +50,7 @@ function progressed(seed = 777, saveId = "save_test0001"): GameState {
   return run(s, { type: "buyHouse", id: cheapest.id }, { type: "upgradeHouse", id: cheapest.id });
 }
 
-const save = (s: GameState, savedAt = 1_000): SaveV3 => {
+const save = (s: GameState, savedAt = 1_000): SaveV4 => {
   const out = serializeState(s, savedAt);
   if (!out) throw new Error("stan nie nadaje się do zapisu");
   return out;
@@ -283,7 +284,7 @@ describe("E1.5 uszkodzony zapis nie niszczy poprawnej kopii", () => {
 
   it("nie zapisuje niepoprawnych danych", async () => {
     const { store, storage } = makeStore();
-    const bad = { ...save(progressed()), player: { ...save(progressed()).player, health: 1000 } } as SaveV3;
+    const bad = { ...save(progressed()), player: { ...save(progressed()).player, health: 1000 } } as SaveV4;
     const outcome = await store.save(bad);
     expect(outcome.ok).toBe(false);
     expect(storage.getItem("miasto.save")).toBeNull();
@@ -321,7 +322,7 @@ describe("E1.5 uszkodzony zapis nie niszczy poprawnej kopii", () => {
 });
 
 describe("E1.6 niezgodny worldFingerprint nie powoduje nadpisania", () => {
-  function tamperedRaw(mutate: (s: SaveV3) => SaveV3): string {
+  function tamperedRaw(mutate: (s: SaveV4) => SaveV4): string {
     return encodeSave(mutate(save(progressed())));
   }
 
@@ -366,44 +367,44 @@ describe("E1.6 niezgodny worldFingerprint nie powoduje nadpisania", () => {
   });
 });
 
-describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 4)", () => {
-  const v4: SchemaConfig = {
-    current: 4,
-    steps: { 3: (p) => ({ ...p, version: 4, schemaNote: "v4" }) },
+describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 5)", () => {
+  const v5: SchemaConfig = {
+    current: 5,
+    steps: { 4: (p) => ({ ...p, version: 5, schemaNote: "v5" }) },
     validate: (p) => {
       const { version, schemaNote, ...rest } = p as Record<string, unknown>;
-      if (version !== 4 || schemaNote !== "v4") return { ok: false, problems: ["v4: brak pól"] };
-      const base = validateSaveV3({ ...rest, version: 3 });
-      return base.ok ? { ok: true, value: { ...base.value, version: 4, schemaNote } as unknown as SaveV3 } : base;
+      if (version !== 5 || schemaNote !== "v5") return { ok: false, problems: ["v5: brak pól"] };
+      const base = validateSaveV4({ ...rest, version: 4 });
+      return base.ok ? { ok: true, value: { ...base.value, version: 5, schemaNote } as unknown as SaveV4 } : base;
     },
   };
 
   const oldRaw = () => encodeSave(save(progressed()));
 
-  it("migracja v3 -> v4 przechodzi, a oryginał zostaje w kopii przed migracją i w .bak", async () => {
+  it("migracja v4 -> v5 przechodzi, a oryginał zostaje w kopii przed migracją i w .bak", async () => {
     const storage = new MemoryStorage();
     const raw = oldRaw();
     storage.setItem("miasto.save", raw);
-    const loaded = await new LocalStorageSaveStore({ storage, schema: v4 }).load();
+    const loaded = await new LocalStorageSaveStore({ storage, schema: v5 }).load();
     expect(loaded.kind).toBe("ok");
     if (loaded.kind !== "ok") return;
-    expect(loaded.migratedFrom).toBe(3);
-    expect(storage.getItem("miasto.save.premigration.v3.0")).toBe(raw);
+    expect(loaded.migratedFrom).toBe(4);
+    expect(storage.getItem("miasto.save.premigration.v4.0")).toBe(raw);
     expect(storage.getItem("miasto.save.bak")).toBe(raw);
-    const migrated = decodeSave(storage.getItem("miasto.save") ?? "", v4);
+    const migrated = decodeSave(storage.getItem("miasto.save") ?? "", v5);
     expect(migrated.kind).toBe("ok");
-    expect((migrated as { save: { version: number } }).save.version).toBe(4);
+    expect((migrated as { save: { version: number } }).save.version).toBe(5);
   });
 
   it("błąd migracji (wyjątek): oryginał nietknięty, kopia przed migracją istnieje", async () => {
     const storage = new MemoryStorage();
     const raw = oldRaw();
     storage.setItem("miasto.save", raw);
-    const broken: SchemaConfig = { ...v4, steps: { 3: () => { throw new Error("bum"); } } };
+    const broken: SchemaConfig = { ...v5, steps: { 4: () => { throw new Error("bum"); } } };
     const loaded = await new LocalStorageSaveStore({ storage, schema: broken }).load();
     expect(loaded.kind).toBe("migration_failed");
     expect(storage.getItem("miasto.save")).toBe(raw);
-    expect(storage.getItem("miasto.save.premigration.v3.0")).toBe(raw);
+    expect(storage.getItem("miasto.save.premigration.v4.0")).toBe(raw);
     expect(storage.getItem("miasto.save.bak")).toBeNull();
   });
 
@@ -411,7 +412,7 @@ describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 4)", () =
     const storage = new MemoryStorage();
     const raw = oldRaw();
     storage.setItem("miasto.save", raw);
-    const bad: SchemaConfig = { ...v4, steps: { 3: (p) => ({ ...p, version: 4 }) } };
+    const bad: SchemaConfig = { ...v5, steps: { 4: (p) => ({ ...p, version: 5 }) } };
     const loaded = await new LocalStorageSaveStore({ storage, schema: bad }).load();
     expect(loaded.kind).toBe("migration_failed");
     expect(storage.getItem("miasto.save")).toBe(raw);
@@ -419,14 +420,14 @@ describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 4)", () =
 
   it("brak kroku migracji i zła wersja kroku są błędami, a nie cichym pominięciem", () => {
     const payload = JSON.parse(JSON.stringify(save(progressed())));
-    expect(migratePayload(payload, 3, { ...v4, steps: {} }).ok).toBe(false);
-    expect(migratePayload(payload, 3, { ...v4, steps: { 3: (p) => ({ ...p, version: 6 }) } }).ok).toBe(false);
+    expect(migratePayload(payload, 4, { ...v5, steps: {} }).ok).toBe(false);
+    expect(migratePayload(payload, 4, { ...v5, steps: { 4: (p) => ({ ...p, version: 7 }) } }).ok).toBe(false);
   });
 
   it("migracja nie modyfikuje danych wejściowych", () => {
     const payload = JSON.parse(JSON.stringify(save(progressed()))) as Record<string, unknown>;
     const snapshot = JSON.stringify(payload);
-    const out = migratePayload(payload, 3, v4);
+    const out = migratePayload(payload, 4, v5);
     expect(out.ok).toBe(true);
     expect(JSON.stringify(payload)).toBe(snapshot);
   });
@@ -445,7 +446,7 @@ describe("E1.7 migracja jest bezpieczna (mechanizm, syntetyczna wersja 4)", () =
         mem.setItem(k, v);
       },
     };
-    const loaded = await new LocalStorageSaveStore({ storage: noRoom, schema: v4 }).load();
+    const loaded = await new LocalStorageSaveStore({ storage: noRoom, schema: v5 }).load();
     expect(loaded.kind).toBe("migration_failed");
     expect(mem.getItem("miasto.save")).toBe(raw);
   });
@@ -508,7 +509,7 @@ describe("walidacja zapisu", () => {
   const valid = () => JSON.parse(JSON.stringify(save(progressed()))) as Record<string, any>;
 
   it("akceptuje poprawny zapis", () => {
-    expect(validateSaveV3(valid()).ok).toBe(true);
+    expect(validateSaveV4(valid()).ok).toBe(true);
   });
 
   it.each([
@@ -530,14 +531,69 @@ describe("walidacja zapisu", () => {
     ["duplikat id domu", (s: any) => (s.houses[1].id = s.houses[0].id)],
     ["elapsed ujemny", (s: any) => (s.time.elapsed = -1)],
     ["saveId z niedozwolonymi znakami", (s: any) => (s.saveId = "a b")],
+    ["brak wyglądu", (s: any) => delete s.player.appearance],
+    ["wygląd: zły kolor", (s: any) => (s.player.appearance.topColor = "zielony")],
+    ["wygląd: ID elementu to śmieć", (s: any) => (s.player.appearance.hairStyleId = "<script>")],
+    ["wygląd: liczba zamiast ID", (s: any) => (s.player.appearance.bottomId = 5)],
   ])("odrzuca: %s", (_name, mutate) => {
     const s = valid();
     mutate(s);
-    expect(validateSaveV3(s).ok).toBe(false);
+    expect(validateSaveV4(s).ok).toBe(false);
   });
 
   it("odrzuca nie-obiekty", () => {
-    for (const bad of [null, 5, "x", [], undefined]) expect(validateSaveV3(bad).ok).toBe(false);
+    for (const bad of [null, 5, "x", [], undefined]) expect(validateSaveV4(bad).ok).toBe(false);
+  });
+
+  it("wygląd: puste sloty (null) są poprawne, a nieznane ID z innej wersji gry przechodzi walidację i jest czyszczone przy wczytaniu", () => {
+    const s = valid();
+    s.player.appearance.hairStyleId = null;
+    s.player.appearance.topId = "top.77";
+    const checked = validateSaveV4(s);
+    expect(checked.ok).toBe(true);
+    if (!checked.ok) return;
+    const state = hydrateState(checked.value);
+    expect(state.appearance.hairStyleId).toBeNull();
+    expect(state.appearance.topId).toBeNull();
+    expect(state.appearance.bottomId).toBe(DEFAULT_APPEARANCE.bottomId);
+  });
+});
+
+describe("wygląd postaci: stan, komenda i zapis", () => {
+  const custom = { ...DEFAULT_APPEARANCE, hairStyleId: "hair.02", hairColor: "#112233", topId: null, bottomColor: "#445566" };
+
+  it("nowa gra ma domyślny wygląd, a komenda appearance.set go zmienia bez ruszania reszty stanu", () => {
+    const s = progressed();
+    expect(s.appearance).toEqual(DEFAULT_APPEARANCE);
+    const out = applyCommand(s, { type: "appearance.set", appearance: custom });
+    expect(out.state.appearance).toEqual(custom);
+    expect({ ...out.state, appearance: s.appearance }).toEqual(s);
+  });
+
+  it("komenda normalizuje śmieci, ignoruje identyczny wygląd i nie działa poza grą", () => {
+    const s = progressed();
+    const out = applyCommand(s, { type: "appearance.set", appearance: { ...DEFAULT_APPEARANCE, topId: "top.99", hairColor: "pink" } });
+    expect(out.state.appearance.topId).toBeNull();
+    expect(out.state.appearance.hairColor).toBe(DEFAULT_APPEARANCE.hairColor);
+    expect(applyCommand(s, { type: "appearance.set", appearance: { ...DEFAULT_APPEARANCE } }).state).toBe(s);
+    expect(applyCommand(initialState, { type: "appearance.set", appearance: custom }).state).toBe(initialState);
+  });
+
+  it("zapis zawiera wygląd, a Kontynuuj go przywraca (zapis -> kodowanie -> odczyt -> stan)", async () => {
+    const s = run(progressed(), { type: "appearance.set", appearance: custom });
+    const { store } = makeStore();
+    expect(await store.save(save(s))).toEqual({ ok: true });
+    const loaded = await store.load();
+    expect(loaded.kind).toBe("ok");
+    if (loaded.kind !== "ok") return;
+    expect(loaded.save.player.appearance).toEqual(custom);
+    expect(hydrateState(loaded.save).appearance).toEqual(custom);
+  });
+
+  it("nowa gra po zmianie wyglądu zaczyna od wyglądu domyślnego", () => {
+    const changed = run(progressed(), { type: "appearance.set", appearance: custom });
+    const fresh = run({ ...changed, phase: "name" }, { type: "setName", name: "Ola" }, { type: "startLoading", seed: 5, saveId: "save_test0002" });
+    expect(fresh.appearance).toEqual(DEFAULT_APPEARANCE);
   });
 });
 
@@ -576,7 +632,7 @@ function fakeTimers() {
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
 function recordingStore() {
-  const saved: SaveV3[] = [];
+  const saved: SaveV4[] = [];
   const store: SaveStore = {
     load: async () => ({ kind: "none" }),
     save: async (s): Promise<SaveOutcome> => {

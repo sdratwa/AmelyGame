@@ -70,11 +70,14 @@ export type ButtonBinding = {
 };
 
 export const BUTTON_BINDINGS: readonly ButtonBinding[] = [
-  { button: BTN.cross, game: "interact", ui: "confirm" },
+  // ✕/A w lesie to skok (czytany bezpośrednio, patrz `TPP_BUTTONS`), w interfejsie zatwierdzanie.
+  { button: BTN.cross, ui: "confirm" },
   { button: BTN.circle, ui: "cancel" },
   { button: BTN.triangle, game: "inventory", ui: "inventory" },
-  { button: BTN.square, game: "journal", ui: "journal" },
+  // □/X: interakcja w lesie, dziennik w interfejsie (zamykanie dziennika). W lesie dziennik jest na L2/LT.
+  { button: BTN.square, game: "interact", ui: "journal" },
   { button: BTN.l1, game: "minimap" },
+  { button: BTN.l2, game: "journal" },
   { button: BTN.r1, game: "slotPrev" },
   { button: BTN.r2, game: "slotNext" },
   { button: BTN.options, game: "pause", ui: "pause" },
@@ -86,6 +89,13 @@ export const BUTTON_BINDINGS: readonly ButtonBinding[] = [
 
 /** Przycisk trzymany: bieg (L3). */
 export const SPRINT_BUTTON = BTN.l3;
+
+/**
+ * Sterowanie trzecioosobowe (gra i `/dev/third-person`): skok i przełączanie kucania. Ruch, kamera i bieg idą wspólnymi
+ * osiami huba (lewy drążek, prawy drążek, L3). Przyciski są odczytywane bezpośrednio, bez akcji gry. Skok na ✕/A
+ * wymusił przeniesienie interakcji na □/X (patrz `BUTTON_BINDINGS`), a dziennika na L2/LT.
+ */
+export const TPP_BUTTONS = { jump: BTN.cross, crouch: BTN.circle } as const;
 
 export type PadFamily = "playstation" | "xbox" | "generic";
 
@@ -155,6 +165,8 @@ export const KEYBOARD_LABELS: Record<HintAction, string | null> = {
   look: "Mysz",
   sprint: "Shift",
   navigate: "Tab",
+  jump: "Spacja",
+  crouch: "C",
 };
 
 /** Przycisk pada odpowiadający akcji podpowiedzi (wynika z `BUTTON_BINDINGS`, nie z ręcznych napisów). */
@@ -180,6 +192,10 @@ export function buttonForHint(action: HintAction): number | null {
       return bindingButton("slotNext", "game", BTN.r2);
     case "sprint":
       return SPRINT_BUTTON;
+    case "jump":
+      return TPP_BUTTONS.jump;
+    case "crouch":
+      return TPP_BUTTONS.crouch;
     default:
       return null;
   }

@@ -58,3 +58,21 @@ export const MATERIAL_TYPES: Readonly<Record<string, "foliage" | "solid">> = {
   grass: "foliage",
   flowers: "foliage",
 };
+
+/**
+ * Liście z paczki Pro (tylko prototyp /dev/forest-pro): wiatr i przyciemnienie nasady jak w innych liściach, ale bez wpisu w palecie
+ * wyglądu (`MATERIAL_IDS`), więc korekta barw jest neutralna i kolory pozostają takie jak w paczce. Gra tych materiałów nie używa.
+ */
+export const PRO_FOLIAGE: Readonly<Record<string, FoliageWind>> = {
+  leaves_birch: { height: 8, amplitude: 0.1, rootShade: 0 },
+  leaves_cherryblossom: { height: 7, amplitude: 0.09, rootShade: 0 },
+  leaves_giantpine: { height: 12, amplitude: 0.06, rootShade: 0 },
+  leaves_tallthick: { height: 9, amplitude: 0.06, rootShade: 0 },
+};
+
+export const PRO_MATERIAL_TYPES: Readonly<Record<string, "foliage" | "solid">> = {
+  leaves_birch: "foliage",
+  leaves_cherryblossom: "foliage",
+  leaves_giantpine: "foliage",
+  leaves_tallthick: "foliage",
+};

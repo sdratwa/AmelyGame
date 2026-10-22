@@ -56,6 +56,10 @@ export type StreamedForestOptions = {
   anisotropy: number;
   receiveShadow: boolean;
   tuneGround: (material: THREE.MeshStandardMaterial) => void;
+  /** Waga pustyni 0..1 (atrybut gruntu Pro); brak = grunt jak w v2. */
+  desertAt?: (x: number, z: number) => number;
+  /** Dodatek do klucza pamięci płytek: las o innej wersji generatora (ten sam seed) ma inną teksturę gruntu. */
+  cacheTag?: string;
 };
 
 export type StreamStats = {
@@ -237,7 +241,7 @@ export class StreamedForest {
 
   private startJob(coord: SectorCoord): Job {
     const sector = this.o.forest.sector(coord.ix, coord.iz);
-    const cacheKey = `${this.o.forest.seed}:${this.o.groundStyle}:${this.pixels}:${sectorKey(coord)}`;
+    const cacheKey = `${this.o.cacheTag ?? ""}${this.o.forest.seed}:${this.o.groundStyle}:${this.pixels}:${sectorKey(coord)}`;
     const data = cachedTile(cacheKey) ?? null;
     return { coord, key: sectorKey(coord), sector, cacheKey, builder: null, data };
   }
@@ -282,7 +286,7 @@ export class StreamedForest {
     texture.anisotropy = o.anisotropy;
     texture.needsUpdate = true;
 
-    const meshData = buildGroundMesh(o.forest.terrain, job.sector.bounds, o.profile.groundCell);
+    const meshData = buildGroundMesh(o.forest.terrain, job.sector.bounds, o.profile.groundCell, o.desertAt);
     padUvs(meshData.uvs, this.size, TILE_PAD);
     const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 1, metalness: 0 });
     o.tuneGround(material);

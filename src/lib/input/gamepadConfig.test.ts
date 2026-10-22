@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { BTN, BUTTON_BINDINGS, BUTTON_GLYPHS, SPRINT_BUTTON, buttonForHint, padFamilyFromId } from "./gamepadConfig";
+import { BTN, BUTTON_BINDINGS, BUTTON_GLYPHS, SPRINT_BUTTON, TPP_BUTTONS, buttonForHint, padFamilyFromId } from "./gamepadConfig";
 import { hintLabel, padForestHelp } from "./prompts";
 
 describe("mapowanie przycisków", () => {
-  it("Cross/A to interakcja w grze i zatwierdzanie w interfejsie", () => {
+  it("Cross/A to skok w grze (bez akcji huba) i zatwierdzanie w interfejsie; interakcja jest na Square/X", () => {
     const b = BUTTON_BINDINGS.find((x) => x.button === BTN.cross);
-    expect(b?.game).toBe("interact");
+    expect(b?.game).toBeUndefined();
     expect(b?.ui).toBe("confirm");
+    expect(TPP_BUTTONS.jump).toBe(BTN.cross);
+    expect(TPP_BUTTONS.crouch).toBe(BTN.circle);
+    const sq = BUTTON_BINDINGS.find((x) => x.button === BTN.square);
+    expect(sq?.game).toBe("interact");
+    expect(sq?.ui).toBe("journal");
   });
 
   it("Circle/B cofa tylko w interfejsie (w wolnym lesie nie wychodzi z gry)", () => {
@@ -15,10 +20,10 @@ describe("mapowanie przycisków", () => {
     expect(b?.game).toBeUndefined();
   });
 
-  it("Triangle/Y = ekwipunek, Square/X = dziennik, L1 = minimapa, Options = pauza, L3 = bieg", () => {
+  it("Triangle/Y = ekwipunek, L2/LT = dziennik w lesie, L1 = minimapa, Options = pauza, L3 = bieg", () => {
     const by = (button: number) => BUTTON_BINDINGS.find((x) => x.button === button);
     expect(by(BTN.triangle)?.game).toBe("inventory");
-    expect(by(BTN.square)?.game).toBe("journal");
+    expect(by(BTN.l2)?.game).toBe("journal");
     expect(by(BTN.l1)?.game).toBe("minimap");
     expect(by(BTN.options)?.game).toBe("pause");
     expect(SPRINT_BUTTON).toBe(BTN.l3);
@@ -52,18 +57,25 @@ describe("rodzina kontrolera i podpowiedzi", () => {
     expect(padFamilyFromId("Some Pad")).toBe("generic");
   });
 
-  it("interakcja: [E] na klawiaturze, [✕] na PlayStation, [A] na Xbox", () => {
+  it("interakcja: [E] na klawiaturze, [□] na PlayStation, [X] na Xbox; skok [Spacja]/[✕]/[A], kucanie [C]/[○]/[B]", () => {
     expect(hintLabel("interact", "keyboard")).toBe("E");
-    expect(hintLabel("interact", "playstation")).toBe("✕");
-    expect(hintLabel("interact", "xbox")).toBe("A");
+    expect(hintLabel("interact", "playstation")).toBe("□");
+    expect(hintLabel("interact", "xbox")).toBe("X");
+    expect(hintLabel("jump", "keyboard")).toBe("Spacja");
+    expect(hintLabel("jump", "playstation")).toBe("✕");
+    expect(hintLabel("jump", "xbox")).toBe("A");
+    expect(hintLabel("crouch", "keyboard")).toBe("C");
+    expect(hintLabel("crouch", "playstation")).toBe("○");
+    expect(hintLabel("crouch", "xbox")).toBe("B");
+    expect(hintLabel("confirm", "playstation")).toBe("✕");
   });
 
   it("pozostałe podpowiedzi wynikają z mapowania", () => {
     expect(hintLabel("inventory", "keyboard")).toBe("I");
     expect(hintLabel("inventory", "playstation")).toBe("△");
     expect(hintLabel("inventory", "xbox")).toBe("Y");
-    expect(hintLabel("journal", "playstation")).toBe("□");
-    expect(hintLabel("journal", "xbox")).toBe("X");
+    expect(hintLabel("journal", "playstation")).toBe("L2");
+    expect(hintLabel("journal", "xbox")).toBe("LT");
     expect(hintLabel("cancel", "playstation")).toBe("○");
     expect(hintLabel("cancel", "xbox")).toBe("B");
     expect(hintLabel("minimap", "playstation")).toBe("L1");
@@ -83,6 +95,8 @@ describe("rodzina kontrolera i podpowiedzi", () => {
     const labels = help.map((h) => h.label);
     expect(labels).toContain("ruch");
     expect(labels).toContain("interakcja");
+    expect(labels).toContain("skok");
+    expect(labels).toContain("kucanie");
     expect(labels).toContain("menu");
   });
 });

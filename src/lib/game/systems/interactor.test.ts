@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { reducer, type Command } from "../core/apply";
 import type { GameState } from "../core/state";
-import { anchorsOf, grantItem, harvestTargets, inForest, newPlaying, run, slotsFrom, unlockToolOrder } from "../testkit";
+import { anchorsOf, grantItem, harvestTargets, inForest, newPlaying, run, slotsFrom, unlockToolOrder, testWorldKey } from "../testkit";
 import { forestChestsOf, forestObject } from "../world/lookup";
 import { countOf } from "./containers";
 import { CHEST_WINDOW_DELAY_MS, ForestInteractor, OPEN_CONFIRM_TIMEOUT_MS } from "./interactor";
@@ -36,7 +36,7 @@ function harness(initial?: GameState) {
   return { h, interactor, advance: (ms: number) => void (h.time += ms) };
 }
 
-const chest = (id: string) => forestChestsOf(SEED).find((c) => c.id === id)!;
+const chest = (id: string) => forestChestsOf(testWorldKey(SEED)).find((c) => c.id === id)!;
 
 describe("M1/C1: kontroler interakcji (E, okno skrzyni)", () => {
   it("E na zamkniętej skrzyni: komenda silnika, animacja, okno po opóźnieniu, zabranie przedmiotu, postęp zadania", () => {
@@ -165,7 +165,7 @@ describe("M1/C1: kontroler interakcji (E, okno skrzyni)", () => {
   it("zbieranie: bez narzędzia komunikat i brak zmiany, z narzędziem surowiec trafia do ekwipunku, a obiekt znika i nie da się zebrać ponownie", () => {
     const { h, interactor } = harness();
     const tree = harvestTargets(SEED).find((t) => t.kind === "tree" && t.size === "l")!;
-    const obj = forestObject(SEED, tree.id)!;
+    const obj = forestObject(testWorldKey(SEED), tree.id)!;
     h.pose = standing(obj, 2);
     const noTool = interactor.poll();
     expect(noTool.prompt?.key).toBeNull();

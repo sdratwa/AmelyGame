@@ -3,7 +3,9 @@
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { QualityId } from "@/lib/assets";
+import { getInputHub, setFreeForest, startBrowserInput } from "@/lib/input/browser";
 import { GrassLabPanel } from "./GrassLabPanel";
+import { ProTuningPanel } from "./ProTuningPanel";
 import {
   BENCHMARK_SECONDS,
   DEFAULT_HOUR,
@@ -13,15 +15,21 @@ import {
   DEFAULT_SEED,
   ForestRenderer,
   PRESET_IDS,
+  PRO_DEFAULT_CONFIG,
   TUNING_RANGES,
+  PRO_ZONE_IDS,
+  PRO_ZONES,
   parsePreset,
   parseSectorParam,
+  parseZoneParam,
+  zoneSector,
   presetConfig,
   stressRadius,
   visualFromJson,
   visualToJson,
   LAB_MODELS,
   type BenchmarkReport,
+  type ZoneTourReport,
   type LabOptions,
   type PanelStats,
   type PresetId,
@@ -58,6 +66,11 @@ function parseQuality(text: string | null): QualityId {
   return (QUALITIES as string[]).includes(q) ? (q as QualityId) : "MEDIUM";
 }
 
+function zoneStart(text: string | null) {
+  const zone = parseZoneParam(text);
+  return zone ? zoneSector(zone) : undefined;
+}
+
 function hourLabel(h: number): string {
   const m = Math.round(h * 60) % 1440;
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -88,15 +101,16 @@ function Toggle({ label, on, onChange, hint }: { label: string; on: boolean; onC
   );
 }
 
-export function ForestPrototype() {
+/** `pro`: prototyp lasu 300 x 300 m z paczką Pro (trasa `/dev/forest-pro`): cały las, 4 strefy, bruk drogi, oryginalne kolory paczki. */
+export function ForestPrototype({ pro = false }: { pro?: boolean } = {}) {
   const params = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<ForestRenderer | null>(null);
   const [stats, setStats] = useState<PanelStats | null>(null);
-  const [quality, setQuality] = useState<QualityId>(() => parseQuality(params.get("q")));
+  const [quality, setQuality] = useState<QualityId>(() => (pro && !params.get("q") ? "HIGH" : parseQuality(params.get("q"))));
   const [hour, setHour] = useState<number>(() => {
     const h = Number(params.get("hour"));
-    return params.get("hour") !== null && Number.isFinite(h) ? ((h % 24) + 24) % 24 : DEFAULT_HOUR;
+    return params.get("hour") !== null && Number.isFinite(h) ? ((h % 24) + 24) % 24 : pro ? 12 : DEFAULT_HOUR;
   });
   const [overrides, setOverrides] = useState<ViewOverrides>(() => ({
     ...DEFAULT_OVERRIDES,
@@ -105,10 +119,17 @@ export function ForestPrototype() {
     forceLod: params.get("lod") === "0" ? 0 : params.get("lod") === "1" ? 1 : null,
     wind: params.get("wind") !== "0",
   }));
-  const [visual, setVisual] = useState<VisualConfig>(() => presetConfig(parsePreset(params.get("preset")) ?? DEFAULT_PRESET));
+  const [visual, setVisual] = useState<VisualConfig>(() => (() => {
+      const named = parsePreset(params.get("preset"));
+      if (named) return presetConfig(named);
+      if (!pro) return presetConfig(DEFAULT_PRESET);
+      const base = presetConfig(PRO_DEFAULT_CONFIG.preset);
+      return { ...base, tuning: { ...PRO_DEFAULT_CONFIG.tuning } };
+    })());
   const [visualNote, setVisualNote] = useState<string | null>(null);
   const [seedText, setSeedText] = useState(() => params.get("seed") ?? String(DEFAULT_SEED));
   const [bench, setBench] = useState<BenchmarkReport | null>(null);
+  const [tour, setTour] = useState<ZoneTourReport | null>(null);
   const [lab, setLab] = useState<LabOptions | null>(() => {
     if (params.get("lab") !== "grass") return null;
     const model = params.get("labModel");
@@ -121,7 +142,7 @@ export function ForestPrototype() {
     return params.get("stress") ? stressRadius(n) : null;
   }, [params]);
 
-  const initial = useRef({ quality, hour, overrides, params, stress, visual, lab });
+  const initial = useRef({ quality, hour, overrides, params, stress, visual, lab, pro });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -136,17 +157,26 @@ export function ForestPrototype() {
       visual: init.visual,
       window: {
         seed: init.params.get("seed") !== null && Number.isFinite(seed) ? seed >>> 0 : DEFAULT_SEED,
-        sector: parseSectorParam(init.params.get("sector")) ?? undefined,
-        radius: init.stress ?? 1,
+        sector: parseSectorParam(init.params.get("sector")) ?? (init.pro ? zoneStart(init.params.get("zone")) : undefined),
+        // Prototyp Pro domyślnie buduje cały las 300 x 300 m (okno 10 x 10 sektorów); `?stress=` nadal działa.
+        radius: init.stress ?? (init.pro ? 5 : 1),
+        pro: init.pro,
       },
       onStats: setStats,
       onLab: (o) => setLab(o),
     });
     rendererRef.current = renderer;
+    // Pad (jak w grze): lewy drążek chodzi, prawy obraca kamerę, sprint z ustawień kontrolera. Wejście i ustawienia pochodzą z tego
+    // samego huba co w grze; "wolny las" wyłącza tryb nawigacji po interfejsie, żeby drążki nie sterowały panelem.
+    const stopInput = startBrowserInput();
+    setFreeForest(true);
+    renderer.setInputHub(getInputHub());
     if (init.lab) renderer.setGrassLab(init.lab);
     return () => {
       renderer.dispose();
       rendererRef.current = null;
+      setFreeForest(false);
+      stopInput();
     };
   }, []);
 
@@ -262,8 +292,26 @@ export function ForestPrototype() {
     }
   }, []);
 
+  const runTour = useCallback(async () => {
+    setTour(null);
+    try {
+      setTour(await rendererRef.current!.runZoneTour());
+    } catch {
+      /* test przerwany */
+    }
+  }, []);
+
+  const goZone = useCallback(
+    (id: (typeof PRO_ZONE_IDS)[number]) => {
+      const c = PRO_ZONES[id];
+      rendererRef.current?.teleportNear(c.x, c.z);
+      updateUrl({ zone: id });
+    },
+    [updateUrl],
+  );
+
   const copyReport = useCallback(async () => {
-    const payload = JSON.stringify({ stats, quality, hour, overrides, benchmark: bench }, null, 2);
+    const payload = JSON.stringify({ stats, quality, hour, overrides, benchmark: bench, zoneTour: tour }, null, 2);
     try {
       await navigator.clipboard.writeText(payload);
       setCopied(true);
@@ -271,7 +319,7 @@ export function ForestPrototype() {
     } catch {
       window.prompt("Skopiuj raport", payload);
     }
-  }, [stats, quality, hour, overrides, bench]);
+  }, [stats, quality, hour, overrides, bench, tour]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -312,7 +360,7 @@ export function ForestPrototype() {
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-slate-100">
           <div className="rounded-lg bg-slate-900/90 px-5 py-4 text-center shadow-xl ring-1 ring-slate-700">
             <div className="text-sm font-medium">{stats.loading}</div>
-            <div className="mt-1 text-xs text-slate-400">Prototyp V2b: las z generatora W1a</div>
+            <div className="mt-1 text-xs text-slate-400">{pro ? "Prototyp lasu PRO 300 x 300 m (generowanie całego lasu może potrwać)" : "Prototyp V2b: las z generatora W1a"}</div>
           </div>
         </div>
       )}
@@ -333,7 +381,7 @@ export function ForestPrototype() {
 
       <div className="absolute left-3 top-3 z-20 w-72 rounded-lg bg-slate-950/75 p-3 text-xs shadow-lg ring-1 ring-slate-700 backdrop-blur">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">V2b diagnostyka</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">{pro ? "PRO 300 x 300 diagnostyka" : "V2b diagnostyka"}</span>
           <button type="button" onClick={() => setPanelOpen((v) => !v)} className="text-[11px] text-slate-400 hover:text-slate-100">
             {panelOpen ? "ukryj sterowanie" : "pokaż sterowanie"}
           </button>
@@ -354,6 +402,7 @@ export function ForestPrototype() {
             <Row k="Seed" v={String(stats.seed)} />
             <Row k="Sektor" v={stats.sectorId.replace("sector.forest_start.", "")} title={stats.sectorId} />
             <Row k="Okno" v={`${stats.windowSectors} sektorów${stats.stress ? " (stress)" : ""}`} />
+            {pro && <Row k="Odcinek trasy" v={stats.tourLeg ?? "-"} />}
             <Row k="Pozycja (x, y, z)" v={`${fmt(stats.position.x, 1)}, ${fmt(stats.position.y, 1)}, ${fmt(stats.position.z, 1)}`} />
             {stats.fallbackModels > 0 && <div className="text-amber-300">Zastępniki zamiast modeli: {stats.fallbackModels}</div>}
           </div>
@@ -496,6 +545,8 @@ export function ForestPrototype() {
             {visualNote && <div className="text-[11px] text-emerald-300">{visualNote}</div>}
           </section>
 
+          {pro && <ProTuningPanel getRenderer={() => rendererRef.current} />}
+
           <section className="space-y-1.5">
             <div className="text-[11px] uppercase tracking-wide text-slate-400">Efekty</div>
             <div className="flex flex-wrap gap-1.5">
@@ -558,6 +609,46 @@ export function ForestPrototype() {
               </a>
             </div>
           </section>
+
+          {pro && (
+            <section className="space-y-1.5">
+              <div className="text-[11px] uppercase tracking-wide text-slate-400">Strefy lasu PRO (przenieś gracza)</div>
+              <div className="grid grid-cols-2 gap-1">
+                {PRO_ZONE_IDS.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={!!stats.loading || stats.benchmark.running}
+                    onClick={() => goZone(id)}
+                    className="rounded bg-slate-800 px-2 py-1 text-left ring-1 ring-slate-600 hover:bg-slate-700 disabled:opacity-40"
+                  >
+                    {PRO_ZONES[id].label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                disabled={!!stats.loading || stats.benchmark.running}
+                onClick={runTour}
+                className="w-full rounded bg-emerald-600/80 px-2 py-1.5 font-medium text-white disabled:opacity-40"
+              >
+                {stats.benchmark.running && stats.tourLeg ? `Trasa: ${stats.tourLeg} ${Math.round(stats.benchmark.progress * 100)}%` : "Test FPS: trasa przez 4 strefy i drogę"}
+              </button>
+              {tour && (
+                <div className="space-y-1 rounded bg-slate-900/80 p-2">
+                  {tour.legs.map((l) => (
+                    <div key={l.id} className="border-b border-slate-800 pb-1 last:border-0 last:pb-0">
+                      <div className="font-medium text-slate-200">{l.label}</div>
+                      <Row k="FPS śr. / 1% low" v={`${fmt(l.averageFps, 1)} / ${fmt(l.onePercentLowFps, 1)}`} />
+                      <Row k="Draw calls / trójkąty" v={`${fmt(l.avgDrawCalls)} / ${thousands(l.avgTriangles)}`} />
+                      <Row k="Instancje / modele" v={`${thousands(l.avgVisibleInstances)} / ${fmt(l.avgActiveModels)}`} />
+                    </div>
+                  ))}
+                  <div className="pt-1 text-[10px] leading-snug text-slate-400">Pełny raport JSON: przycisk „Kopiuj raport”.</div>
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="space-y-1.5">
             <div className="text-[11px] uppercase tracking-wide text-slate-400">Test FPS ({BENCHMARK_SECONDS} s)</div>

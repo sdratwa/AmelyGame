@@ -5,6 +5,8 @@ import {
   ROCK_JITTER,
   ROCK_MAX_TILT,
   SPECIES,
+  SPECIES_ALL,
+  SPECIES_PRO,
   createForest,
   summarizeForest,
 } from "@/lib/game/world/generators/v2";
@@ -18,9 +20,17 @@ const entries = new Map(manifest.models.map((m) => [m.id, m]));
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
 
 describe("W1a + V1: tabela gatunków zgodna z manifestem", () => {
+  it("tabela v2 (Standard) jest podzbiorem manifestu, a katalog pełny (Standard + Pro) pokrywa manifest co do jednego modelu", () => {
+    expect(SPECIES).toHaveLength(31);
+    expect(SPECIES_ALL).toHaveLength(manifest.models.length);
+    expect(SPECIES_ALL).toHaveLength(SPECIES.length + SPECIES_PRO.length);
+    expect(new Set(SPECIES_ALL.map((s) => s.model)).size).toBe(SPECIES_ALL.length);
+    expect(SPECIES_ALL.map((s) => s.model).sort()).toEqual(manifest.models.map((m) => m.id).sort());
+    for (const s of SPECIES) expect(entries.has(s.model), s.model).toBe(true);
+  });
+
   it("każdy gatunek istnieje w manifeście, a rozmiary, kolizje i trójkąty się zgadzają", () => {
-    expect(SPECIES).toHaveLength(manifest.models.length);
-    for (const s of SPECIES) {
+    for (const s of SPECIES_ALL) {
       const e = entries.get(s.model);
       expect(e, s.model).toBeDefined();
       if (!e) continue;

@@ -172,3 +172,72 @@ export const GROUND_DETAIL_FRAGMENT = /* glsl */ `
     vec3 gdWarm = mix(vec3(1.05, 1.0, 0.92), vec3(0.95, 1.0, 1.06), gdW);
     diffuseColor.rgb *= (1.0 + uDetail * (gdN - 0.5) * 2.0) * mix(vec3(1.0), gdWarm, clamp(uDetail * 3.0, 0.0, 1.0));
   }`;
+
+/**
+ * Shader gruntu trybu Pro (prototyp `/dev/forest-pro`): spękana ziemia (komórki Voronoi) tam, gdzie maska w alfie tekstury
+ * gruntu jest niezerowa, oraz fale piasku (albedo i pochylenie normalnej) według atrybutu `aDesert`. Wszystko wygasa z odległością,
+ * żeby cienkie linie nie migotały. Uniform `uPro` = (rozmiar komórki, szerokość linii, siła pęknięć, siła pochylenia fal), `uProTone` = zmienność koloru piasku.
+ */
+export const PRO_GROUND_DECL = /* glsl */ `
+uniform vec4 uPro;
+uniform float uProTone;
+uniform vec2 uProFade;
+varying float vDesert;
+vec3 prCell(vec2 p) {
+  vec2 ip = floor(p);
+  vec2 fp = fract(p);
+  float f1 = 8.0;
+  float f2 = 8.0;
+  float id = 0.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j));
+      vec2 o = vec2(grHash(ip + g), grHash(ip + g + vec2(31.7, 17.3)));
+      vec2 r = g + 0.12 + 0.76 * o - fp;
+      float d = dot(r, r);
+      if (d < f1) { f2 = f1; f1 = d; id = grHash(ip + g + 7.7); }
+      else if (d < f2) { f2 = d; }
+    }
+  }
+  return vec3(sqrt(f1), sqrt(f2), id);
+}
+float prRipple(vec2 p) {
+  vec2 q = p + (vec2(grNoise(p * 0.07), grNoise(p * 0.07 + 5.2)) - 0.5) * 7.0;
+  float a = sin(dot(q, vec2(0.92, 0.39)) * 5.2 + grNoise(q * 0.45) * 3.5);
+  float b = sin(dot(q, vec2(-0.39, 0.92)) * 2.4 + grNoise(q * 0.27 + 3.0) * 4.5);
+  return a * 0.62 + b * 0.38;
+}`;
+
+export const PRO_GROUND_ALBEDO = /* glsl */ `
+  float pgCrack = diffuseColor.a;
+  diffuseColor.a = 1.0;
+  float pgDesert = vDesert;
+  float pgDist = length(vViewPosition);
+  {
+    float cw = pgCrack * (1.0 - smoothstep(uProFade.x, uProFade.y, pgDist));
+    if (cw > 0.01) {
+      vec3 pc = prCell(vGroundXZ / uPro.x);
+      float edge = (pc.y - pc.x) * uPro.x;
+      float line = 1.0 - smoothstep(uPro.y * 0.5, uPro.y * 1.7, edge);
+      float broad = 1.0 - smoothstep(0.0, uPro.x * 0.3, edge);
+      diffuseColor.rgb *= 1.0 - cw * uPro.z * (line + 0.22 * broad);
+      diffuseColor.rgb *= 1.0 + cw * (pc.z - 0.5) * 0.1;
+    }
+    float dw = pgDesert * (1.0 - smoothstep(30.0, 70.0, pgDist));
+    if (dw > 0.01) {
+      float rh = prRipple(vGroundXZ);
+      diffuseColor.rgb *= 1.0 + dw * uProTone * rh;
+    }
+  }`;
+
+export const PRO_GROUND_NORMAL = /* glsl */ `
+  {
+    float dn = pgDesert * (1.0 - smoothstep(22.0, 55.0, pgDist)) * uPro.w;
+    if (dn > 0.001) {
+      float e = 0.12;
+      float h0 = prRipple(vGroundXZ);
+      vec2 rg = vec2(prRipple(vGroundXZ + vec2(e, 0.0)) - h0, prRipple(vGroundXZ + vec2(0.0, e)) - h0) / e;
+      vec3 tilt = vec3(-rg.x, 0.0, -rg.y) * dn;
+      normal = normalize(normal + (viewMatrix * vec4(tilt, 0.0)).xyz);
+    }
+  }`;

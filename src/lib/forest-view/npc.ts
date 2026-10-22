@@ -148,6 +148,11 @@ export class NpcLayer {
     return this.visible && this.troll.encounter.requestTalk();
   }
 
+  /** Pozycja trolla na płaszczyźnie x-z (do sprawdzenia, czy między nim a graczem nie stoi przeszkoda). */
+  get position(): { x: number; z: number } {
+    return { x: this.troll.x, z: this.troll.z };
+  }
+
   get dialogActive(): boolean {
     return this.troll.encounter.dialogActive;
   }

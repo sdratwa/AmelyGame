@@ -10,6 +10,10 @@ Stan: etap V1 (15 października 2026). W repozytorium jest zoptymalizowany zesta
 - Placeholdery proceduralne wyłącznie do testów mechaniki, oznaczone `placeholder: true`; docelowy las nie powstaje z prostych brył. Wyjątek techniczny: zastępnik przy błędzie ładowania (`fallback: true`), widoczny w statystykach biblioteki.
 - Wygląd rozdzielony od gry: kolizje należą do obiektów świata (generator), a manifest podaje tylko sugerowane rozmiary kolizji modeli. Wymiana modeli nie psuje zapisów (patrz [swiat-generator.md](swiat-generator.md)).
 
+## Aktualizacja 20.10.2026: paczka Pro (zakup autora)
+
+Autor kupił wersję **Pro** tej samej paczki (CC0, `License_Pro.txt`). Pro jest nadzbiorem Standard: 31 modeli używanych w grze ma w niej bajt w bajt identyczną geometrię i pliki glTF, więc modele gry się nie zmieniają. Potok (`scripts/assets/`) buduje teraz 122 modele (116 z paczki + 6 pustynnych wariantów skał); 31 z nich używa gra (generator v2), reszta jest tylko w prototypie `/dev/forest-pro` do czasu decyzji autora. Szczegóły, porównanie trójkątów i instrukcja testu: [prototyp-lasu-pro.md](prototyp-lasu-pro.md). Poniższa sekcja opisuje zatwierdzony wcześniej zestaw 31 modeli z wersji Standard.
+
 ## Zatwierdzony pakiet: Quaternius "Stylized Nature MegaKit" [Standard]
 
 Zweryfikowane 15.10.2026 na oficjalnej stronie itch.io przed pobraniem.

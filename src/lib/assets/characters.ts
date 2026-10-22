@@ -40,6 +40,9 @@ export type DeerEntry = CharacterEntry & {
   textures: { name: string; size: number[]; bytes: number }[];
 };
 
+/** Postać gracza (model bazowy dziewczynki, szkielet Mixamo): przód +Z zgodny z azymutem `atan2(dx, dz)`. */
+export type PlayerEntry = CharacterEntry & { forward: "+z" };
+
 export type CharactersManifest = { schemaVersion: 1; characters: CharacterEntry[] };
 
 export class CharacterLoadError extends Error {
@@ -55,6 +58,22 @@ export class CharacterLoadError extends Error {
 
 export const TROLL_ID = "troll.forest";
 export const DEER_ID = "deer.forest";
+export const PLAYER_GIRL_ID = "player.girl.base";
+/** Plik modelu gracza względem `public/` (oczekiwana ścieżka, gdy go brakuje). */
+export const PLAYER_GIRL_FILE = "public/characters/Miasto_Dziewczynka_9_animacji_beta.glb";
+/** Animacje wymagane od modelu gracza (nazwy klipów w pliku, bez zmian); brak którejkolwiek to błąd. */
+export const PLAYER_REQUIRED_CLIPS = [
+  "idle",
+  "walk",
+  "run",
+  "jump",
+  "crouch_idle",
+  "crouch_walk_forward",
+  "crouch_walk_back",
+  "crouch_sneak_left",
+  "crouch_sneak_right",
+] as const;
+export type PlayerClipName = (typeof PLAYER_REQUIRED_CLIPS)[number];
 /** Animacje wymagane od modelu trolla (nazwy klipów w pliku); brak którejkolwiek to błąd, a nie ciche udawanie ruchu. */
 export const TROLL_REQUIRED_CLIPS = ["Walk", "Idle", "Nervous", "Surprised", "Happy", "Dance", "Angry"] as const;
 /** Jedyny klip jelenia w pliku (preset czworonoga); nie ma Idle ani biegu. */
@@ -82,6 +101,7 @@ export type CharacterAsset<E extends CharacterEntry = CharacterEntry> = {
 
 export type TrollAsset = CharacterAsset<TrollEntry>;
 export type DeerAsset = CharacterAsset<DeerEntry>;
+export type PlayerAsset = CharacterAsset<PlayerEntry>;
 
 const defaultJson = (url: string) =>
   fetch(url).then((r) => {
@@ -187,6 +207,20 @@ export const loadDeerAsset = (options: CharacterLoaderOptions = {}): Promise<Dee
       if (!bone || !scene.getObjectByName(sceneNodeName(bone))) throw new CharacterLoadError(DEER_ID, `brak kości ${bone}`);
     }
     if (entry.feet.length !== 4) throw new CharacterLoadError(DEER_ID, "oczekiwano czterech kości kopyt");
+  });
+
+/**
+ * Gracz (dziewczynka): jedna siatka ze skórą, 65 kości Mixamo i dziewięć klipów o nazwach z `PLAYER_REQUIRED_CLIPS`.
+ * Brak pliku zgłasza `CharacterLoadError` z oczekiwaną ścieżką (nie ma zamiennika).
+ */
+export const loadPlayerAsset = (options: CharacterLoaderOptions = {}): Promise<PlayerAsset> =>
+  loadCharacter<PlayerEntry>(PLAYER_GIRL_ID, PLAYER_REQUIRED_CLIPS, options, (entry) => {
+    if (entry.forward !== "+z") throw new CharacterLoadError(PLAYER_GIRL_ID, "oczekiwano przodu +z");
+  }).catch((e) => {
+    if (e instanceof CharacterLoadError && /nie udało się wczytać/.test(e.message)) {
+      throw new CharacterLoadError(PLAYER_GIRL_ID, `${e.message}; oczekiwany plik: ${PLAYER_GIRL_FILE}`, { cause: e });
+    }
+    throw e;
   });
 
 /** Zwalnia geometrie, materiały, tekstury i szkielet sceny GLB. */

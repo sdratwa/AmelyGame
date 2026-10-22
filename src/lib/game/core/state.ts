@@ -2,6 +2,7 @@ import { INVENTORY_SLOTS, MAX_HEALTH, START_WALLET } from "./constants";
 import type { House } from "../content/houses";
 import type { ItemStack } from "../content/items";
 import type { WorldAnchors } from "../world/anchors";
+import { DEFAULT_APPEARANCE, type CharacterAppearanceV1 } from "@/lib/character/appearance";
 import type { BadgeId, NpcId, QuestId, RegionId, RiddleId } from "./ids";
 
 export type View = "world" | "forest" | "shop";
@@ -76,6 +77,8 @@ export type GameState = {
   houses: House[];
   world: WorldInfo | null;
   forestPose: ForestPose | null;
+  /** Wygląd postaci gracza (dane; zapisywany w SaveV4). Nie wpływa na rozgrywkę. */
+  appearance: CharacterAppearanceV1;
   quests: QuestsState;
   chests: Record<string, ChestState>;
   troll: TrollState;
@@ -122,6 +125,7 @@ export const initialState: GameState = {
   houses: [],
   world: null,
   forestPose: null,
+  appearance: { ...DEFAULT_APPEARANCE },
   quests: initialQuests(),
   chests: {},
   troll: initialTroll(),

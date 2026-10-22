@@ -5,7 +5,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { describe, expect, it } from "vitest";
 import { mulberry32 } from "../game/core/rng";
-import { MODELS } from "../../../scripts/assets/config.mjs";
+import { MODELS, MODELS_PRO_ONLY, MODELS_STANDARD } from "../../../scripts/assets/config.mjs";
 import {
   AssetLibrary, AssetLoadError, ManifestError, QUALITY_PROFILES, composePlacementMatrix, createInstancedModel, indexManifest,
   instancedCost, parseManifest, pickLodIndex, pickRock, placementCollider, type AssetManifest, type Placement,
@@ -114,16 +114,22 @@ describe("manifest zasobów: kompletność i pliki", () => {
     expect(by("rock").length).toBeGreaterThanOrEqual(3);
   });
 
-  it("budżety: materiały, tekstury, rozmiar i trójkąty", () => {
-    expect(manifest.materials.length).toBeLessThanOrEqual(12);
-    expect(manifest.textures.length).toBeLessThanOrEqual(14);
-    expect(manifest.totals.totalBytesFull).toBeLessThan(4 * 1024 * 1024);
+  it("budżety: materiały, tekstury, rozmiar i trójkąty (cała paczka Pro; gra używa tylko modeli Standard)", () => {
+    expect(manifest.materials.length).toBeLessThanOrEqual(20);
+    expect(manifest.textures.length).toBeLessThanOrEqual(25);
+    expect(manifest.totals.totalBytesFull).toBeLessThan(14 * 1024 * 1024);
     for (const t of manifest.textures) {
       expect(Math.max(t.full.width, t.full.height)).toBeLessThanOrEqual(1024);
       expect(Math.max(t.low.width, t.low.height)).toBeLessThanOrEqual(512);
     }
-    for (const m of manifest.models) {
+    const standardIds = new Set<string>(MODELS_STANDARD.map((m: { id: string }) => m.id));
+    for (const m of manifest.models.filter((x) => standardIds.has(x.id))) {
       expect(m.triangles, m.id).toBeLessThanOrEqual(10_500);
+    }
+    expect(MODELS_PRO_ONLY.length).toBe(85);
+    expect(MODELS_STANDARD.length + MODELS_PRO_ONLY.length).toBe(116);
+    for (const m of manifest.models) {
+      expect(m.triangles, m.id).toBeLessThanOrEqual(15_000);
       expect(m.drawCalls, m.id).toBeLessThanOrEqual(2);
     }
   });

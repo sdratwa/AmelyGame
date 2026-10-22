@@ -1,7 +1,9 @@
 export * from "./species";
 export * from "./profiles";
+export { SHOWCASE_PROFILES } from "./showcaseProfiles";
+export { PRO_OPTIONS, PRO_QUADRANT_LAYOUT, PRO_PAVING, PRO_TUNING, PRO_GROUND, type ProGroundTuning, type ProOptions, type PavingOptions, type ProTuning, type ProGrassTuning, type ProRockTuning, type ProDuneTuning, type ClusterTuning } from "./pro";
 export { FOREST_PLAN, FOREST_START, BRIDGE_FLAG, RIVER_BARRIER_ID, BRIDGE_PASSAGE_ID, planForest } from "./plan";
-export { ForestGeometry, type TrailInfo, type ClearArea } from "./geometry";
+export { ForestGeometry, QUADRANT_IDS, type TrailInfo, type ClearArea, type QuadrantId, type QuadrantLayout } from "./geometry";
 export { LAYERS, layerCapacityPer100m2, VegetationGenerator, type LayerConfig } from "./vegetation";
 export { validateForest, MAX_TERRAIN_TAN } from "./validate";
 export {

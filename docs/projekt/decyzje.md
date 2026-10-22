@@ -189,3 +189,40 @@
 - Ustawienia kontrolera w `localStorage` (`miasto.input.gamepad`), bez zmiany `SaveV3`. Wibracje opcjonalne i delikatne (skrzynia, ważny przedmiot, most).
 - Bez zmian: mechanika pierwszego questa, trolla, jelenia, generator, most, `MIASTO_DEFAULT`, wartości życia/zegara.
 - Agent nie uruchamiał testów, lint, typecheck, build ani przeglądarki (zakaz projektu); do weryfikacji przez autora.
+
+## Prototyp lasu PRO 300 x 300 m (20 października 2026)
+
+- Paczka Quaternius Stylized Nature MegaKit **Pro** (zakup autora) dodana do potoku zasobów: 122 modele w manifeście, gra nadal używa tylko 31 modeli Standard (geometria bajt w bajt taka sama). Szczegóły: [prototyp-lasu-pro.md](prototyp-lasu-pro.md).
+- Nowa trasa deweloperska `/dev/forest-pro` (tylko development): 4 strefy z płynnym przejściem (A jesienna łąka, B iglasty, C pustynia, D mix), bruk części `trail.main` kamieniami RockPath/Pebble, test FPS przez wszystkie strefy z raportem JSON.
+- Wszystko za opcją `ForestOptions.pro` (domyślnie wyłączona): generator v2, zapisy i quest bez zmian. Włączenie modeli Pro do gry wymaga osobnej decyzji (generator v3, kotwice questa, migracje).
+- Nic nie jest wycinane; ocena wieku odbiorcy (martwe drzewa, grzyby, nasycone kolory) i wydajności po obejrzeniu prototypu przez autora.
+- Agent nie uruchamiał testów, lint, typecheck, build ani przeglądarki; do weryfikacji przez autora.
+
+## Quest 1 w lesie Pro: generator v3 i projekt pod multiplayer (22 października 2026)
+
+- Decyzja autora: nowe gry grają w lesie z paczką Pro (generator świata **v3**); zapisy v2 działają dalej na zamrożonym generatorze v2. `CURRENT_GEN_VERSION = 3`.
+- Tożsamość świata to czysta funkcja `(seed, genVersion)` (`WorldRef`) plus odcisk z zapisu. Serwer (kolejny krok: multiplayer) i każdy klient liczą z niej tę samą **warstwę autorytatywną**; klient dokłada tylko warstwę kosmetyczną.
+- Warstwa autorytatywna (we wspólnym odcisku `gameplayDigest`, zamrożona w v3): plan i kotwice questa (identyczne jak v2), teren z wydmami, drzewa i drzewa stare, skały i formacje (pozycje, kolizje, ID, skale), obiekty do pozyskania. Zmiana = nowa wersja generatora.
+- Warstwa kosmetyczna (poza odciskiem, deterministyczna z seeda): trawa, kwiaty, paprocie, krzewy, rośliny, grzyby, płatki, kamyki, bruk oraz wygląd (kolory, pęknięcia, skale widoku, zagłębienie bruku). Można ją stroić bez unieważniania zapisów i światów serwera.
+- Zasady dla multiplayera (bez implementacji serwera, synchronizacji ani lobby): w warstwie autorytatywnej żadnej trygonometrii ani nieustalonej kolejności; wydmy używają haszowego szumu całkowitoliczbowego; `generators/` nie importuje `three`, `react` ani `forest-view`; ID obiektów numerowane osobno dla każdego rodzaju, więc pominięcie warstwy kosmetycznej nie zmienia ID drzew i skał. Stan gracza i świata (pozyskane obiekty, skrzynie, most) pozostaje w `GameState`, gotowym do przeniesienia na serwer.
+- Bez zmian: wartości życia, śmierci, drenażu i zegara, mechanika questa i trolla.
+- Agent nie uruchamiał testów, lint, typecheck, build ani przeglądarki; sumy kontrolne warstwy autorytatywnej v3 zostaną zamrożone po akceptacji wartości przez autora i pierwszym uruchomieniu testów.
+
+## TPP1: sterowanie trzecioosobowe (22 października 2026)
+
+- Gracz w trzeciej osobie to dziewczynka z gotowego GLB (`public/characters/`, wpis `player.girl.base`), z dziewięcioma animacjami Mixamo o dokładnych nazwach; nie generujemy modelu, szkieletu ani animacji. Szczegóły: [tpp-sterowanie.md](tpp-sterowanie.md).
+- Tryb tylko deweloperski (`/dev/third-person`, opcja `StreamOptions.thirdPerson`); gra i `/dev/forest` bez zmian. Logika sterowania w `src/lib/tpp/` bez Three.js i Reacta (przygotowanie pod serwer autorytatywny), `PlayerIntent` jako warstwa wejścia (pad i dotyk bez zmian w ruchu).
+- Kolizje poziome nadal z `WalkWorld` (kapsuła oddzielona od modelu), pion z prędkości i grawitacji; animacja nigdy nie porusza postacią. Root motion usuwany selektywnie na kopiach klipów (średnia pozioma w pętlach, tylko wzrost pionowy w skoku).
+- Wartości domyślne (do akceptacji autora): chód 2,2, bieg 4,8, kucanie 1,0 m/s; skok 1,5 m przy grawitacji 12; kamera 2,35 m, 15° w dół (wartości wskazane przez autora po próbach w `/dev/third-person`). Wszystko w `TPP_DEFAULTS`, bez zmian wartości życia, śmierci, drenażu i zegara.
+- Do decyzji autora: włączenie TPP do głównej gry (interakcje, skrzynie, rozmowa z trollem, pad: skok i kucanie), ocena materiału i cieni postaci, dostrojenie prędkości nominalnych klipów.
+- Agent nie uruchamiał testów, lint, typecheck, build ani przeglądarki; do weryfikacji przez autora.
+
+## TPP2 + AVATAR1: sterowanie trzecioosobowe w grze i personalizacja postaci (22 października 2026)
+
+- Decyzje autora w tej iteracji: pad "skok ✕/A, interakcja □/X" (dziennik przeszedł na L2/LT) oraz zapis wyglądu w nowej wersji zapisu **SaveV4** (`player.appearance`) z migracją v3 -> v4.
+- TPP jest domyślnym widokiem w głównej grze; jeden autorytatywny stan gracza (`PlayerController`), `FirstPersonController.state` jako lustro. Interakcje liczone od postaci z kontrolą drożności odcinka postać-cel (tylko TPP). Szczegóły: [tpp-sterowanie.md](tpp-sterowanie.md).
+- Wygląd postaci to dane (`CharacterAppearanceV1`) i rejestr elementów o stabilnych ID (`hair.01`, `hair.02`, `top.01`, `bottom.01`): gotowe pod serwer i multiplayer (ID i kolory, nie geometria, są tym, co się synchronizuje). Wygląd nie wpływa na rozgrywkę.
+- Fryzury i ubrania są **prototypami proceduralnymi/pochodnymi, nie finalnymi assetami**: fryzury generowane w kodzie i zamocowane do kości głowy; ubrania to powłoki wyprowadzone z bazowej siatki w czasie wczytania (ten sam szkielet, te same wagi), a bazowa siatka pod nimi jest ukrywana. Odstępstwo od planu: powłoki powstają w runtime, nie w skrypcie budującym GLB (ta sama czysta funkcja `deriveShell` może być użyta w skrypcie). Do finalnych ubrań przewidziano furtkę `kind: "glb"` i specyfikację assetu.
+- Bez zmian: generator lasu, zasady questa, mechanika trolla i mostu, wartości życia, śmierci, drenażu i zegara, mapa miasta 2D, animacje (nie dodano zastępczych).
+- Agent nie uruchamiał testów, lint, typecheck, build ani przeglądarki; wygląd i "czucie" ocenia autor.
+

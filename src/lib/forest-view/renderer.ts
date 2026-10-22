@@ -1,21 +1,32 @@
 import * as THREE from "three";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
-import { loadDeerAsset, loadTrollAsset, type DeerAsset, type TrollAsset } from "@/lib/assets/characters";
+import { loadDeerAsset, loadPlayerAsset, loadTrollAsset, type DeerAsset, type PlayerAsset, type TrollAsset } from "@/lib/assets/characters";
 import { loadBridgeAsset } from "@/lib/assets/bridge";
 import { loadChestAsset } from "@/lib/assets/props";
-import { forestBridgeOf, forestChestsOf, forestOf, forestWalkOf, syncBridgeColliders, syncHarvestedColliders } from "@/lib/game/world/lookup";
-import { BRIDGE_FLAG } from "@/lib/game/world/generators/v2";
+import type { WorldRef } from "@/lib/game/world/types";
+import type { WalkWorld } from "@/lib/game/world/walk";
+import { authoritativeForestOf, forestBridgeOf, forestChestsOf, forestOf, forestWalkOf, syncBridgeColliders, syncHarvestedColliders } from "@/lib/game/world/lookup";
+import { BRIDGE_FLAG, PRO_GROUND } from "@/lib/game/world/generators/v2";
+import { isReachClear } from "@/lib/game/systems/reach";
 import { BENCHMARK_SECONDS, benchmarkPose, buildBenchmarkRoute, type BenchmarkRoute } from "./benchmark";
+import { TOUR_WARMUP_SECONDS, TourLegRecorder, buildTourLegs, tourDuration, tourLegAt, tourPose, type TourLeg, type TourLegReport } from "./proTour";
 import { atmosphereAt, DEFAULT_HOUR, type AtmosphereState, type Rgb } from "./atmosphere";
 import { FirstPersonController, type MoveInput } from "./controller";
+import { ThirdPersonRig, type TppSnapshot } from "@/lib/tpp/thirdPersonRig";
+import type { TppConfig } from "@/lib/tpp/config";
+import { PlayerModel } from "./playerModel";
+import { PlayerAnimator, type PlayerAnimStats } from "./playerAnimator";
+import { AppearanceRig, type AppearanceStats } from "./appearance/appearanceRig";
+import { DEFAULT_APPEARANCE, devFitOverrides, normalizeAppearance, type CharacterAppearanceV1 } from "@/lib/character";
 import { mergeMove } from "@/lib/input/analog";
+import { TPP_BUTTONS } from "@/lib/input/gamepadConfig";
 import type { InputHub } from "@/lib/input/inputHub";
 import { FrameStats } from "./frameStats";
-import { buildGroundMesh, buildWaterMesh, createGroundBuilder, type GroundMeshData, type GroundStyle } from "./ground";
-import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PaletteStore, gradeFragment } from "./grading";
+import { buildGroundMesh, buildWaterMesh, createGroundBuilder, desertWeightFn, type GroundMeshData, type GroundStyle } from "./ground";
+import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PRO_GROUND_ALBEDO, PRO_GROUND_DECL, PRO_GROUND_NORMAL, PaletteStore, gradeFragment } from "./grading";
 import { GrassLab, sanitizeLab, type LabOptions } from "./grassLab";
-import { ForestInstancer, type InstancerStats } from "./instancer";
-import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewOverrides } from "./profiles";
+import { ForestInstancer, PATH_SINK_DEFAULT, PRO_KIND_SCALE_DEFAULTS, type InstancerStats, type PathSink } from "./instancer";
+import { DEFAULT_OVERRIDES, VIEW_PROFILES, type ForestViewProfile, type ViewKind, type ViewOverrides } from "./profiles";
 import type { DialogOutcome } from "@/lib/npc/encounter";
 import { DeerLayer, type DeerStats } from "./deer";
 import type { StepSink } from "@/lib/audio/controller";
@@ -28,9 +39,11 @@ import { ChestLayer, FxBurst, type BurstKind } from "./props";
 import { STREAM_RADIUS } from "./stream";
 import { forestModelIds, StreamedForest, type StreamStats } from "./streaming";
 import { buildForestWindow, type ForestWindow, type WindowOptions } from "./window";
-import { DEFAULT_PRESET, isModified, presetConfig, sanitizeTuning, tintedFog, type PresetId, type VisualConfig, type VisualTuning } from "./visual";
+import { DEFAULT_PRESET, PRO_DEFAULT_CONFIG, isModified, presetConfig, sanitizeTuning, tintedFog, type PresetId, type VisualConfig, type VisualTuning } from "./visual";
 
 export type PanelStats = {
+  /** Tylko w trybie trzecioosobowym. */
+  tpp?: TppDiagnostics;
   fps: number;
   avgFps: number;
   frameMs: number;
@@ -55,6 +68,8 @@ export type PanelStats = {
   loading: string | null;
   error: string | null;
   benchmark: { running: boolean; progress: number };
+  /** Prototyp Pro: nazwa odcinka trasy pomiarowej, który trwa; null poza trasą. */
+  tourLeg?: string | null;
   showcase: { id: string; ix: number; iz: number; qualifies: boolean }[];
   stress: boolean;
   preset: PresetId;
@@ -73,9 +88,28 @@ export type PanelStats = {
   deer?: DeerStats | null;
   /** Błąd wczytania modelu jelenia (gra działa dalej bez niego). */
   deerError?: string | null;
+  /** Wygląd postaci gracza (TPP): elementy, trójkąty, brakujące zasoby. */
+  appearance?: AppearanceStats | null;
   /** Most i latarnie (panel dev); null, gdy most nie stoi albo model się nie wczytał. */
   bridge?: { built: boolean; triangles: number; bays: number; length: number; lamps: number; level: number; lights: number; markers: boolean } | null;
   bridgeError?: string | null;
+};
+
+/** Raport trasy przez 4 strefy prototypu Pro (plus droga główna): jeden wpis na odcinek, do porównania stref. */
+export type ZoneTourReport = {
+  kind: "forest-pro-zone-tour";
+  quality: QualityId;
+  seed: number;
+  windowSectors: number;
+  totalSeconds: number;
+  legs: TourLegReport[];
+  canvas: string;
+  pixelRatio: number;
+  gpu: string;
+  userAgent: string;
+  overrides: ViewOverrides;
+  visual: VisualConfig;
+  note: string;
 };
 
 export type BenchmarkReport = {
@@ -105,6 +139,8 @@ export type BenchmarkReport = {
 /** Tryb gry: cały las 300 x 300 m z streamingiem sektorów zamiast jednego okna prototypu. */
 export type StreamOptions = {
   seed: number;
+  /** Wersja generatora świata z zapisu (od 3: las z paczką Pro). Brak = 2 (zamrożony las v2). */
+  genVersion?: number;
   /** Pozycja startowa gracza (już zwalidowana, np. `safeForestPose`). */
   pose: { x: number; z: number; yaw: number };
   /** Czy most jest zbudowany (otwiera przejście przez rzekę). */
@@ -113,6 +149,37 @@ export type StreamOptions = {
   opened?: readonly string[];
   /** Identyfikatory zebranych drzew i skał (znikają z lasu i z kolizji). */
   harvested?: readonly string[];
+  /**
+   * Sterowanie trzecioosobowe (dev, `/dev/third-person`): zamiast kamery z oczu gracza renderer pokazuje postać z GLB
+   * i kamerę za nią. Bez tej opcji las działa jak dotąd (pierwsza osoba).
+   */
+  thirdPerson?: { config?: Partial<TppConfig> };
+  /** Wygląd postaci gracza (tryb TPP); domyślny z `DEFAULT_APPEARANCE`. Zmiana w trakcie gry: `setPlayerAppearance`. */
+  appearance?: CharacterAppearanceV1;
+};
+
+/** Dane panelu deweloperskiego TPP (odświeżane razem z `PanelStats`). */
+/** Stan gracza w trzeciej osobie (patrz `getPlayerView`). */
+export type PlayerView = {
+  x: number;
+  y: number;
+  z: number;
+  speed: number;
+  grounded: boolean;
+  crouching: boolean;
+  bodyYaw: number;
+  aimYaw: number;
+  /** Wspólny punkt interakcji na wysokości tułowia postaci. */
+  torsoY: number;
+};
+
+export type TppDiagnostics = TppSnapshot & {
+  /** Dominująca animacja ruchu albo `jump`. */
+  animation: string;
+  jumpWeight: number;
+  /** Błąd wczytania modelu (wtedy gracz jest widoczny jako kapsuła zastępcza). */
+  modelError: string | null;
+  config: TppConfig;
 };
 
 export type RendererOptions = {
@@ -234,6 +301,7 @@ export class ForestRenderer {
   };
   private readonly frameStats = new FrameStats(0.5);
   private bench: { stats: FrameStats; route: BenchmarkRoute; t: number; calls: number; tris: number; n: number; resolve: (r: BenchmarkReport) => void } | null = null;
+  private tour: { legs: TourLeg[]; recorders: TourLegRecorder[]; t: number; total: number; resolve: (r: ZoneTourReport) => void } | null = null;
   private built: Built | null = null;
   private stream: StreamedForest | null = null;
   private streamOptions: StreamOptions | null = null;
@@ -258,6 +326,9 @@ export class ForestRenderer {
   private suspended = false;
   private loadProgress = 0;
   private controller: FirstPersonController | null = null;
+  private tpp: { rig: ThirdPersonRig; model: PlayerModel | null; animator: PlayerAnimator | null; appearance: AppearanceRig | null; placeholder: THREE.Group | null; detach: () => void; modelError: string | null } | null = null;
+  private playerAppearance: CharacterAppearanceV1 = { ...DEFAULT_APPEARANCE };
+  private tppAssetError: string | null = null;
   private library: AssetLibrary | null = null;
   private instancer: ForestInstancer | null = null;
   private lab: GrassLab | null = null;
@@ -291,6 +362,12 @@ export class ForestRenderer {
   private lastCamDir = new THREE.Vector3();
   private lastInstanceUpdate = 0;
   private dirtyInstances = true;
+  /** Uniformy gruntu Pro (pęknięcia, fale piasku); zmieniane na żywo przez `setProGround`. */
+  private readonly proGround = createProGroundUniforms();
+  /** Zapamiętane mnożniki skali rodzajów, nakładane też na instancer zbudowany później (np. po zmianie seeda). */
+  private readonly kindScales: Partial<Record<ViewKind, number>> = {};
+  /** Zagłębienie bruku drogi (tylko tryb Pro); suwaki zmieniają je na żywo. */
+  private pathSink: PathSink = { max: 0, random: 0 };
   private lastEmit = 0;
   private cleanup: (() => void)[] = [];
   private readonly onStats?: (stats: PanelStats) => void;
@@ -301,7 +378,14 @@ export class ForestRenderer {
     this.onStats = options.onStats;
     this.onLab = options.onLab;
     this.windowOptions = options.window ?? {};
+    // Las gry od generatora v3 (paczka Pro) dostaje te same domyślne ustawienia widoku co prototyp /dev/forest-pro.
+    const proWorld = (options.stream?.genVersion ?? 2) >= 3;
+    if (this.windowOptions.pro || proWorld) {
+      this.pathSink = { ...PATH_SINK_DEFAULT };
+      Object.assign(this.kindScales, PRO_KIND_SCALE_DEFAULTS);
+    }
     this.streamOptions = options.stream ?? null;
+    if (options.stream?.appearance) this.playerAppearance = normalizeAppearance(options.stream.appearance);
     this.openedChests = new Set(options.stream?.opened ?? []);
     this.harvestedIds = new Set(options.stream?.harvested ?? []);
     if (options.stream?.bridgeBuilt) this.worldFlags.add(BRIDGE_FLAG);
@@ -309,7 +393,11 @@ export class ForestRenderer {
     this.profile = VIEW_PROFILES[this.quality];
     this.overrides = { ...DEFAULT_OVERRIDES, ...options.overrides };
     this.hour = options.hour ?? DEFAULT_HOUR;
-    this.visual = options.visual ? structuredClone(options.visual) : presetConfig(DEFAULT_PRESET);
+    this.visual = options.visual
+      ? structuredClone(options.visual)
+      : proWorld
+        ? { ...presetConfig(PRO_DEFAULT_CONFIG.preset), tuning: { ...PRO_DEFAULT_CONFIG.tuning } }
+        : presetConfig(DEFAULT_PRESET);
     this.atmosphere = atmosphereAt(this.hour, this.visual.look.dayModel);
     this.palette.setPalette(this.visual.look.palette, this.visual.tuning.greenSaturation, this.visual.look.groundDetail);
 
@@ -390,6 +478,32 @@ export class ForestRenderer {
     return this.streamOptions ? { ...this.streamOptions.pose } : null;
   }
 
+  /** Czy rozgrywka działa w trzeciej osobie (jedyne autorytatywne źródło stanu gracza to wtedy `ThirdPersonRig`). */
+  get isThirdPerson(): boolean {
+    return this.tpp !== null;
+  }
+
+  /**
+   * Autorytatywny stan gracza TPP: pozycja, prędkość, grounded oraz dwa kierunki (ciało i kamera). `aimYaw` to kierunek,
+   * który widzi gracz, i właśnie on trafia do `getPose().yaw` (zapis, minimapa, audio, interakcje). Null poza TPP.
+   */
+  getPlayerView(): PlayerView | null {
+    const t = this.tpp;
+    if (!t) return null;
+    const s = t.rig.controller.state;
+    return {
+      x: s.x,
+      y: s.y,
+      z: s.z,
+      speed: s.speed,
+      grounded: s.grounded,
+      crouching: s.crouching,
+      bodyYaw: s.bodyYaw,
+      aimYaw: t.rig.camera.yaw,
+      torsoY: s.y + s.capsuleHeight * 0.6,
+    };
+  }
+
   /** Flaga świata `bridge.built`: otwiera lub zamyka przejście przez rzekę (kolizje, nie wygląd). */
   setBridgeBuilt(built: boolean): void {
     const was = this.worldFlags.has(BRIDGE_FLAG);
@@ -421,12 +535,19 @@ export class ForestRenderer {
    * Zgrywa most z flagą świata: collidery poręczy, wysokość pokładu w kontrolerze i widoczność modelu (ładowanego
    * leniwie dopiero, gdy most jest zbudowany). Wywoływane po zmianie flagi i po zbudowaniu lasu.
    */
+  private streamWorld(): WorldRef | null {
+    const o = this.streamOptions;
+    return o ? { seed: o.seed, genVersion: o.genVersion ?? 2 } : null;
+  }
+
   private applyBridge(animate: boolean): void {
-    const seed = this.streamOptions?.seed;
-    if (seed === undefined) return;
+    const world = this.streamWorld();
+    if (!world) return;
     const built = this.worldFlags.has(BRIDGE_FLAG);
-    syncBridgeColliders(seed, built);
-    if (this.controller) this.controller.deckHeight = built ? (x, z) => forestBridgeOf(seed).deckHeightAt(x, z) : null;
+    syncBridgeColliders(world, built);
+    const deck = built ? (x: number, z: number) => forestBridgeOf(world).deckHeightAt(x, z) : null;
+    if (this.controller) this.controller.deckHeight = deck;
+    if (this.tpp) this.tpp.rig.deckHeight = deck;
     if (!built) {
       this.bridgeLayer?.setBuilt(false, false);
       return;
@@ -436,21 +557,21 @@ export class ForestRenderer {
       return;
     }
     this.bridgeAnimate = animate;
-    void this.loadBridge(seed);
+    void this.loadBridge(world);
   }
 
-  private loadBridge(seed: number): Promise<void> {
+  private loadBridge(world: WorldRef): Promise<void> {
     if (this.bridgeLoad) return this.bridgeLoad;
     const gen = this.generation;
     this.bridgeLoad = (async () => {
       let asset: Awaited<ReturnType<typeof loadBridgeAsset>> | null = null;
       try {
         asset = await loadBridgeAsset();
-        if (gen !== this.generation || this.disposed || this.streamOptions?.seed !== seed) {
+        if (gen !== this.generation || this.disposed || this.streamOptions?.seed !== world.seed) {
           asset.dispose();
           return;
         }
-        const layer = new BridgeLayer(asset, forestBridgeOf(seed), { receiveShadow: this.shadowsOn() });
+        const layer = new BridgeLayer(asset, forestBridgeOf(world), { receiveShadow: this.shadowsOn() });
         layer.setHour(this.hour);
         layer.lamps.setMarkers(this.bridgeMarkers);
         this.bridgeLayer = layer;
@@ -475,11 +596,11 @@ export class ForestRenderer {
   setChestStates(opened: Iterable<string>, animate = true): void {
     this.openedChests = new Set(opened);
     const layer = this.chestLayer;
-    const seed = this.streamOptions?.seed;
-    if (!layer || seed === undefined) return;
+    const world = this.streamWorld();
+    if (!layer || !world) return;
     const started = layer.setOpened((id) => this.openedChests.has(id), animate);
     for (const id of started) {
-      const c = forestChestsOf(seed).find((p) => p.id === id);
+      const c = forestChestsOf(world).find((p) => p.id === id);
       if (c) this.fx?.spawn("sparkle", c.x, c.y + 0.7, c.z);
     }
   }
@@ -487,9 +608,9 @@ export class ForestRenderer {
   /** Zebrane drzewa i skały: znikają z instancji i z kolizji (świat chodzenia jest wspólny dla całego lasu). */
   setHarvested(ids: Iterable<string>): void {
     this.harvestedIds = new Set(ids);
-    const seed = this.streamOptions?.seed;
-    if (seed === undefined) return;
-    syncHarvestedColliders(seed, [...this.harvestedIds]);
+    const world = this.streamWorld();
+    if (!world) return;
+    syncHarvestedColliders(world, [...this.harvestedIds]);
     this.stream?.setRemoved(this.harvestedIds);
   }
 
@@ -544,12 +665,23 @@ export class ForestRenderer {
 
   /** Świadoma rozmowa (E) z trollem z bliska; false, gdy jest za daleko albo trwa sekwencja spotkania. */
   talkToNpc(): boolean {
+    if (!this.npcReachable()) return false;
     return this.npcLayer?.requestTalk() ?? false;
   }
 
   /** Czy E może teraz zacząć rozmowę z trollem (do podpowiedzi). */
   get canTalkToNpc(): boolean {
-    return this.npcLayer?.canTalk ?? false;
+    return (this.npcLayer?.canTalk ?? false) && this.npcReachable();
+  }
+
+  /** TPP: rozmowa z trollem wymaga czystej linii od postaci (drzewo lub skała między nimi ją blokuje). W pierwszej osobie bez zmian. */
+  private npcReachable(): boolean {
+    const t = this.tpp;
+    const npc = this.npcLayer;
+    const world = this.streamWorld();
+    if (!t || !npc || !world) return true;
+    const s = t.rig.controller.state;
+    return isReachClear(authoritativeForestOf(world), { x: s.x, z: s.z }, npc.position);
   }
 
   /** Krótki efekt cząstek (drzazgi, odłamki) w danym punkcie świata. */
@@ -560,7 +692,10 @@ export class ForestRenderer {
   /** Zawieszenie sterowania (np. otwarty dziennik): zeruje klawisze i zatrzymuje ruch gracza. */
   setSuspended(suspended: boolean): void {
     this.suspended = suspended;
-    if (suspended) this.keys.clear();
+    if (suspended) {
+      this.keys.clear();
+      this.tpp?.rig.input.releaseAll();
+    }
   }
 
   get isStreaming(): boolean {
@@ -592,6 +727,30 @@ export class ForestRenderer {
     this.palette.setPalette(this.visual.look.palette, this.visual.tuning.greenSaturation, this.visual.look.groundDetail);
     this.applyAtmosphere();
     this.applyProfileToRenderer();
+  }
+
+  /** Pęknięcia gruntu Pro na żywo: rozmiar komórki i szerokość linii (m), siła (0-1) i zakres wygaszania (m od kamery). */
+  setProGround(p: { cell?: number; width?: number; strength?: number; fadeNear?: number; fadeFar?: number }): void {
+    const u = this.proGround;
+    if (p.cell !== undefined) u.uPro.value.x = Math.max(0.05, p.cell);
+    if (p.width !== undefined) u.uPro.value.y = Math.max(0.002, p.width);
+    if (p.strength !== undefined) u.uPro.value.z = Math.max(0, Math.min(1, p.strength));
+    if (p.fadeNear !== undefined) u.uProFade.value.x = Math.max(0, p.fadeNear);
+    if (p.fadeFar !== undefined) u.uProFade.value.y = Math.max(u.uProFade.value.x + 0.1, p.fadeFar);
+  }
+
+  /** Zagłębienie płyt bruku i kamyków drogi w ziemi (tryb Pro), bez przebudowy świata. */
+  setPathSink(sink: PathSink): void {
+    this.pathSink = sink;
+    this.instancer?.setPathSink(sink);
+    this.dirtyInstances = true;
+  }
+
+  /** Skala instancji rodzaju (trawa, kwiaty) tylko w widoku, bez przebudowy świata. */
+  setKindScale(kind: ViewKind, scale: number): void {
+    this.kindScales[kind] = scale;
+    this.instancer?.setKindScale(kind, scale);
+    this.dirtyInstances = true;
   }
 
   setOverrides(partial: Partial<ViewOverrides>): void {
@@ -629,6 +788,20 @@ export class ForestRenderer {
     void this.rebuildWorld();
   }
 
+  /** Przenosi gracza w pobliże punktu (najbliższe miejsce bez kolizji); używane przez przyciski stref prototypu Pro. */
+  teleportNear(x: number, z: number): void {
+    const win = this.built?.window;
+    const ctl = this.controller;
+    if (!win || !ctl || this.bench || this.tour) return;
+    for (let r = 0; r < 40; r++) {
+      for (let k = 0; k < 16; k++) {
+        const px = x + r * Math.cos((k / 16) * Math.PI * 2);
+        const pz = z + r * Math.sin((k / 16) * Math.PI * 2);
+        if (win.walk.isWalkable(px, pz)) return void ctl.teleport(px, pz);
+      }
+    }
+  }
+
   get currentWindow(): ForestWindow | null {
     return this.built?.window ?? null;
   }
@@ -647,6 +820,17 @@ export class ForestRenderer {
 
   cancelBenchmark(): void {
     this.bench = null;
+    this.tour = null;
+  }
+
+  /** Trasa pomiarowa przez 4 strefy i drogę główną (prototyp Pro); wynik to raport JSON z podziałem na odcinki. */
+  runZoneTour(): Promise<ZoneTourReport> {
+    return new Promise((resolve, reject) => {
+      if (!this.built || this.bench || this.tour) return reject(new Error("Test trasy niedostępny"));
+      const legs = buildTourLegs(this.built.window);
+      document.exitPointerLock?.();
+      this.tour = { legs, recorders: legs.map((l) => new TourLegRecorder(l)), t: 0, total: tourDuration(legs), resolve };
+    });
   }
 
   /** Podłącza hub wejścia (pad): renderer staje się "kierowcą" odczytu w swojej pętli `frame`. */
@@ -782,8 +966,87 @@ export class ForestRenderer {
       this.stream.dispose();
       this.stream = null;
     }
+    this.disposeTpp();
     this.disposeView();
     this.controller = null;
+  }
+
+  private disposeTpp(): void {
+    const t = this.tpp;
+    if (!t) return;
+    this.tpp = null;
+    t.detach();
+    t.rig.dispose();
+    t.animator?.dispose();
+    t.appearance?.dispose();
+    t.model?.dispose();
+    if (t.placeholder) {
+      t.placeholder.removeFromParent();
+      t.placeholder.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
+      });
+    }
+  }
+
+  /** Dane diagnostyczne TPP (null poza trybem trzecioosobowym albo przed końcem ładowania). */
+  getTppSnapshot(): TppDiagnostics | null {
+    const t = this.tpp;
+    if (!t) return null;
+    const st: PlayerAnimStats | null = t.animator?.stats() ?? null;
+    return { ...t.rig.snapshot(), animation: st?.dominant ?? "-", jumpWeight: st?.jump ?? 0, modelError: t.modelError, config: { ...t.rig.config } };
+  }
+
+  /**
+   * Zmienia wygląd postaci gracza bez restartu: kontroler, animacje, pozycja i świat zostają nietknięte, a wymieniane są
+   * tylko zmienione elementy. Wywołane przed wczytaniem postaci zapamiętuje wygląd na później.
+   */
+  setPlayerAppearance(appearance: CharacterAppearanceV1): void {
+    this.playerAppearance = normalizeAppearance(appearance);
+    this.tpp?.appearance?.apply(this.playerAppearance);
+  }
+
+  /** Dane diagnostyczne wyglądu (null poza TPP albo gdy rig wyglądu się nie utworzył). */
+  getAppearanceStats(): AppearanceStats | null {
+    return this.tpp?.appearance?.stats() ?? null;
+  }
+
+  /** Dostęp do rigu wyglądu dla narzędzi deweloperskich (dopasowanie fryzur). */
+  get appearanceRig(): AppearanceRig | null {
+    return this.tpp?.appearance ?? null;
+  }
+
+  /** Zmienia parametry sterowania TPP na żywo (suwaki panelu); wartości spoza zakresów są przycinane. */
+  setTppConfig(patch: Partial<TppConfig>): void {
+    this.tpp?.rig.setConfig(patch);
+    if (patch.modelYawDeg !== undefined) this.tpp?.model?.setModelYawDeg(this.tpp.rig.config.modelYawDeg);
+  }
+
+  /** Ustawia gracza TPP w punkcie (najbliższe miejsce bez kolizji nie jest szukane: punkt musi być sprawdzony wcześniej). */
+  teleportTpp(x: number, z: number, yaw?: number): void {
+    const t = this.tpp;
+    if (!t) return;
+    t.rig.teleport(x, z, yaw ?? t.rig.controller.state.bodyYaw);
+  }
+
+  /** Generuje wszystkie sektory lasu (do pamięci świata) porcjami z oddawaniem sterowania i postępem w komunikacie ładowania. */
+  private async warmForest(forest: ForestWorld, label: string, gen: number): Promise<void> {
+    const { nx, nz } = forest.sectorGrid;
+    const total = nx * nz;
+    let done = 0;
+    for (let iz = 0; iz < nz; iz++) {
+      for (let ix = 0; ix < nx; ix++) {
+        forest.sector(ix, iz);
+        done++;
+        if (done % 4 === 0) {
+          this.loading = `${label} ${Math.round((done / total) * 100)}%`;
+          await tick();
+          if (gen !== this.generation || this.disposed) return;
+        }
+      }
+    }
   }
 
   /** Buduje las gry: świat chodzenia całego lasu, modele i streamowane sektory wokół pozycji startowej. */
@@ -798,8 +1061,15 @@ export class ForestRenderer {
     await tick();
     if (gen !== this.generation || this.disposed) return;
     try {
-      const forest = forestOf(opts.seed);
-      const walk = forestWalkOf(opts.seed);
+      const world = this.streamWorld() as WorldRef;
+      const pro = world.genVersion >= 3;
+      // Warstwa autorytatywna (kolizje) i las do rysowania powstają porcjami, żeby okno nie zamarzało i pokazywało postęp.
+      await this.warmForest(authoritativeForestOf(world), "Kolizje lasu", gen);
+      if (gen !== this.generation || this.disposed) return;
+      const walk = forestWalkOf(world);
+      const forest = forestOf(world);
+      await this.warmForest(forest, "Generowanie lasu", gen);
+      if (gen !== this.generation || this.disposed) return;
       await tick();
       if (gen !== this.generation || this.disposed) return;
       this.stepForest = forest;
@@ -809,7 +1079,9 @@ export class ForestRenderer {
           this.error = e.message;
         },
       });
-      const instancer = new ForestInstancer(library, { batches: [] }, this.profile, this.overrides, this.palette);
+      const instancer = new ForestInstancer(library, { batches: [] }, this.profile, this.overrides, this.palette, pro);
+      for (const [kind, k] of Object.entries(this.kindScales)) instancer.setKindScale(kind as ViewKind, k);
+      instancer.setPathSink(this.pathSink);
       this.loading = `Ładowanie modeli (${this.quality})`;
       await instancer.preload(forestModelIds(forest));
       if (gen !== this.generation || this.disposed) {
@@ -840,10 +1112,22 @@ export class ForestRenderer {
         this.deerError = e instanceof Error ? e.message : String(e);
         console.error(e);
       }
+      let playerAsset: PlayerAsset | null = null;
+      this.tppAssetError = null;
+      if (opts.thirdPerson) {
+        this.loading = "Wczytywanie postaci gracza";
+        try {
+          playerAsset = await loadPlayerAsset();
+        } catch (e) {
+          this.tppAssetError = e instanceof Error ? e.message : String(e);
+          console.error(e);
+        }
+      }
       if (gen !== this.generation || this.disposed) {
         chestAsset?.dispose();
         trollAsset?.dispose();
         deerAsset?.dispose();
+        playerAsset?.dispose();
         instancer.dispose();
         await library.dispose();
         return;
@@ -858,14 +1142,16 @@ export class ForestRenderer {
         instancer,
         anisotropy: Math.min(this.profile.assets.anisotropy, this.renderer.capabilities.getMaxAnisotropy()),
         receiveShadow: this.shadowsOn(),
-        tuneGround: (material) => tuneGroundMaterial(material, this.palette),
+        tuneGround: (material) => tuneGroundMaterial(material, this.palette, pro ? this.proGround : null),
+        desertAt: pro ? (desertWeightFn(forest) ?? undefined) : undefined,
+        cacheTag: pro ? `g${world.genVersion}:` : undefined,
       });
       stream.prepareInitial(opts.pose.x, opts.pose.z);
       stream.setRemoved(this.harvestedIds);
-      syncHarvestedColliders(opts.seed, [...this.harvestedIds]);
+      syncHarvestedColliders(world, [...this.harvestedIds]);
       if (chestAsset) {
         const shadows = this.shadowsOn();
-        const layer = new ChestLayer(chestAsset, forestChestsOf(opts.seed), { castShadow: shadows, receiveShadow: shadows });
+        const layer = new ChestLayer(chestAsset, forestChestsOf(world), { castShadow: shadows, receiveShadow: shadows });
         layer.setOpened((id) => this.openedChests.has(id), false);
         this.chestLayer = layer;
         this.scene.add(layer.group);
@@ -908,6 +1194,7 @@ export class ForestRenderer {
       const controller = new FirstPersonController(walk, forest.terrain, opts.pose);
       controller.flags = this.worldFlags;
       this.controller = controller;
+      if (opts.thirdPerson) this.createTpp(playerAsset, walk, forest.terrain, opts.pose, opts.thirdPerson.config ?? {});
       this.applyBridge(false);
       this.lastCamPos.set(1e9, 0, 0);
       this.dirtyInstances = true;
@@ -918,8 +1205,59 @@ export class ForestRenderer {
     }
   }
 
+  /** Tworzy sterowanie, model i animacje TPP; błąd modelu nie przerywa gry (gracz jest wtedy kapsułą zastępczą). */
+  private createTpp(asset: PlayerAsset | null, walk: WalkWorld, terrain: ForestWorld["terrain"], pose: { x: number; z: number; yaw: number }, config: Partial<TppConfig>): void {
+    const rig = new ThirdPersonRig(walk, terrain, pose, config);
+    rig.flags = this.worldFlags;
+    const isField = (e: unknown) => {
+      const t = (e as { target?: unknown }).target;
+      return t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement;
+    };
+    const detach = rig.input.attach(window, document, () => this.locked && !this.bench && !this.suspended, isField);
+    let model: PlayerModel | null = null;
+    let animator: PlayerAnimator | null = null;
+    let appearance: AppearanceRig | null = null;
+    let placeholder: THREE.Group | null = null;
+    let modelError = this.tppAssetError;
+    if (asset) {
+      try {
+        const shadows = this.shadowsOn();
+        model = new PlayerModel(asset, { castShadow: shadows, receiveShadow: shadows, targetHeight: rig.config.characterHeight, modelYawDeg: rig.config.modelYawDeg });
+        animator = new PlayerAnimator(asset, model.hipsName);
+        this.scene.add(model.group);
+        try {
+          // Wygląd jest dodatkiem: jego błąd nie może przerwać gry (postać zostaje w bazowym stroju).
+          appearance = new AppearanceRig(asset, { castShadow: shadows, receiveShadow: shadows, fits: devFitOverrides() });
+          appearance.apply(this.playerAppearance);
+        } catch (e) {
+          console.error(e);
+          appearance?.dispose();
+          appearance = null;
+        }
+      } catch (e) {
+        modelError = e instanceof Error ? e.message : String(e);
+        console.error(e);
+        animator?.dispose();
+        animator = null;
+        model = null;
+        asset.dispose();
+      }
+    }
+    if (!model) {
+      // Kapsuła zastępcza o wymiarach kolizji, żeby sterowanie i kamerę dało się sprawdzić bez modelu.
+      const h = rig.config.standHeight;
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, Math.max(0.1, h - 0.6), 4, 10), new THREE.MeshStandardMaterial({ color: 0xff8844 }));
+      body.position.y = h / 2;
+      placeholder = new THREE.Group();
+      placeholder.add(body);
+      this.scene.add(placeholder);
+    }
+    this.tpp = { rig, model, animator, appearance, placeholder, detach, modelError };
+  }
+
   private groundSize(): number {
     const stress = (this.windowOptions.radius ?? 1) > 1;
+    if (this.windowOptions.pro) return Math.max(this.profile.groundTexture, 3072);
     return stress ? Math.max(this.profile.groundTexture, 2048) : this.profile.groundTexture;
   }
 
@@ -952,9 +1290,10 @@ export class ForestRenderer {
     const textures = new Map<GroundStyle, THREE.DataTexture>([[style, texture]]);
 
     const cell = stress ? Math.max(profile.groundCell, 1.4) : profile.groundCell;
-    const mesh = buildGroundMesh(win.forest.terrain, win.windowBounds, cell);
+    const pro = this.windowOptions.pro === true;
+    const mesh = buildGroundMesh(win.forest.terrain, win.windowBounds, cell, pro ? (desertWeightFn(win.forest) ?? undefined) : undefined);
     const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 1, metalness: 0 });
-    tuneGroundMaterial(material, this.palette);
+    tuneGroundMaterial(material, this.palette, pro ? this.proGround : null);
     const ground = new THREE.Mesh(toGeometry(mesh), material);
     ground.name = "ground";
     ground.receiveShadow = true;
@@ -1000,7 +1339,9 @@ export class ForestRenderer {
         this.error = e.message;
       },
     });
-    const instancer = new ForestInstancer(library, this.built.window, this.profile, this.overrides, this.palette);
+    const instancer = new ForestInstancer(library, this.built.window, this.profile, this.overrides, this.palette, this.windowOptions.pro === true);
+    for (const [kind, k] of Object.entries(this.kindScales)) instancer.setKindScale(kind as ViewKind, k);
+    instancer.setPathSink(this.pathSink);
     this.loading = `Ładowanie modeli (${this.quality})`;
     await instancer.init();
     if (gen !== this.generation || this.disposed) {
@@ -1219,10 +1560,13 @@ export class ForestRenderer {
     };
     const lockChange = () => {
       this.locked = document.pointerLockElement === canvas;
-      if (!this.locked) this.keys.clear();
+      if (!this.locked) {
+        this.keys.clear();
+        this.tpp?.rig.input.releaseAll();
+      }
     };
     const move = (e: MouseEvent) => {
-      if (this.locked && !this.bench) this.controller?.look(e.movementX, e.movementY);
+      if (this.locked && !this.bench && !this.tpp) this.controller?.look(e.movementX, e.movementY);
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -1289,21 +1633,52 @@ export class ForestRenderer {
         const pose = benchmarkPose(b.route, b.t);
         ctl.teleport(pose.x, pose.z, pose.yaw);
         ctl.state.pitch = pose.pitch;
+      } else if (this.tour) {
+        const tr = this.tour;
+        tr.t += dt;
+        const at = tourLegAt(tr.legs, tr.t);
+        if (at) {
+          const pose = tourPose(tr.legs[at.index], at.local);
+          ctl.teleport(pose.x, pose.z, pose.yaw);
+          ctl.state.pitch = pose.pitch;
+        }
       } else if (!this.loading && !this.suspended) {
         ctl.blockers = [...(this.npcLayer?.blockers() ?? []), ...(this.deerLayer?.blockers() ?? [])];
         const px = ctl.state.x;
         const pz = ctl.state.z;
         const pad = this.inputHub;
-        if (pad && (pad.look.x !== 0 || pad.look.y !== 0)) ctl.lookAnalog(pad.look.x, pad.look.y, dt, pad.lookYawRate, pad.lookPitchRate);
-        ctl.update(dt, this.moveInput());
+        const tpp = this.tpp;
+        if (tpp) {
+          tpp.rig.blockers = ctl.blockers;
+          if (pad) {
+            tpp.rig.input.setExternal(pad.move.x, pad.move.y, pad.sprint);
+            const gp = pad.pad;
+            if (gp.status === "ready") {
+              if (gp.pressed[TPP_BUTTONS.jump] === 1) tpp.rig.input.requestJump();
+              if (gp.pressed[TPP_BUTTONS.crouch] === 1) tpp.rig.input.requestCrouchToggle();
+            }
+            if (pad.look.x !== 0 || pad.look.y !== 0) tpp.rig.camera.lookAnalog(pad.look.x, pad.look.y, dt, pad.lookYawRate, pad.lookPitchRate);
+          }
+          this.updateTpp(dt, ctl);
+        } else {
+          if (pad && (pad.look.x !== 0 || pad.look.y !== 0)) ctl.lookAnalog(pad.look.x, pad.look.y, dt, pad.lookYawRate, pad.lookPitchRate);
+          ctl.update(dt, this.moveInput());
+        }
         const walked = dt > MAX_STEP_FRAME_DT ? 0 : Math.hypot(ctl.state.x - px, ctl.state.z - pz);
         this.stepSink?.playerMotion(walked, Math.min(dt, MAX_STEP_FRAME_DT), ctl.state.x, ctl.state.z);
       } else {
         this.stepSink?.playerMotion(0, Math.min(dt, MAX_STEP_FRAME_DT), ctl.state.x, ctl.state.z);
       }
       const s = ctl.state;
-      this.camera.position.set(s.x, s.eyeY, s.z);
-      this.camera.rotation.set(s.pitch, s.yaw, 0);
+      const tppRig = this.tpp?.rig;
+      if (tppRig) {
+        const pose = tppRig.cameraPose;
+        this.camera.position.set(pose.x, pose.y, pose.z);
+        this.camera.rotation.set(pose.pitch, pose.yaw, 0);
+      } else {
+        this.camera.position.set(s.x, s.eyeY, s.z);
+        this.camera.rotation.set(s.pitch, s.yaw, 0);
+      }
       this.updateInstances(time);
       this.updateSun();
       this.chestLayer?.update(dt, s);
@@ -1333,12 +1708,46 @@ export class ForestRenderer {
         b.resolve(this.makeReport(b.stats, b.calls / b.n, b.tris / b.n));
       }
     }
+    if (this.tour) {
+      const tr = this.tour;
+      const at = tourLegAt(tr.legs, tr.t);
+      if (at && at.local >= TOUR_WARMUP_SECONDS) {
+        tr.recorders[at.index].push(dtMs, info.render.calls, info.render.triangles, this.instancerStats);
+      }
+      if (!at) {
+        this.tour = null;
+        tr.resolve(this.makeTourReport(tr.recorders, tr.total));
+      }
+    }
     if (time - this.lastEmit > 250) {
       this.lastEmit = time;
       if (lab && lab.current.motion === "orbit") this.onLab?.(lab.current);
       this.emit();
     }
   };
+
+  /**
+   * Jedna klatka TPP: kapsuła i kamera, potem model i animacje (jeden `mixer.update`). Stan `FirstPersonController`
+   * jest tylko lustrem (pozycja, kierunek, oczy), dzięki czemu skrzynie, NPC, zwierzęta i strumieniowanie działają bez zmian.
+   */
+  private updateTpp(dt: number, ctl: FirstPersonController): void {
+    const t = this.tpp;
+    if (!t) return;
+    const s = t.rig.update(dt);
+    ctl.state.x = s.x;
+    ctl.state.z = s.z;
+    // Lustro tylko do odczytu dla warstw, które czytają stan pierwszej osoby; kierunek = kierunek kamery (jak `getPose`).
+    ctl.state.yaw = t.rig.camera.yaw;
+    ctl.state.eyeY = t.rig.eyeY;
+    ctl.lastBlock = s.lastBlock;
+    if (t.model) t.model.setPose(s.x, s.y, s.z, s.bodyYaw);
+    else if (t.placeholder) {
+      t.placeholder.position.set(s.x, s.y, s.z);
+      t.placeholder.rotation.y = s.bodyYaw;
+      t.placeholder.scale.y = s.capsuleHeight / t.rig.config.standHeight;
+    }
+    t.animator?.update(dt, t.rig.animIntent(), s, t.rig.config, t.rig.controller.expectedAirTime);
+  }
 
   private advanceStream(pos: { x: number; z: number }, time: number): void {
     const stream = this.stream;
@@ -1407,6 +1816,25 @@ export class ForestRenderer {
     return ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : "nieznana";
   }
 
+  private makeTourReport(recorders: readonly TourLegRecorder[], total: number): ZoneTourReport {
+    const size = this.renderer.getSize(new THREE.Vector2());
+    return {
+      kind: "forest-pro-zone-tour",
+      quality: this.quality,
+      seed: this.built?.window.seed ?? 0,
+      windowSectors: this.built?.window.sectors.length ?? 0,
+      totalSeconds: total,
+      legs: recorders.map((r) => r.report()),
+      canvas: `${size.x}x${size.y}`,
+      pixelRatio: this.renderer.getPixelRatio(),
+      gpu: this.gpuName(),
+      userAgent: navigator.userAgent,
+      overrides: this.overrides,
+      visual: this.visual,
+      note: "FPS jest ograniczany przez odświeżanie monitora (vsync). Pierwsze 1,5 s każdego odcinka nie wchodzi do statystyk. Wartości zależą od GPU i przeglądarki.",
+    };
+  }
+
   private makeReport(stats: FrameStats, calls: number, tris: number): BenchmarkReport {
     const s = stats.summary();
     const size = this.renderer.getSize(new THREE.Vector2());
@@ -1460,11 +1888,16 @@ export class ForestRenderer {
       sectorId: this.built?.window.sector.id ?? "-",
       windowSectors: this.built?.window.sectors.length ?? 0,
       position: { x: s?.x ?? 0, y: s ? s.eyeY : 0, z: s?.z ?? 0 },
+      tpp: this.getTppSnapshot() ?? undefined,
       groundTriangles: this.built?.groundTriangles ?? 0,
       locked: this.locked,
       loading: this.loading,
       error: this.error,
-      benchmark: { running: this.bench !== null, progress: this.bench ? Math.min(1, this.bench.t / BENCHMARK_SECONDS) : 0 },
+      benchmark: {
+        running: this.bench !== null || this.tour !== null,
+        progress: this.bench ? Math.min(1, this.bench.t / BENCHMARK_SECONDS) : this.tour ? Math.min(1, this.tour.t / Math.max(0.01, this.tour.total)) : 0,
+      },
+      tourLeg: this.tour ? (this.tour.legs[tourLegAt(this.tour.legs, this.tour.t)?.index ?? 0]?.label ?? null) : null,
       showcase: (this.built?.window.showcase ?? []).map((q) => ({ id: q.id, ix: q.ix, iz: q.iz, qualifies: q.qualifies })),
       stress: (this.windowOptions.radius ?? 1) > 1,
       preset: this.visual.preset,
@@ -1476,6 +1909,7 @@ export class ForestRenderer {
       npcError: this.npcError,
       deer: this.deerLayer?.stats() ?? null,
       deerError: this.deerError,
+      appearance: this.tpp?.appearance?.stats() ?? null,
       bridge: this.bridgeStats(),
       bridgeError: this.bridgeError,
     });
@@ -1497,6 +1931,7 @@ function toGeometry(m: GroundMeshData): THREE.BufferGeometry {
   g.setAttribute("position", new THREE.BufferAttribute(m.positions, 3));
   g.setAttribute("normal", new THREE.BufferAttribute(m.normals, 3));
   g.setAttribute("uv", new THREE.BufferAttribute(m.uvs, 2));
+  if (m.desert) g.setAttribute("aDesert", new THREE.BufferAttribute(m.desert, 1));
   g.setIndex(new THREE.BufferAttribute(m.indices, 1));
   g.computeBoundingSphere();
   return g;
@@ -1515,18 +1950,36 @@ function disposeMesh(mesh: THREE.Mesh): void {
 }
 
 
-function tuneGroundMaterial(material: THREE.MeshStandardMaterial, palette: PaletteStore): void {
+/** Uniformy shadera gruntu Pro współdzielone z panelem (suwaki zmieniają je na żywo, bez przeładowania). */
+export type ProGroundUniforms = { uPro: { value: THREE.Vector4 }; uProTone: { value: number }; uProFade: { value: THREE.Vector2 } };
+
+export function createProGroundUniforms(): ProGroundUniforms {
+  return {
+    uPro: { value: new THREE.Vector4(PRO_GROUND.crackCell, PRO_GROUND.crackWidth, PRO_GROUND.crackStrength, PRO_GROUND.rippleTilt) },
+    uProTone: { value: PRO_GROUND.rippleTone },
+    uProFade: { value: new THREE.Vector2(PRO_GROUND.crackFadeNear, PRO_GROUND.crackFadeFar) },
+  };
+}
+
+function tuneGroundMaterial(material: THREE.MeshStandardMaterial, palette: PaletteStore, pro: ProGroundUniforms | null = null): void {
   const grade = palette.get("ground");
+  if (pro) material.defines = { ...(material.defines ?? {}), PRO_GROUND: 1 };
   material.onBeforeCompile = (shader) => {
+    if (pro) {
+      shader.uniforms.uPro = pro.uPro;
+      shader.uniforms.uProTone = pro.uProTone;
+      shader.uniforms.uProFade = pro.uProFade;
+    }
     shader.uniforms.uGreenSat = palette.greenSat;
     shader.uniforms.uDetail = palette.groundDetail;
     Object.assign(shader.uniforms, grade);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vGroundXZ;\nvarying float vGrPhase;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGroundXZ = position.xz;\nvGrPhase = 0.5;");
+      .replace("#include <common>", `#include <common>\nvarying vec2 vGroundXZ;\nvarying float vGrPhase;${pro ? "\nattribute float aDesert;\nvarying float vDesert;" : ""}`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\nvGroundXZ = position.xz;\nvGrPhase = 0.5;${pro ? "\nvDesert = aDesert;" : ""}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\n${GRADE_UNIFORM_DECL}\nuniform float uDetail;\nvarying vec2 vGroundXZ;\n${NOISE_GLSL}`)
-      .replace("#include <map_fragment>", `#include <map_fragment>${gradeFragment({ swap: false, foliage: false })}\n${GROUND_DETAIL_FRAGMENT}`);
+      .replace("#include <common>", `#include <common>\n${GRADE_UNIFORM_DECL}\nuniform float uDetail;\nvarying vec2 vGroundXZ;\n${NOISE_GLSL}${pro ? `\n${PRO_GROUND_DECL}` : ""}`)
+      .replace("#include <map_fragment>", `#include <map_fragment>${pro ? `\n${PRO_GROUND_ALBEDO}` : ""}${gradeFragment({ swap: false, foliage: false })}\n${GROUND_DETAIL_FRAGMENT}`);
+    if (pro) shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>\n${PRO_GROUND_NORMAL}`);
   };
-  material.customProgramCacheKey = () => "forest2:ground";
+  material.customProgramCacheKey = () => (pro ? "forest2:ground:pro" : "forest2:ground");
 }

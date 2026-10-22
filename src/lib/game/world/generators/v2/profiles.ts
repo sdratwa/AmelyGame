@@ -10,14 +10,46 @@ export const PROFILE_IDS: readonly ProfileId[] = ["mixed_forest", "sunny_forest"
 
 export type DensityLayer = "tree" | "ancient" | "rock" | "bush" | "fern" | "plant" | "grass" | "flower";
 
+/** Profile prototypu /dev/forest-pro (paczka Pro): cztery strefy 300x300 m. Nie należą do generatora v2. */
+export type ShowcaseProfileId = "pro_autumn" | "pro_conifer" | "pro_desert" | "pro_mix";
+
+export const SHOWCASE_PROFILE_IDS: readonly ShowcaseProfileId[] = ["pro_autumn", "pro_conifer", "pro_desert", "pro_mix"];
+
+export type AnyProfileId = ProfileId | ShowcaseProfileId;
+
+/**
+ * Dodatkowe wagi gatunków z paczki Pro (tylko tryb deweloperski, opcjonalne; brak = 0). Wagi grup w obrębie warstwy są względne
+ * względem grup bazowych z `mix`, a udziały (`rockBig`, `rockDesert`) i szanse są z przedziału 0..1. Wszystkie wartości mieszają się
+ * liniowo na granicach stref, tak samo jak reszta profilu.
+ */
+export type ProMix = {
+  tree?: Partial<Record<"birch" | "giantpine" | "tallthick" | "blossom" | "dead", number>>;
+  bush?: Partial<Record<"bushbig" | "bushlong", number>>;
+  grass?: Partial<Record<"wide" | "wheat", number>>;
+  /** Wagi grzybów względem pospolitego (waga 1): kapelusz czerwony i półkowe. */
+  mushroom?: Partial<Record<"mushroomcap" | "bracket", number>>;
+  /** Udział dużych głazów (Rock_Big) wśród skał klasy L. */
+  rockBig?: number;
+  /** Udział pustynnych wariantów (tekstura Rocks_Desert) wśród skał. */
+  rockDesert?: number;
+  /** Szansa na kępę płatków pod drzewem kwitnącym. */
+  petals?: number;
+  /** Szansa na kępę kamyków przy skale. */
+  pebbles?: number;
+  /** Szansa (0-1), że kotwica skały jest formacją dużych głazów (zamiast zwykłego skupiska). */
+  formations?: number;
+};
+
 export type EnvironmentProfile = {
-  id: ProfileId;
+  id: AnyProfileId;
   label: string;
   /** Średnia gęstość docelowa na 100 m² (przed wpływem skupisk, terenu i rzadzenia). Dla skał i kwiatów: sztuki. */
   density: Record<DensityLayer, number>;
   /** Szansa (0..1) na kępę grzybów u podstawy pojedynczego drzewa. */
   mushroomChance: number;
   /** Wagi względne grup gatunków w obrębie warstwy. */
+  /** Gatunki z paczki Pro (tylko prototyp); profile v2 tego pola nie mają. */
+  pro?: ProMix;
   mix: {
     tree: { broadleaf: number; pine: number };
     bush: { plain: number; flowering: number };

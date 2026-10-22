@@ -5,7 +5,8 @@ import { QUEST_BY_ID } from "../content/quests";
 import { inventoryProblems } from "../systems/containers";
 import { CHEST_CONTENTS } from "../systems/forestQuest";
 import { FINGERPRINT_PATTERN } from "../world/fingerprint";
-import type { SaveV3 } from "./schema";
+import { isHexColor } from "@/lib/character/appearance";
+import type { SaveV4 } from "./schema";
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; problems: string[] };
 
@@ -44,13 +45,32 @@ function checkStacks(value: unknown, path: string, bad: (p: string, why: string)
   return ok;
 }
 
+/** ID z rejestru: `hair.01` albo `hair_tripo_short_01` (małe litery, cyfry, `_` i `.`); sprawdzenie obecności w rejestrze robi `normalizeAppearance`. */
+const ITEM_ID = /^[a-z][a-z0-9_.]{1,63}$/;
+
+/**
+ * Wygląd: sprawdzamy kształt i bezpieczeństwo (typy, kolory, format ID), a NIE istnienie elementu w rejestrze: nieznane
+ * ID z innej wersji gry nie psuje zapisu, tylko daje puste miejsce przy wczytaniu (`normalizeAppearance`).
+ */
+function checkAppearance(value: unknown, bad: (p: string, why: string) => void): void {
+  if (!isObj(value)) return bad("player.appearance", "oczekiwano obiektu");
+  if (!isStr(value.baseId) || value.baseId.length === 0 || value.baseId.length > 40) bad("player.appearance.baseId", "niepoprawna postać bazowa");
+  for (const k of ["hairStyleId", "topId", "bottomId"] as const) {
+    const v = value[k];
+    if (v !== null && (!isStr(v) || !ITEM_ID.test(v))) bad(`player.appearance.${k}`, "oczekiwano ID elementu lub null");
+  }
+  for (const k of ["hairColor", "topColor", "bottomColor"] as const) {
+    if (!isHexColor(value[k])) bad(`player.appearance.${k}`, "oczekiwano koloru #rrggbb");
+  }
+}
+
 /** Walidacja ręczna (bez zewnętrznych bibliotek): sprawdza strukturę, typy i niezmienniki (ekwipunek, zadania, skrzynie). */
-export function validateSaveV3(input: unknown): ValidationResult<SaveV3> {
+export function validateSaveV4(input: unknown): ValidationResult<SaveV4> {
   const problems: string[] = [];
   const bad = (path: string, why: string) => problems.push(`${path}: ${why}`);
 
   if (!isObj(input)) return { ok: false, problems: ["save: oczekiwano obiektu"] };
-  if (input.version !== 3) bad("version", "oczekiwano 3");
+  if (input.version !== 4) bad("version", "oczekiwano 4");
   if (!isStr(input.saveId) || !SAVE_ID.test(input.saveId)) bad("saveId", "niepoprawny identyfikator");
   if (!isNum(input.savedAt) || input.savedAt < 0) bad("savedAt", "oczekiwano liczby >= 0");
 
@@ -105,6 +125,7 @@ export function validateSaveV3(input: unknown): ValidationResult<SaveV3> {
     }
     if (!isInt(player.selected) || player.selected < 0 || player.selected >= INVENTORY_SLOTS) bad("player.selected", "poza zakresem");
     if (player.forestPose !== null && !isForestPose(player.forestPose)) bad("player.forestPose", "niepoprawna pozycja");
+    checkAppearance(player.appearance, bad);
   }
 
   const tutorial = input.tutorial;
@@ -218,5 +239,5 @@ export function validateSaveV3(input: unknown): ValidationResult<SaveV3> {
   }
 
   if (problems.length > 0) return { ok: false, problems };
-  return { ok: true, value: input as unknown as SaveV3 };
+  return { ok: true, value: input as unknown as SaveV4 };
 }

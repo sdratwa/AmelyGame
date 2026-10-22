@@ -4,7 +4,7 @@ import { rngStream } from "../core/rng";
 import type { GameState } from "../core/state";
 import { FOREST_START_REGION } from "../world/bounds";
 import { FOREST_START } from "../world/generators/v2";
-import { forestChestsOf, forestOf } from "../world/lookup";
+import { authoritativeForestOf, forestChestsOf, type WorldKey } from "../world/lookup";
 import { questProgress } from "./quests";
 
 export type MapPoint = { x: number; z: number };
@@ -26,8 +26,8 @@ const RIVER_STEP = 5;
 
 const cache = new WeakMap<object, MinimapModel>();
 
-export function buildMinimapModel(seed: number): MinimapModel {
-  const forest = forestOf(seed);
+export function buildMinimapModel(world: WorldKey): MinimapModel {
+  const forest = authoritativeForestOf(world);
   const hit = cache.get(forest);
   if (hit) return hit;
   const b = FOREST_START_REGION.bounds;
@@ -94,6 +94,7 @@ export function searchAreaFor(seed: number, chest: ChestId, at: MapPoint): Searc
 export function searchAreas(state: GameState): SearchArea[] {
   if (!state.world) return [];
   const seed = state.world.seed;
+  const world = { seed, genVersion: state.world.genVersion };
   const out: SearchArea[] = [];
   for (const questId of Object.keys(state.quests.accepted) as QuestId[]) {
     if (state.quests.completed[questId]) continue;
@@ -106,7 +107,7 @@ export function searchAreas(state: GameState): SearchArea[] {
     for (const area of stage.areas) {
       if (area.kind === "chest") {
         if ((state.ledger.gained[area.item] ?? 0) >= 1 || state.chests[area.chest]?.opened) continue;
-        const placement = forestChestsOf(seed).find((c) => c.id === area.chest);
+        const placement = forestChestsOf(world).find((c) => c.id === area.chest);
         if (placement && !out.some((a) => a.chest === area.chest)) out.push(searchAreaFor(seed, area.chest, placement));
       } else if (area.kind === "bridge_site" && anchors) {
         out.push({ kind: "bridge_site", chest: null, ...offsetCenter(seed, "bridge_site", anchors.bridge, BRIDGE_AREA_RADIUS), r: BRIDGE_AREA_RADIUS });

@@ -1,3 +1,4 @@
+import { DEFAULT_APPEARANCE } from "@/lib/character/appearance";
 import { result, unchanged, type CommandResult } from "../core/result";
 import {
   initialLedger,
@@ -29,6 +30,7 @@ export function startLoading(state: GameState, seed: number, saveId: string): Co
       phase: "loading",
       houses: base.houses,
       forestPose: null,
+      appearance: { ...DEFAULT_APPEARANCE },
       slots: initialSlots(),
       ledger: initialLedger(),
       selected: 0,

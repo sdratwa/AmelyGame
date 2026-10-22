@@ -83,7 +83,7 @@ describe("FOREST_CONTROLS", () => {
   const flat = FOREST_CONTROLS.flatMap((c) => c.keys);
 
   it("zawiera docelowe sterowanie i każdy klawisz tylko raz", () => {
-    for (const k of ["W", "A", "S", "D", "Shift", "E", "I", "J", "M", "O", "F3", "Esc"]) expect(flat).toContain(k);
+    for (const k of ["W", "A", "S", "D", "Shift", "Spacja", "C", "E", "I", "J", "M", "O", "F3", "Esc"]) expect(flat).toContain(k);
     expect(new Set(flat).size).toBe(flat.length);
   });
 });

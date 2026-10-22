@@ -4,7 +4,7 @@ import type { ChestId } from "../core/ids";
 import type { GameState } from "../core/state";
 import type { ItemId } from "../content/items";
 import { CHEST_CONTENTS } from "./forestQuest";
-import { describePrompt, interactionCommand, pickInteraction, type InteractTarget, type Prompt, type ViewPose } from "./interaction";
+import { describePrompt, interactionCommand, pickInteraction, type InteractTarget, type PickOptions, type Prompt, type ViewPose } from "./interaction";
 
 /** Po tylu ms od E na zamkniętej skrzyni pokazujemy okno zawartości (czas animacji pokrywy, patrz `CHEST_OPEN_SECONDS`). */
 export const CHEST_WINDOW_DELAY_MS = 900;
@@ -29,6 +29,8 @@ export type InteractorDeps = {
   dispatch: (command: Command) => void;
   getPose: () => ViewPose | null;
   now: () => number;
+  /** Tryb trzecioosobowy: cel musi być osiągalny po czystej linii od postaci (patrz `PickOptions`). */
+  requireClearReach?: () => boolean;
 };
 
 /**
@@ -70,7 +72,7 @@ export class ForestInteractor {
     let target: InteractTarget | null = null;
     let prompt: Prompt | null = null;
     if (!this.windowFor && !this.buildOpen && pose) {
-      target = pickInteraction(state, pose);
+      target = pickInteraction(state, pose, this.pickOptions());
       if (target && !(this.pending && target.kind === "chest" && target.id === this.pending.id)) prompt = describePrompt(state, target);
     }
     const next: InteractorSnapshot = {
@@ -101,7 +103,7 @@ export class ForestInteractor {
     }
     if (this.pending || this.buildOpen) return true;
     if (!pose || state.dead || state.view !== "forest") return false;
-    const target = pickInteraction(state, pose);
+    const target = pickInteraction(state, pose, this.pickOptions());
     if (!target) return false;
     if (target.kind === "bridge_site") {
       // Bez schematu to tylko komunikat (podpowiedź); z schematem E otwiera okno budowy.
@@ -207,6 +209,10 @@ export class ForestInteractor {
       const chest = pose ? chestDistance(state, w, pose) : Infinity;
       if (!st?.opened || st.taken || chest > CHEST_PROMPT_RANGE + 1.5) this.windowFor = null;
     }
+  }
+
+  private pickOptions(): PickOptions {
+    return { requireClearReach: this.deps?.requireClearReach?.() ?? false };
   }
 
   private windowView(state: GameState, id: ChestId): ChestWindowView {

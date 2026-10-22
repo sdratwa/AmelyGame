@@ -115,7 +115,7 @@ export function harvest(state: GameState, cmd: HarvestCommand): CommandResult {
   if (!alive(state) || !validAt(cmd.at)) return unchanged(state);
   if (typeof cmd.objectId !== "string" || cmd.objectId.length === 0 || cmd.objectId.length > 80) return unchanged(state);
   if (state.harvested.includes(cmd.objectId)) return unchanged(state);
-  const obj = forestObject(state.world!.seed, cmd.objectId);
+  const obj = forestObject({ seed: state.world!.seed, genVersion: state.world!.genVersion }, cmd.objectId);
   const target = obj ? harvestOf(obj) : null;
   if (!obj || !target) return unchanged(state);
   if (distance2(cmd.at, obj) > HARVEST_RANGE) return unchanged(state);

@@ -93,7 +93,8 @@ function paintStatic(model: MinimapModel, px: number): HTMLCanvasElement {
 
 export function Minimap({ seed, state, getPose, size = 200 }: { seed: number; state: GameState; getPose: () => MinimapPose | null; size?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const model = useMemo(() => buildMinimapModel(seed), [seed]);
+  const genVersion = state.world?.genVersion ?? 2;
+  const model = useMemo(() => buildMinimapModel({ seed, genVersion }), [seed, genVersion]);
   const world = state.world;
   const areas = useMemo(
     () => searchAreas(state),

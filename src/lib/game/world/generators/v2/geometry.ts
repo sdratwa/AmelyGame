@@ -3,7 +3,7 @@ import type { EnvironmentZone } from "../../features";
 import type { WorldPlan, TrailRequest, RiverRequest } from "../../pipeline";
 import { SegmentIndex } from "../../polyline";
 import type { Point, RibbonPoint } from "../../shape";
-import { BASE_PROFILE, PROFILE_IDS, type EnvironmentProfile, type ProfileId, type ProfileTable } from "./profiles";
+import { BASE_PROFILE, PROFILE_IDS, type AnyProfileId, type EnvironmentProfile, type ProfileId, type ProfileTable } from "./profiles";
 
 const smooth = (t: number) => {
   const c = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -12,6 +12,26 @@ const smooth = (t: number) => {
 
 export type TrailInfo = { id: string; points: readonly Point[]; halfWidth: number; stub: boolean };
 export type ClearArea = { id: string; x: number; z: number; r: number };
+
+export type QuadrantId = "a" | "b" | "c" | "d";
+
+/**
+ * Tryb deweloperski prototypu Pro: cztery strefy-ćwiartki zamiast jednego profilu bazowego. Ćwiartki: a = północny zachód
+ * (x < seamX, z < seamZ), b = południowy zachód, c = południowy wschód, d = północny wschód (północ = mniejsze z).
+ * Granice są miękkie: waga rośnie gładko (smoothstep) na pasie szerokości `feather` wokół szwu, a wagi czterech ćwiartek
+ * zawsze sumują się do 1 (iloczyn gładkich współczynników osi). Strefy planu (polany, brzeg rzeki) zachowują pierwszeństwo.
+ */
+export type QuadrantLayout = {
+  profiles: Readonly<Record<QuadrantId, EnvironmentProfile>>;
+  seamX: number;
+  seamZ: number;
+  /** Szerokość pasa przejścia (m): od czystej strefy po jednej stronie szwu do czystej po drugiej. */
+  feather: number;
+  /** Rodzaje stref planu pomijane w tym trybie (losowe zagajniki zaburzałyby czytelność ćwiartek). */
+  dropZoneKinds: readonly string[];
+};
+
+export const QUADRANT_IDS: readonly QuadrantId[] = ["a", "b", "c", "d"];
 
 type ZoneGeom = {
   profile: EnvironmentProfile;
@@ -31,12 +51,15 @@ export class ForestGeometry {
   private readonly waterIndex = new SegmentIndex(10, 16);
   private readonly trailIndex = new SegmentIndex(8, 16);
   private readonly zones: ZoneGeom[] = [];
+  private readonly quadrants: QuadrantLayout | null;
 
   constructor(
     plan: WorldPlan,
     readonly region: RegionDef,
     profiles: ProfileTable,
+    quadrants?: QuadrantLayout,
   ) {
+    this.quadrants = quadrants ?? null;
     const river = plan.terrain.find((r): r is RiverRequest => r.kind === "river");
     if (!river) throw new Error("Plan lasu nie zawiera rzeki");
     this.river = { id: river.id, points: river.points };
@@ -55,6 +78,7 @@ export class ForestGeometry {
     );
     for (const z of zones) {
       if (!(PROFILE_IDS as readonly string[]).includes(z.kind)) continue;
+      if (this.quadrants?.dropZoneKinds.includes(z.kind)) continue;
       const feather = Number(z.props?.feather ?? 10);
       const base = { profile: profiles[z.kind as ProfileId], priority: z.priority ?? 0, feather };
       if (z.shape.type === "circle") {
@@ -65,11 +89,25 @@ export class ForestGeometry {
         this.zones.push({ ...base, ribbon: idx });
       }
     }
-    this.weightProfiles = [...this.zones.map((z) => z.profile), profiles[BASE_PROFILE]];
+    const tail = this.quadrants ? QUADRANT_IDS.map((id) => this.quadrants!.profiles[id]) : [profiles[BASE_PROFILE]];
+    this.weightProfiles = [...this.zones.map((z) => z.profile), ...tail];
   }
 
   get weightCount(): number {
-    return this.zones.length + 1;
+    return this.zones.length + (this.quadrants ? QUADRANT_IDS.length : 1);
+  }
+
+  /** Wagi czterech ćwiartek w punkcie (suma = 1); null poza trybem ćwiartek. Kolejność: a, b, c, d. */
+  quadrantWeights(x: number, z: number, out: Float64Array | number[] = new Float64Array(4)): Float64Array | number[] | null {
+    const q = this.quadrants;
+    if (!q) return null;
+    const tx = smooth((x - q.seamX) / q.feather + 0.5);
+    const tz = smooth((z - q.seamZ) / q.feather + 0.5);
+    out[0] = (1 - tx) * (1 - tz);
+    out[1] = (1 - tx) * tz;
+    out[2] = tx * tz;
+    out[3] = tx * (1 - tz);
+    return out;
   }
 
   /** Odległość od brzegu wody (ujemna wewnątrz); `Infinity`, gdy dalej niż ~10 m. */
@@ -143,11 +181,21 @@ export class ForestGeometry {
       out[i] = a;
       remaining -= a;
     }
-    out[n] = remaining;
+    const q = this.quadrants;
+    if (!q) {
+      out[n] = remaining;
+      return;
+    }
+    const tx = smooth((x - q.seamX) / q.feather + 0.5);
+    const tz = smooth((z - q.seamZ) / q.feather + 0.5);
+    out[n] = remaining * (1 - tx) * (1 - tz);
+    out[n + 1] = remaining * (1 - tx) * tz;
+    out[n + 2] = remaining * tx * tz;
+    out[n + 3] = remaining * tx * (1 - tz);
   }
 
   /** Dominujący profil w punkcie (do diagnostyki, minimapy i raportów). */
-  dominantProfile(x: number, z: number): ProfileId {
+  dominantProfile(x: number, z: number): AnyProfileId {
     const w = new Float64Array(this.weightCount);
     this.profileWeights(x, z, w);
     let best = 0;

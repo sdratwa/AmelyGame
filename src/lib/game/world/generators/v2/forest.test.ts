@@ -83,7 +83,9 @@ describe("W1a: determinizm i nazwane strumienie", () => {
     const dir = __dirname;
     for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))) {
       const text = readFileSync(join(dir, file), "utf8");
-      expect(text, file).not.toMatch(/Math\.(sin|cos|tan|atan2?|exp|pow|log\d*|hypot|random)\(/);
+      // `paving.ts` (bruk drogi Pro) to warstwa wyłącznie kosmetyczna, poza odciskiem świata i bez wpływu na rozgrywkę:
+      // może używać zwykłej matematyki. Pozostałe reguły (bez react/three/GLB) obowiązują także tam.
+      if (file !== "paving.ts") expect(text, file).not.toMatch(/Math\.(sin|cos|tan|atan2?|exp|pow|log\d*|hypot|random)\(/);
       expect(text, file).not.toMatch(/from\s+["'](react|three|next|@react-three|@\/components)/);
       expect(text, file).not.toMatch(/\.glb|\.gltf|BufferGeometry|THREE\./);
     }
