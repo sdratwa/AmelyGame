@@ -86,6 +86,8 @@ export type GameState = {
   troll: TrollState;
   harvested: string[];
   bridge: BridgeState;
+  /** Historical bridge from personal progress, preserved if an online room resets. Not a world authority. */
+  savedBridge?: BridgeState;
   discovered: RegionId[];
   badges: BadgeId[];
   dialog: DialogState | null;

@@ -1,3 +1,4 @@
+import { applySharedWorld, type SharedWorld } from "./sharedWorld";
 import type { ItemId } from "../content/items";
 import { respawn } from "../systems/death";
 import { buyHouse, upgradeHouse } from "../systems/houses";
@@ -50,6 +51,7 @@ export type Command =
   | { type: "forest.pose"; pose: ForestPose }
   | { type: "appearance.set"; appearance: CharacterAppearanceV1 }
   | { type: "tick"; dt: number }
+  | { type: "world.sync"; world: SharedWorld }
   | { type: "world.clock"; elapsed: number }
   | { type: "enter"; view: View }
   | { type: "leave" }
@@ -95,6 +97,8 @@ function execute(state: GameState, command: Command): CommandResult {
       return setForestPose(state, command.pose);
     case "appearance.set":
       return setAppearance(state, command.appearance);
+    case "world.sync":
+      return result(applySharedWorld(state, command.world));
     case "world.clock":
       return Number.isFinite(command.elapsed) && command.elapsed >= 0 && state.worldElapsed !== command.elapsed
         ? result({ ...state, worldElapsed: command.elapsed })

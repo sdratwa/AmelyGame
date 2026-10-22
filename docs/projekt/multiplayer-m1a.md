@@ -200,3 +200,30 @@ Czas osobistego postępu `elapsed` pozostaje w SaveV4 i nadal obsługuje dotychc
 Odbiór ręczny: uruchom ponownie multiplayer, otwórz grę na dwóch komputerach z różnymi zapisami, dołącz w różnym czasie, porównaj godzinę i światło. Otwórz menu tylko na jednym komputerze, odczekaj, wznów; następnie rozłącz i dołącz ponownie. Wspólna pora dnia ma pozostać zgodna. Bez testów GUI po stronie agenta.
 
 Weryfikacja zegara: 23 testy modułu multiplayer zaliczone. Pełny `npm test`: 1165 zaliczonych, 2 pominięte, jeden wcześniej opisany błąd materiałów GLB (assets.test.ts:202, 19 zamiast 20). Typecheck i build zaliczone; lint bez błędów, dwa istniejące ostrzeżenia. Build wymagał ponowienia po ostrzeżeniu o podatności Next.js; aktualizacja bezpieczeństwa pozostaje osobnym zadaniem. Testy obejmują zegar dwóch klientów, upływ czasu, ponowne dołączenie, różne zapisy, lokalną pauzę, drenaż według wspólnej pory dnia, odrzucanie błędnych wartości i niezależność SaveV4.
+
+## Wspólne drzewa, skały i most (23 października 2026)
+
+Protokół **3** dodaje wspólny stan `harvested` / `bridgeBuilt` z numerem rewizji. Po aktualizacji należy zrestartować `npm run multiplayer` i odświeżyć wszystkich klientów. Snapshot wspólnego świata jest wysyłany przy handshake oraz po zmianie, niezależnie od 20 Hz pozycji. Dołączenie, powrót do lasu i reconnect odczytują aktualny stan pokoju.
+
+Zbieranie i budowa wymagają potwierdzenia pokoju. Serwer sprawdza format zapisu osobistego, tożsamość świata, obiekt, odległość podaną w komendzie, narzędzia, miejsce w ekwipunku i przepis istniejącym `applyCommand`. Wspólny stan zastępuje pola świata z zapisu klienta. Jedna z równoczesnych prób może usunąć zasób lub postawić most; tylko zwycięzca dostaje surowiec / zużywa materiały. Klient kolejkuje pozostałe komendy do odpowiedzi, aby np. wyrzucenie materiałów nie wyprzedziło budowy. Wyjście online czeka na rozstrzygnięcie przed zapisem. Przy rozłączeniu nowe zmiany świata są blokowane.
+
+Zmiana trafia do normalnego stanu gry przez `world.sync`; dotychczasowy renderer aktualizuje obiekty, streaming sektorów, collidery drzew/skał, model mostu, poręcze i dostępność przejścia. Wspólny most odblokowuje odpowiedni etap osobistego questa. Nie dodano modeli ani tekstur; liczba draw calls/trójkątów odpowiada dotychczasowym wariantom świata z mostem i usuniętymi obiektami. Brak testów GUI.
+
+Proces uruchamiany przez `npm run multiplayer` zapisuje wspólny stan w `.data/multiplayer/world_001.json` (poza Git). Opcjonalna ścieżka: `MULTIPLAYER_WORLD_SAVE`. Zapis do pliku tymczasowego i rename następują przed potwierdzeniem akcji. Uszkodzony lub niezgodny plik zatrzymuje start pokoju, bez nadpisania danych. Po restarcie serwera obiekty i most zachowują stan; zegar nadal startuje od nowa.
+
+Przy wczytaniu osobistego zapisu online klient wysyła `world.restore`: serwer scala sumę poprawnych identyfikatorów usuniętych obiektów i flagę mostu. To zachowuje wcześniejsze postępy sprzed wspólnego świata; pusty lub starszy zapis nie odtwarza drzew ani nie burzy mostu. Import nie przyznaje surowców ani nagród budowniczego. Reset pliku serwera przy zachowaniu zapisów klientów nie jest pełnym resetem świata — ich zmiany zostaną ponownie scalone. Format SaveV4 pozostaje zgodny; zapis solo nie jest importowany do pokoju.
+
+Zakres: wspólne usuwanie drzew i skał oraz budowa mostu. Ekwipunek, skrzynie, troll i osobisty postęp nadal są lokalne. Serwer sprawdza spójność przesłanego ekwipunku, ale nie prowadzi kont ani autorytatywnej historii jego zdobycia; dotychczasowy model zaufanego LAN pozostaje. Nie jest to kompletne zabezpieczenie przed spreparowanym zapisem ani transakcja rozproszona między dyskiem serwera a localStorage. Nagłe zamknięcie karty/zerwanie sieci po zapisie świata, lecz przed odebraniem potwierdzenia i zapisem osobistym, może utracić osobiste rozliczenie tej akcji. Wspólny stan świata pozostaje spójny.
+
+Pliki: `server/src/ForestRoom.ts`, `index.ts`, `worldStore.ts`; `src/lib/multiplayer/{protocol,client,commands,sharedWorld,sharedWorld.test}.ts`; `src/lib/game/core/{apply,state,sharedWorld}.ts`; `src/lib/game/save/serialize.ts`; `src/components/game/GameApp.tsx`; `.gitignore`.
+
+Odbiór ręczny autora:
+
+1. Zrestartuj serwer multiplayer i odśwież grę na dwóch komputerach. Sprawdź również osobisty zapis z mostem zbudowanym przed aktualizacją.
+2. Gracz X ścina drzewo i rozbija skałę. Gracz Y powinien zobaczyć ich zniknięcie i móc przejść przez ich dawne miejsce, także po wyjściu z sektora i powrocie.
+3. Spróbujcie zebrać ten sam zasób jednocześnie: surowiec ma dostać tylko jedna osoba.
+4. X buduje most: oboje widzicie most i przechodzicie w obie strony. Przy równoczesnej budowie materiały traci tylko jedna osoba.
+5. Y dołącza później, wraca z miasta oraz robi reconnect: stan świata pozostaje zgodny. Wyjdźcie online, uruchom ponownie serwer i wróćcie.
+6. Bez połączenia nie można ścinać ani budować. Sprawdź także dotychczasowy zapis i mechaniki solo.
+
+Weryfikacja: pełny `npm test` — **1169 zaliczonych, 2 pominięte, 1 istniejący błąd** `assets.test.ts:202` (19 zamiast 20 materiałów). Cztery nowe testy przechodzą; obejmują rzeczywiste połączenia WebSocket dwóch klientów, wyścig o drzewo/skałę/most, pojedyncze rozliczenie, kolizje i przejście przez most, dołączenie i reconnect, walidację, scalanie starszych zapisów oraz trwałość/ochronę pliku serwera. `npm run typecheck` zaliczony. `npm run lint`: 0 błędów i 2 wcześniejsze ostrzeżenia. `npm run build` zaliczony po ponowieniu po istniejącym ostrzeżeniu o podatności Next.js 16.4.0; aktualizacja bezpieczeństwa pozostaje osobnym zadaniem. `git diff --check` bez błędów. Wygląd i rozgrywka w przeglądarce czekają na ocenę autora.

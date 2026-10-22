@@ -1,3 +1,5 @@
+import type { SharedWorld, WorldCommand, WorldReply } from "./sharedWorld";
+import type { SaveV4 } from "../game/save/schema";
 import { SoundEventGate } from "./soundEvents";
 import type { PlayerSoundEvent } from "./protocol";
 import { Client, type Room } from "@colyseus/sdk";
@@ -12,6 +14,36 @@ import {
 } from "./protocol";
 import { fingerprintWorld, generateWorld } from "../game/world/registry";
 export class MultiplayerClient {
+  world: SharedWorld | null = null;
+  private worldListeners = new Set<(world: SharedWorld) => void>();
+  private requestId = 0;
+  private pending = new Map<number, (reply: WorldReply | null) => void>();
+  subscribeWorld(listener: (world: SharedWorld) => void) {
+    this.worldListeners.add(listener);
+    if (this.world) listener(this.world);
+    return () => { this.worldListeners.delete(listener); };
+  }
+  private receiveWorld(world: SharedWorld) {
+    if (this.world && world.revision < this.world.revision) return;
+    this.world = world;
+    for (const listener of this.worldListeners) listener(world);
+  }
+  requestWorld(command: WorldCommand | { type: "world.restore" }, save: SaveV4): Promise<WorldReply | null> {
+    if (this.status !== "połączony" || !this.room) return Promise.resolve(null);
+    const requestId = ++this.requestId;
+    return new Promise<WorldReply | null>((resolve) => {
+      const timeout = setTimeout(() => {
+        // An ambiguous result must not allow further local mutations on this connection.
+        this.disconnect();
+      }, 8000);
+      this.pending.set(requestId, (reply) => {
+        clearTimeout(timeout);
+        this.pending.delete(requestId);
+        resolve(reply);
+      });
+      this.room!.send("worldCommand", { requestId, command, save });
+    }).catch(() => { this.disconnect(); return null; });
+  }
   onSound: ((event: PlayerSoundEvent) => void) | null = null;
   private sounds = new SoundEventGate();
   room: Room | null = null;
@@ -39,6 +71,11 @@ export class MultiplayerClient {
         fingerprint: fingerprintWorld(generateWorld(2030, 3)),
       });
       this.room = room;
+      room.onMessage("world", (world: SharedWorld) => this.receiveWorld(world));
+      room.onMessage("worldReply", (reply: WorldReply) => {
+        this.pending.get(reply.requestId)?.(reply);
+        this.receiveWorld(reply.world);
+      });
       room.onMessage("snapshot", (s: Snapshot) => {
         this.worldElapsed = s.worldElapsed;
         this.serverOffset = s.serverTime - Date.now();
@@ -71,6 +108,7 @@ export class MultiplayerClient {
       room.onLeave(() => {
         if (this.room !== room) return;
         this.room = null;
+        for (const done of this.pending.values()) done(null);
         this.sounds.clear();
         this.status = "rozłączony";
         this.players = [];
@@ -96,6 +134,8 @@ export class MultiplayerClient {
               reject(Error("Niezgodny generator świata"));
               return;
             }
+            this.world = null;
+            this.receiveWorld(w.world);
             this.worldElapsed = w.worldElapsed;
             this.config = w.config;
             this.local = w.player;
@@ -171,6 +211,7 @@ export class MultiplayerClient {
       });
   }
   disconnect() {
+    for (const done of this.pending.values()) done(null);
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     void this.room?.leave();

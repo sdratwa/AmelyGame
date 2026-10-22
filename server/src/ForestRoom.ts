@@ -1,3 +1,5 @@
+import { WorldStore } from "./worldStore";
+import { emptySharedWorld, resolveWorldCommand } from "../../src/lib/multiplayer/sharedWorld";
 import { createSoundEvent } from "../../src/lib/multiplayer/soundEvents";
 import { Room, type Client } from "@colyseus/core";
 import { randomUUID } from "node:crypto";
@@ -13,6 +15,8 @@ export class ForestRoom extends Room {
   maxClients = NET.maxPlayers;
   autoDispose = false;
   private world = createInstance();
+  private store?: WorldStore;
+  private sharedWorld = emptySharedWorld();
   private players = new Map<string, Player>();
   private soundSequence = 0;
   private readonly worldStartedAt = performance.now();
@@ -24,10 +28,33 @@ export class ForestRoom extends Room {
     string,
     { time: number; count: number; sound: number }
   >();
-  onCreate(options: { worldInstanceId?: string }) {
+  onCreate(options: { worldInstanceId?: string; worldSavePath?: string }) {
     this.roomId = options.worldInstanceId ?? "world_001";
     if (options.worldInstanceId && options.worldInstanceId !== "world_001")
       this.world = createInstance(options.worldInstanceId);
+    if (options.worldSavePath) {
+      this.store = new WorldStore(options.worldSavePath, this.world.config);
+      this.sharedWorld = this.store.load();
+      for (const id of this.sharedWorld.harvested) this.world.walk.removeObject(id);
+    }
+    this.onMessage("worldCommand", (client, data) => {
+      if (!this.players.has(client.sessionId) || !data || !Number.isSafeInteger(data.requestId)) return;
+      const outcome = this.allow(client)
+        ? resolveWorldCommand(this.sharedWorld, this.world.config, data.command, data.save)
+        : { accepted: false, world: this.sharedWorld };
+      if (outcome.accepted) {
+        try { this.store?.save(outcome.world); }
+        catch {
+          client.send("worldReply", { requestId: data.requestId, accepted: false, world: this.sharedWorld });
+          client.send("notice", "Nie udało się zapisać wspólnego świata. Spróbuj ponownie.");
+          return;
+        }
+      }
+      this.sharedWorld = outcome.world;
+      if (outcome.accepted) for (const id of this.sharedWorld.harvested) this.world.walk.removeObject(id);
+      client.send("worldReply", { requestId: data.requestId, ...outcome });
+      if (outcome.accepted) this.broadcast("world", this.sharedWorld);
+    });
     this.onMessage("motion", (client, data) => {
       const p = this.players.get(client.sessionId);
       if (
@@ -47,6 +74,7 @@ export class ForestRoom extends Room {
         client.send("welcome", {
           worldElapsed: this.worldElapsed(),
           config: this.world.config,
+          world: this.sharedWorld,
           player: this.players.get(client.sessionId),
         }),
     );

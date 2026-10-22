@@ -13,6 +13,7 @@ const record = <T extends object>(map: Record<string, T>) =>
  */
 export function serializeState(state: GameState, savedAt: number): SaveV4 | null {
   if (state.phase !== "playing" || !state.world) return null;
+  const bridge = state.bridge.built ? state.bridge : (state.savedBridge ?? state.bridge);
   return {
     version: 4,
     saveId: state.world.saveId,
@@ -52,7 +53,7 @@ export function serializeState(state: GameState, savedAt: number): SaveV4 | null
       deposit: stacks(state.troll.deposit) as ItemStack[],
     },
     harvested: [...state.harvested],
-    bridge: { built: state.bridge.built, builtAt: state.bridge.builtAt },
+    bridge: { built: bridge.built, builtAt: bridge.builtAt },
     discovered: [...state.discovered],
     badges: [...state.badges],
   };

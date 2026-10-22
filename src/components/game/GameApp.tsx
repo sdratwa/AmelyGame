@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { GameCommands } from "@/lib/multiplayer/commands";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   boardEntries,
   boardHasUnread,
@@ -111,7 +112,10 @@ export function GameApp({ multiplayer, exitSaverRef }: {
   multiplayer?: import("@/lib/multiplayer/client").MultiplayerClient;
   exitSaverRef?: { current: (() => Promise<boolean>) | null };
 }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, setState] = useState(initialState);
+  const [commands] = useState(() => new GameCommands(initialState, setState, multiplayer));
+  const dispatch = commands.dispatch;
+  useEffect(() => multiplayer?.subscribeWorld(commands.sync), [multiplayer, commands]);
   const speed = useRef(1);
   const poseReaderRef = useRef<(() => ForestPose | null) | null>(null);
   const storeRef = useRef<SaveStore | null>(null);
@@ -138,7 +142,14 @@ export function GameApp({ multiplayer, exitSaverRef }: {
     let cancelled = false;
     const store = getStore();
     const run = async () => {
-      if (multiplayer?.config && multiplayer.local) return loadOnlineGame(store, multiplayer.config, multiplayer.local);
+      if (multiplayer?.config && multiplayer.local) {
+        const loaded = await loadOnlineGame(store, multiplayer.config, multiplayer.local);
+        if (loaded.kind === "ok") {
+          const restored = await multiplayer.requestWorld({ type: "world.restore" }, loaded.save);
+          if (!restored?.accepted) throw Error("Nie udało się uzgodnić wspólnego świata.");
+        }
+        return loaded;
+      }
       const url = new URL(window.location.href);
       if (url.searchParams.get("reset") === "1") {
         await store.reset();
@@ -165,7 +176,7 @@ export function GameApp({ multiplayer, exitSaverRef }: {
     return () => {
       cancelled = true;
     };
-  }, [bootNonce, getStore, multiplayer]);
+  }, [bootNonce, getStore, multiplayer, dispatch]);
 
   const enabledAutosave = state.phase === "playing";
   const loadedSave =
@@ -227,14 +238,16 @@ export function GameApp({ multiplayer, exitSaverRef }: {
     exitSaverRef.current = async () => {
       const autosaver = autosaverRef.current;
       if (!autosaver) return state.phase !== "playing";
+      await commands.whenIdle();
+      const current = commands.current;
       const pose = poseReaderRef.current?.();
-      autosaver.update(pose ? reducer(state, { type: "forest.pose", pose }) : state);
+      autosaver.update(pose ? reducer(current, { type: "forest.pose", pose }) : current);
       const outcome = await autosaver.saveNow();
       setSaveError(outcome.ok ? null : outcome.error);
       return outcome.ok;
     };
     return () => { exitSaverRef.current = null; };
-  }, [exitSaverRef, state]);
+  }, [exitSaverRef, state, commands]);
 
   const resetSave = useCallback(async () => {
     if(multiplayer) return;
@@ -258,14 +271,14 @@ export function GameApp({ multiplayer, exitSaverRef }: {
       dispatch({ type: "tick", dt });
     }, TICK_MS);
     return () => clearInterval(id);
-  }, [state.phase, multiplayer]);
+  }, [state.phase, multiplayer, dispatch]);
 
   useEffect(() => {
     if (!state.toast) return;
     const id = state.toast.id;
     const t = setTimeout(() => dispatch({ type: "clearToast", id }), 2800);
     return () => clearTimeout(t);
-  }, [state.toast]);
+  }, [state.toast, dispatch]);
 
   const playing = state.phase === "playing" && !state.dead;
   const canOpenPanel = playing && !state.dialog && state.view !== "forest";
@@ -370,16 +383,16 @@ export function GameApp({ multiplayer, exitSaverRef }: {
     document.exitPointerLock?.();
     setPanel((cur) => (cur === null ? "pause" : cur));
   };
-  const readBoard = useCallback((id: QuestId) => dispatch({ type: "board.read", id }), []);
-  const acceptQuest = useCallback((id: QuestId) => dispatch({ type: "quest.accept", id }), []);
+  const readBoard = useCallback((id: QuestId) => dispatch({ type: "board.read", id }), [dispatch]);
+  const acceptQuest = useCallback((id: QuestId) => dispatch({ type: "quest.accept", id }), [dispatch]);
 
-  const onWorldReady = useCallback(() => dispatch({ type: "worldReady" }), []);
-  const onPose = useCallback((pose: ForestPose) => dispatch({ type: "forest.pose", pose }), []);
+  const onWorldReady = useCallback(() => dispatch({ type: "worldReady" }), [dispatch]);
+  const onPose = useCallback((pose: ForestPose) => dispatch({ type: "forest.pose", pose }), [dispatch]);
 
-  const leave = useCallback(() => dispatch({ type: "leave" }), []);
-  const select = useCallback((slot: number) => dispatch({ type: "select", slot }), []);
-  const eat = useCallback(() => dispatch({ type: "eat" }), []);
-  const enter = useCallback((view: View) => dispatch({ type: "enter", view }), []);
+  const leave = useCallback(() => dispatch({ type: "leave" }), [dispatch]);
+  const select = useCallback((slot: number) => dispatch({ type: "select", slot }), [dispatch]);
+  const eat = useCallback(() => dispatch({ type: "eat" }), [dispatch]);
+  const enter = useCallback((view: View) => dispatch({ type: "enter", view }), [dispatch]);
 
   const devReset = multiplayer ? null : <DevResetButton onReset={resetSave} />;
 

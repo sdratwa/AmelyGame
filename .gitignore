@@ -44,3 +44,6 @@ next-env.d.ts
 /.assets-src/
 
 !.env.multiplayer.example
+
+# Shared multiplayer world (server runtime data)
+/.data/

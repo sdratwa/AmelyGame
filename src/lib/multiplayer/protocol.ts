@@ -1,4 +1,5 @@
-export const PROTOCOL = 2;
+import type { SharedWorld } from "./sharedWorld";
+export const PROTOCOL = 3;
 export const NET = { hz: 20, interpolationMs: 100, maxPlayers: 8 };
 export type Motion = {
   sequence: number;
@@ -28,7 +29,7 @@ export type WorldConfig = {
   fingerprint: string;
 };
 export type Snapshot = { serverTime: number; worldElapsed: number; players: Player[] };
-export type Welcome = { config: WorldConfig; player: Player; worldElapsed: number };
+export type Welcome = { config: WorldConfig; player: Player; worldElapsed: number; world: SharedWorld };
 export const SOUND_REGISTRY: Record<
   "HELP_SHOUT",
   {
