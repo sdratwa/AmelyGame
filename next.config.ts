@@ -6,6 +6,7 @@ const extraDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? "")
   .filter(Boolean);
 
 const nextConfig: NextConfig = {
+  experimental: { agentUpgrade: "security" },
   allowedDevOrigins: [
     "127.0.0.1",
     "localhost",
