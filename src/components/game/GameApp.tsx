@@ -17,6 +17,7 @@ import {
   type QuestId,
   type View,
 } from "@/lib/game/engine";
+import { loadOnlineGame, onlineSavePrefix } from "@/lib/multiplayer/save";
 import { Autosaver } from "@/lib/game/save/autosave";
 import { loadGame, type BootResult } from "@/lib/game/save/loader";
 import { createNewGameParams } from "@/lib/game/save/newGame";
@@ -106,9 +107,13 @@ function DevResetButton({ onReset }: { onReset: () => void }) {
   );
 }
 
-export function GameApp() {
+export function GameApp({ multiplayer, exitSaverRef }: {
+  multiplayer?: import("@/lib/multiplayer/client").MultiplayerClient;
+  exitSaverRef?: { current: (() => Promise<boolean>) | null };
+}) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const speed = useRef(1);
+  const poseReaderRef = useRef<(() => ForestPose | null) | null>(null);
   const storeRef = useRef<SaveStore | null>(null);
   const autosaverRef = useRef<Autosaver | null>(null);
   const [boot, setBoot] = useState<Boot>({ status: "loading" });
@@ -125,14 +130,15 @@ export function GameApp() {
   useEffect(() => startBrowserInput(), []);
 
   const getStore = useCallback((): SaveStore => {
-    storeRef.current ??= new LocalStorageSaveStore();
+    storeRef.current ??= new LocalStorageSaveStore(multiplayer?.config ? { prefix: onlineSavePrefix(multiplayer.config) } : {});
     return storeRef.current;
-  }, []);
+  }, [multiplayer]);
 
   useEffect(() => {
     let cancelled = false;
     const store = getStore();
     const run = async () => {
+      if (multiplayer?.config && multiplayer.local) return loadOnlineGame(store, multiplayer.config, multiplayer.local);
       const url = new URL(window.location.href);
       if (url.searchParams.get("reset") === "1") {
         await store.reset();
@@ -142,7 +148,15 @@ export function GameApp() {
       return loadGame(store);
     };
     run()
-      .then((result) => !cancelled && setBoot({ status: "ready", result }))
+      .then((result) => {
+        if (cancelled) return;
+        setBoot({ status: "ready", result });
+        if (multiplayer && result.kind === "ok") {
+          dispatch({ type: "game.load", save: result.save });
+          if (multiplayer.worldElapsed !== null) dispatch({ type: "world.clock", elapsed: multiplayer.worldElapsed });
+          dispatch({ type: "enter", view: "forest" });
+        }
+      })
       .catch(() => {
         if (cancelled) return;
         setSaveError("Zapis gry jest niedostępny w tej przeglądarce.");
@@ -151,7 +165,7 @@ export function GameApp() {
     return () => {
       cancelled = true;
     };
-  }, [bootNonce, getStore]);
+  }, [bootNonce, getStore, multiplayer]);
 
   const enabledAutosave = state.phase === "playing";
   const loadedSave =
@@ -208,11 +222,26 @@ export function GameApp() {
     if (outcome.ok) setLastSavedAt(Date.now());
   }, []);
 
+  useEffect(() => {
+    if (!exitSaverRef) return;
+    exitSaverRef.current = async () => {
+      const autosaver = autosaverRef.current;
+      if (!autosaver) return state.phase !== "playing";
+      const pose = poseReaderRef.current?.();
+      autosaver.update(pose ? reducer(state, { type: "forest.pose", pose }) : state);
+      const outcome = await autosaver.saveNow();
+      setSaveError(outcome.ok ? null : outcome.error);
+      return outcome.ok;
+    };
+    return () => { exitSaverRef.current = null; };
+  }, [exitSaverRef, state]);
+
   const resetSave = useCallback(async () => {
+    if(multiplayer) return;
     autosaverRef.current?.dispose();
     await getStore().reset();
     window.location.reload();
-  }, [getStore]);
+  }, [getStore, multiplayer]);
 
   useEffect(() => {
     speed.current = readSpeed();
@@ -223,12 +252,13 @@ export function GameApp() {
     let last = performance.now();
     const id = setInterval(() => {
       const now = performance.now();
-      const dt = Math.min(1, (now - last) / 1000) * speed.current;
+      const dt = Math.min(1, (now - last) / 1000) * (multiplayer ? 1 : speed.current);
       last = now;
+      if (multiplayer?.worldElapsed != null) dispatch({ type: "world.clock", elapsed: multiplayer.worldElapsed });
       dispatch({ type: "tick", dt });
     }, TICK_MS);
     return () => clearInterval(id);
-  }, [state.phase]);
+  }, [state.phase, multiplayer]);
 
   useEffect(() => {
     if (!state.toast) return;
@@ -351,7 +381,7 @@ export function GameApp() {
   const eat = useCallback(() => dispatch({ type: "eat" }), []);
   const enter = useCallback((view: View) => dispatch({ type: "enter", view }), []);
 
-  const devReset = <DevResetButton onReset={resetSave} />;
+  const devReset = multiplayer ? null : <DevResetButton onReset={resetSave} />;
 
   if (state.phase === "name") {
     if (boot.status === "loading") return <BootScreen />;
@@ -360,6 +390,11 @@ export function GameApp() {
       setBoot({ status: "loading" });
       setBootNonce((n) => n + 1);
     };
+    if (multiplayer) {
+      return <div role="alert" className="p-6">Nie można wczytać postępu online. Zapis pozostaje zachowany.
+        <button onClick={retry}>Spróbuj ponownie</button>
+      </div>;
+    }
     const newGame = () => setWantsNewGame(true);
     if (!wantsNewGame && result.kind === "ok") {
       return (
@@ -413,7 +448,7 @@ export function GameApp() {
     : saveError
       ? { kind: "error", error: saveError }
       : { kind: "idle", lastAt: lastSavedAt };
-  const clock = getClock(state.elapsed);
+  const clock = getClock(state.worldElapsed ?? state.elapsed);
   const sheltered = isSheltered(state);
 
   return (
@@ -444,6 +479,9 @@ export function GameApp() {
           <ForestWorldView
             seed={state.world.seed}
             gameState={state}
+            poseReaderRef={poseReaderRef}
+            onPause={openMenu}
+            multiplayer={multiplayer}
             dispatch={dispatch}
             startPose={state.forestPose}
             bridgeBuilt={state.bridge.built}

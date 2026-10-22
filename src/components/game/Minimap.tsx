@@ -91,7 +91,7 @@ function paintStatic(model: MinimapModel, px: number): HTMLCanvasElement {
   return canvas;
 }
 
-export function Minimap({ seed, state, getPose, size = 200 }: { seed: number; state: GameState; getPose: () => MinimapPose | null; size?: number }) {
+export function Minimap({ multiplayer, seed, state, getPose, size = 200 }: { multiplayer?: import("@/lib/multiplayer/client").MultiplayerClient; seed: number; state: GameState; getPose: () => MinimapPose | null; size?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const genVersion = state.world?.genVersion ?? 2;
   const model = useMemo(() => buildMinimapModel({ seed, genVersion }), [seed, genVersion]);
@@ -132,6 +132,7 @@ export function Minimap({ seed, state, getPose, size = 200 }: { seed: number; st
       last = time;
       ctx.clearRect(0, 0, px, px);
       ctx.drawImage(base, 0, 0);
+      for(const p of multiplayer?.remote() ?? []) { const q=at(p);ctx.beginPath();ctx.arc(q.x,q.y,4*k,0,Math.PI*2);ctx.fillStyle='#7ee7ff';ctx.fill();ctx.fillText(p.name,q.x+6*k,q.y); }
 
       for (const a of areasRef.current) {
         const c = at(a);
@@ -190,7 +191,7 @@ export function Minimap({ seed, state, getPose, size = 200 }: { seed: number; st
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [model, size]);
+  }, [model, size, multiplayer]);
 
   return (
     <figure

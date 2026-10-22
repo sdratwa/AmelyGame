@@ -1,4 +1,8 @@
+import { NET } from "../multiplayer/protocol";
 import * as THREE from "three";
+import { RemotePlayers } from "./remotePlayers";
+import type { MultiplayerClient } from "../multiplayer/client";
+import { getForestAudio } from "../audio/controller";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
 import { loadDeerAsset, loadPlayerAsset, loadTrollAsset, type DeerAsset, type PlayerAsset, type TrollAsset } from "@/lib/assets/characters";
 import { loadBridgeAsset } from "@/lib/assets/bridge";
@@ -317,6 +321,9 @@ export class ForestRenderer {
   private deerLayer: DeerLayer | null = null;
   private deerError: string | null = null;
   private npcDialogListener: (() => void) | null = null;
+  multiplayer: MultiplayerClient | null = null;
+  private remotePlayers: RemotePlayers | null = null;
+  private netElapsed = 0;
   private stepSink: StepSink | null = null;
   private stepForest: ForestWorld | null = null;
   private fx: FxBurst | null = null;
@@ -842,6 +849,8 @@ export class ForestRenderer {
   }
 
   dispose(): void {
+    this.remotePlayers?.dispose();
+    getForestAudio().clearRemotePlayers();
     this.disposed = true;
     this.setInputHub(null);
     this.npcDialogListener = null;
@@ -972,6 +981,9 @@ export class ForestRenderer {
   }
 
   private disposeTpp(): void {
+    this.remotePlayers?.dispose();
+    this.remotePlayers = null;
+    getForestAudio().clearRemotePlayers();
     const t = this.tpp;
     if (!t) return;
     this.tpp = null;
@@ -1665,7 +1677,7 @@ export class ForestRenderer {
           ctl.update(dt, this.moveInput());
         }
         const walked = dt > MAX_STEP_FRAME_DT ? 0 : Math.hypot(ctl.state.x - px, ctl.state.z - pz);
-        this.stepSink?.playerMotion(walked, Math.min(dt, MAX_STEP_FRAME_DT), ctl.state.x, ctl.state.z);
+        this.stepSink?.playerMotion(this.tpp && !this.tpp.rig.controller.state.grounded ? 0 : walked, Math.min(dt, MAX_STEP_FRAME_DT), ctl.state.x, ctl.state.z);
       } else {
         this.stepSink?.playerMotion(0, Math.min(dt, MAX_STEP_FRAME_DT), ctl.state.x, ctl.state.z);
       }
@@ -1695,6 +1707,36 @@ export class ForestRenderer {
     this.particleUniforms.uCenter.value.copy(this.camera.position);
     this.particleUniforms.uSize.value = 0.05;
 
+    if (this.multiplayer && this.tpp?.model) {
+      this.remotePlayers ??= new RemotePlayers(this.scene, this.tpp.model.asset);
+      const players = this.multiplayer.remote();
+      this.remotePlayers.update(players, dt);
+      getForestAudio().remotePlayersMotion(players, dt);
+      const s = this.tpp.rig.controller.state;
+      getForestAudio().setPose({
+        x: s.x,
+        y: s.y + this.tpp.rig.controller.state.capsuleHeight * 0.92,
+        z: s.z,
+        yaw: this.tpp.rig.camera.yaw,
+      });
+      this.netElapsed += dt;
+      if (this.netElapsed >= 1 / NET.hz) {
+        this.netElapsed = 0;
+        this.multiplayer.send({
+          x: s.x,
+          y: s.y,
+          z: s.z,
+          bodyYaw: s.bodyYaw,
+          vx: this.suspended ? 0 : s.vx,
+          vz: this.suspended ? 0 : s.vz,
+          speed: this.suspended ? 0 : s.speed,
+          crouching: s.crouching,
+          grounded: s.grounded,
+          running: s.speed > 4.4,
+          animation: this.tpp.animator?.stats().dominant ?? "idle",
+        });
+      }
+    }
     this.renderer.render(this.scene, this.camera);
 
     const info = this.renderer.info;
@@ -1734,6 +1776,7 @@ export class ForestRenderer {
     const t = this.tpp;
     if (!t) return;
     const s = t.rig.update(dt);
+    if(s.justJumped) this.multiplayer?.recordJump();
     ctl.state.x = s.x;
     ctl.state.z = s.z;
     // Lustro tylko do odczytu dla warstw, które czytają stan pierwszej osoby; kierunek = kierunek kamery (jak `getPose`).

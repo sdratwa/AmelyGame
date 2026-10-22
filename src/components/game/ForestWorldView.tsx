@@ -1,4 +1,5 @@
 "use client";
+import type { MultiplayerClient } from "@/lib/multiplayer/client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ export type ForestWorldViewProps = {
   seed: number;
   /** Stan gry (źródło prawdy): skrzynie, ekwipunek, zebrane obiekty i zadania; widok niczego nie przechowuje sam. */
   gameState: GameState;
+  multiplayer?: MultiplayerClient;
   dispatch: (command: Command) => void;
   /** Zapisana pozycja; niepoprawna (np. wewnątrz drzewa) zostanie zastąpiona punktem wejścia. */
   startPose: ForestPose | null;
@@ -73,6 +75,8 @@ export type ForestWorldViewProps = {
   suspended: boolean;
   onPose: (pose: ForestPose) => void;
   onLeave: () => void;
+  onPause: () => void;
+  poseReaderRef?: { current: (() => ForestPose | null) | null };
   onLoadingChange: (loading: boolean) => void;
 };
 
@@ -267,6 +271,7 @@ export function ForestWorldView({
   seed,
   gameState,
   dispatch,
+  multiplayer,
   startPose,
   bridgeBuilt,
   hour,
@@ -275,6 +280,8 @@ export function ForestWorldView({
   suspended,
   onPose,
   onLeave,
+  onPause,
+  poseReaderRef,
   onLoadingChange,
 }: ForestWorldViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -303,12 +310,12 @@ export function ForestWorldView({
   const harvestedSeen = useRef(gameState.harvested.length);
   const changeAppearance = useCallback((next: CharacterAppearanceV1) => dispatchRef.current({ type: "appearance.set", appearance: next }), []);
   const ready = useRef(false);
-  const callbacks = useRef({ onPose, onLeave });
+  const callbacks = useRef({ onPose, onLeave, onPause });
   const guard = useRef({ suspended, suspendedEnd: 0, unlockedAt: 0, locked: false });
 
   useEffect(() => {
-    callbacks.current = { onPose, onLeave };
-  }, [onPose, onLeave]);
+    callbacks.current = { onPose, onLeave, onPause };
+  }, [onPose, onLeave, onPause]);
   useEffect(() => {
     stateRef.current = gameState;
     dispatchRef.current = dispatch;
@@ -357,6 +364,7 @@ export function ForestWorldView({
       queueMicrotask(() => setFatal(message));
       return;
     }
+    renderer.multiplayer = multiplayer ?? null;
     rendererRef.current = renderer;
     renderer.setInputHub(getInputHub());
     ready.current = false;
@@ -377,9 +385,11 @@ export function ForestWorldView({
       const p = renderer.getPose();
       if (p && ready.current) callbacks.current.onPose(p);
     };
+    if (poseReaderRef) poseReaderRef.current = () => renderer.getPose();
     const id = setInterval(report, POSE_REPORT_MS);
     return () => {
       clearInterval(id);
+      if (poseReaderRef) poseReaderRef.current = null;
       report();
       rendererRef.current = null;
       renderer.onNpcDialog(null);
@@ -388,7 +398,7 @@ export function ForestWorldView({
       trollDialogRef.current = false;
       renderer.dispose();
     };
-  }, [seed, genVersion]);
+  }, [seed, genVersion, multiplayer, poseReaderRef]);
 
   const loading = !fatal && (stats === null || stats.loading !== null) && !stats?.error;
   useEffect(() => {
@@ -414,7 +424,7 @@ export function ForestWorldView({
   const npcDialog = trollDialog || trollMessage !== null || gameState.dialog !== null;
   const saveId = gameState.world?.saveId ?? null;
   const getPose = useCallback(() => rendererRef.current?.getPose() ?? null, []);
-  useForestAudio({ elapsed: gameState.elapsed, saveId, dialog: npcDialog, frozen: frozen || npcDialog, getPose });
+  useForestAudio({ elapsed: gameState.worldElapsed ?? gameState.elapsed, saveId, dialog: npcDialog, frozen: frozen || npcDialog, getPose });
   const [audioSnap, setAudioSnap] = useState<AudioSnapshot | null>(null);
   useEffect(() => {
     rendererRef.current?.setSuspended(frozen);
@@ -532,10 +542,11 @@ export function ForestWorldView({
     return () => clearInterval(id);
   }, [debug]);
   const setClockHour = useCallback((hour: number) => {
+    if (multiplayer) return;
     const target = nextClockTime(stateRef.current.elapsed, hour);
     getForestAudio().jumpClock(target);
     dispatchRef.current({ type: "dev.setClock", elapsed: target });
-  }, []);
+  }, [multiplayer]);
   const testWolves = useCallback(() => {
     getForestAudio().testWolves();
   }, []);
@@ -636,7 +647,7 @@ export function ForestWorldView({
       const now = performance.now();
       if (g.locked || g.suspended || now - g.unlockedAt < ESC_GUARD_MS || now - g.suspendedEnd < ESC_GUARD_MS) return;
       if (document.querySelector('[data-slot="dialog-content"]')) return;
-      callbacks.current.onLeave();
+      callbacks.current.onPause();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -688,7 +699,7 @@ export function ForestWorldView({
 
       {!loading && !error && minimap && (
         <div className="absolute bottom-3 right-3 z-10 hidden sm:block">
-          <Minimap seed={seed} state={gameState} getPose={getPose} size={190} />
+          <Minimap multiplayer={multiplayer} seed={seed} state={gameState} getPose={getPose} size={190} />
         </div>
       )}
 

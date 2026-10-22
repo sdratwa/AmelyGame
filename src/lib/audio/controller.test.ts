@@ -1117,3 +1117,35 @@ describe("ForestAudioController: autoplay, karta w tle, zasoby", () => {
     r.audio.dispose();
   });
 });
+
+describe("M1a remote positional footsteps", () => {
+  it("shares context/buffers, follows feet and removes all player sources", async () => {
+    const { idleMotion } = await import("../multiplayer/protocol");
+    const r = rig();
+    r.audio.enter({ elapsed: at(12), saveId: "online" });
+    await flush(1000);
+    r.audio.setPose({ x: 0, y: 1.4, z: 0, yaw: 0 });
+    const p = { ...idleMotion(2, 0, 0), playerId: "a", sessionId: "a", name: "A", speed: 2.2 };
+    const q = { ...p, playerId: "b", sessionId: "b", z: 3 };
+    for(let i=0;i<40;i++) r.audio.remotePlayersMotion([{...p,x:2+i*0.11},{...q,x:2+i*0.11}],0.05);
+    const details = r.audio.spatialDiagnostics();
+    expect(details.emitters).toBe(2);
+    expect(details.voices).toBeGreaterThanOrEqual(2);
+    expect(r.ctxs).toHaveLength(1);
+    const active = r.ctxs[0].sources.filter(s=>s.buffer?.id.startsWith("footsteps.") && !s.stopped);
+    const panners = active.map(s=>s.history[0].history[0] as FakePanner);
+    expect(panners.every(p=>p.panningModel==="HRTF")).toBe(true);
+    expect(panners.every(p=>Math.abs(p.position.y-0.1)<1e-6)).toBe(true);
+    r.audio.remotePlayersMotion([{...p,x:7,speed:0},{...q,x:7,speed:0}],0.05);
+    expect(panners.every(p=>p.position.x===7)).toBe(true);
+    const total=r.ctxs[0].sources.length;
+    for(let i=0;i<30;i++)r.audio.remotePlayersMotion([{...p,x:7,speed:0},{...q,x:7,speed:0}],0.05);
+    expect(r.ctxs[0].sources).toHaveLength(total);
+    expect(new Set(r.ctxs[0].decoded).size).toBe(r.ctxs[0].decoded.length);
+    r.audio.remotePlayersMotion([],0.05);
+    expect(r.audio.spatialDiagnostics().emitters).toBe(0);
+    expect(active.every(s=>s.stopped && s.disconnected)).toBe(true);
+    expect(panners.every(p=>p.disconnected)).toBe(true);
+    r.audio.dispose();
+  });
+});

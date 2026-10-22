@@ -42,3 +42,5 @@ next-env.d.ts
 
 # oryginalne paczki zasobów 3D (nie trafiają do repo ani do bundla; patrz docs/projekt/zasoby-3d.md)
 /.assets-src/
+
+!.env.multiplayer.example

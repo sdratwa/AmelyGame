@@ -1,9 +1,9 @@
-import { GameApp } from "@/components/game/GameApp";
+import { GameEntry } from "@/components/game/GameEntry";
 
 export default function Home() {
   return (
     <div className="h-dvh">
-      <GameApp />
+      <GameEntry />
     </div>
   );
 }

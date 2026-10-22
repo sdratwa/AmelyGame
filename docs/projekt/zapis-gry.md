@@ -1,5 +1,7 @@
 # Zapis gry (E1, E2, Q1, SaveV3) - stan implementacji
 
+Aktualizacja online (23 października 2026): bieżący format to SaveV4 z wyglądem postaci. Online używa osobnego magazynu `miasto.online.<worldInstanceId>`, solo nadal `miasto.save`. Postęp questa i pozycja są odtwarzane przy ponownym wejściu online; zapis jest lokalny dla przeglądarki. Wspólny zegar serwera `worldElapsed` jest stanem sesji i nie trafia do SaveV4. Szczegóły oraz ograniczenia: [multiplayer-m1a.md](multiplayer-m1a.md). Poniższy opis warstw dokumentuje historyczny etap SaveV3.
+
 Opis tego, co działa w kodzie po etapach E1 (magazyn), E2 + Q1 (ekwipunek ze stosami, questy, skrzynie, troll z depozytem, most) oraz po usunięciu telefonu (SaveV3 = SaveV2 bez telefonu). Minimapa (mgła odkrywania) i tutorial jako maszyna kroków dochodzą w kolejnych wersjach formatu, każda z migracją.
 
 ## Warstwy

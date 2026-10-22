@@ -1,3 +1,6 @@
+import { SOUND_REGISTRY, type PlayerSoundEvent } from "../multiplayer/protocol";
+import { PlayerStepEmitter, SPATIAL_DEFAULTS, stepGain } from "./playerSpatial";
+import type { Player } from "../multiplayer/protocol";
 import { gameHour, MidnightWatcher } from "./clock";
 import {
   FootstepScheduler,
@@ -69,7 +72,7 @@ export type StepSink = {
 };
 
 export type AudioMode = { dialog: boolean; frozen: boolean };
-export type ListenerPose = { x: number; z: number; yaw: number };
+export type ListenerPose = { x: number; y?: number; z: number; yaw: number };
 
 export type EffectInfo = { label: string; kind: "bird" | "wolves" | "wolves-test"; at: number; distance: number; bearingDeg: number; rate: number };
 
@@ -239,6 +242,158 @@ export class ForestAudioController {
   private lastMidnight: MidnightInfo | null = null;
   private lastWolvesSave: string | null = null;
   private stepVolumes: StepVolumes = { player: 1, npc: 1 };
+  spatialSettings = { ...SPATIAL_DEFAULTS };
+  private remoteEmitters = new Map<
+    string,
+    {
+      scheduler: PlayerStepEmitter;
+      sources: Map<AudioBufferSourceNode, { pan: PannerNode; gain: GainNode }>;
+      last: Player;
+    }
+  >();
+  clearRemotePlayers(): void {
+    for (const e of this.remoteEmitters.values())
+      for (const source of e.sources.keys()) {
+        try {
+          source.stop();
+          source.onended?.(new Event("ended"));
+        } catch {}
+      }
+    this.remoteEmitters.clear();
+  }
+  remotePlayersMotion(players: Player[], dt: number): void {
+    const s = this.session;
+    for (const [id, e] of this.remoteEmitters)
+      if (!players.some((p) => p.playerId === id)) {
+        for (const source of e.sources.keys()) {
+          try {
+            source.stop();
+            source.onended?.(new Event("ended"));
+          } catch {}
+        }
+        this.remoteEmitters.delete(id);
+      }
+    if (!s || !this.running(s) || !s.steps.ready || !s.pose) return;
+    for (const p of players) {
+      let e = this.remoteEmitters.get(p.playerId);
+      if (!e) {
+        e = { scheduler: new PlayerStepEmitter(), sources: new Map(), last: p };
+        this.remoteEmitters.set(p.playerId, e);
+      }
+      e.last = p;
+      const step = e.scheduler.update(p, dt);
+      const cfg = this.spatialSettings,
+        range = p.crouching
+          ? cfg.crouchRange
+          : p.running
+            ? cfg.runRange
+            : cfg.walkRange;
+      const distance = Math.hypot(
+        p.x - s.pose.x,
+        p.z - s.pose.z,
+        p.y - (s.pose.y ?? EAR_HEIGHT),
+      );
+      const attenuation = stepGain(
+        distance,
+        range,
+        cfg.refDistance,
+        cfg.rolloff,
+      );
+      const volume = cfg.enabled
+        ? cfg.volume * attenuation * (p.crouching ? 0.25 : p.running ? 1.3 : 1)
+        : 0;
+      for (const active of e.sources.values()) {
+        setPosition(active.pan, p.x, p.y + 0.1, p.z);
+        active.gain.gain.value = volume;
+      }
+      if (!step || volume <= 0 || e.sources.size >= 3) continue;
+      const surface = this.surfaceResolver?.(p.x, p.z) ?? DEFAULT_SURFACE;
+      const pool = s.steps.pools.get(SURFACE_PROFILES[surface].pool);
+      if (!pool?.buffers.length) continue;
+      const source = s.ctx.createBufferSource();
+      source.buffer =
+        pool.buffers[Math.floor(this.rng() * pool.buffers.length)];
+      const gain = s.ctx.createGain();
+      gain.gain.value = volume;
+      const pan = s.ctx.createPanner();
+      pan.panningModel = "HRTF";
+      pan.rolloffFactor = 0;
+      setPosition(pan, p.x, p.y + 0.1, p.z);
+      source.connect(gain);
+      gain.connect(pan);
+      pan.connect(s.effectsVol);
+      e.sources.set(source, { pan, gain });
+      source.onended = () => {
+        e!.sources.delete(source);
+        source.disconnect();
+        gain.disconnect();
+        pan.disconnect();
+      };
+      source.start();
+    }
+  }
+  async playPlayerSound(event: PlayerSoundEvent): Promise<boolean> {
+    const s = this.session,
+      cfg = SOUND_REGISTRY[event.soundId];
+    if (!s || !this.running(s) || !s.loader || !cfg?.asset || !s.pose)
+      return false;
+    const buffer = await s.loader.load(cfg.asset).catch(() => null);
+    if (!buffer || s.disposed || !this.running(s)) return false;
+    const source = s.ctx.createBufferSource();
+    source.buffer = buffer;
+    const pan = s.ctx.createPanner();
+    pan.panningModel = "HRTF";
+    pan.distanceModel = "inverse";
+    pan.refDistance = cfg.refDistance;
+    pan.rolloffFactor = cfg.rolloff;
+    pan.maxDistance = cfg.range;
+    setPosition(pan, event.x, event.y, event.z);
+    const gain = s.ctx.createGain();
+    const distance = Math.hypot(event.x - s.pose.x, event.z - s.pose.z);
+    gain.gain.value = cfg.gain * Math.max(0, 1 - (distance / cfg.range) ** 4);
+    source.connect(gain);
+    gain.connect(pan);
+    pan.connect(s.effectsVol);
+    const voice: Voice = {
+      kind: "bird",
+      source,
+      nodes: [gain, pan],
+      done: false,
+    };
+    s.voices.add(voice);
+    source.onended = () => this.finishVoice(s, voice, false);
+    source.start();
+    return true;
+  }
+  configureSpatial(patch: Partial<typeof SPATIAL_DEFAULTS>) {
+    Object.assign(this.spatialSettings, patch);
+  }
+  spatialDiagnostics() {
+    return {
+      emitterDetails: [...this.remoteEmitters].map(([playerId, e]) => ({
+        playerId,
+        x: e.last.x,
+        y: e.last.y + 0.1,
+        z: e.last.z,
+        voices: e.sources.size,
+      })),
+      emitters: this.remoteEmitters.size,
+      voices: [...this.remoteEmitters.values()].reduce(
+        (n, e) => n + e.sources.size,
+        0,
+      ),
+      nearest: this.session?.pose
+        ? Math.min(
+            ...[...this.remoteEmitters.values()].map((e) =>
+              Math.hypot(
+                e.last.x - this.session!.pose!.x,
+                e.last.z - this.session!.pose!.z,
+              ),
+            ),
+          )
+        : Infinity,
+    };
+  }
   private surfaceResolver: SurfaceResolver | null = null;
 
   constructor(private readonly deps: ControllerDeps = {}) {}
@@ -404,6 +559,7 @@ export class ForestAudioController {
 
   /** Wyjście z lasu: szybkie wyciszenie, potem zatrzymanie źródeł, rozłączenie grafu i zamknięcie kontekstu. */
   leave(): void {
+    this.clearRemotePlayers();
     const s = this.session;
     if (!s) return;
     this.session = null;
@@ -422,6 +578,7 @@ export class ForestAudioController {
 
   /** Natychmiastowe zwolnienie wszystkiego (zamknięcie aplikacji, testy). */
   dispose(): void {
+    this.clearRemotePlayers();
     const s = this.session;
     this.session = null;
     if (s) this.disposeSession(s);
@@ -472,6 +629,7 @@ export class ForestAudioController {
         if (s.disposed) return;
         s.hidden = Boolean(doc.hidden);
         if (s.hidden) {
+          this.clearRemotePlayers();
           s.ctx.suspend().catch(() => undefined);
           s.steps.player.scheduler.reset();
         } else {
@@ -665,13 +823,14 @@ export class ForestAudioController {
     const s = this.session;
     if (!s || s.disposed) return;
     const ctxTime = s.ctx.currentTime;
+    pose = {...pose,y:pose.y ?? s.pose?.y ?? EAR_HEIGHT};
     s.pose = pose;
     const l = s.ctx.listener;
     const fx = -Math.sin(pose.yaw);
     const fz = -Math.cos(pose.yaw);
     if (l.positionX) {
       setParam(l.positionX, pose.x, ctxTime, 0.015);
-      setParam(l.positionY, EAR_HEIGHT, ctxTime, 0.015);
+      setParam(l.positionY, pose.y ?? s.pose?.y ?? EAR_HEIGHT, ctxTime, 0.015);
       setParam(l.positionZ, pose.z, ctxTime, 0.015);
       setParam(l.forwardX, fx, ctxTime, 0.02);
       setParam(l.forwardY, 0, ctxTime, 0.02);
@@ -680,7 +839,7 @@ export class ForestAudioController {
       l.upY.value = 1;
       l.upZ.value = 0;
     } else {
-      l.setPosition(pose.x, EAR_HEIGHT, pose.z);
+      l.setPosition(pose.x, pose.y ?? EAR_HEIGHT, pose.z);
       l.setOrientation(fx, 0, fz, 0, 1, 0);
     }
   }
@@ -1009,8 +1168,10 @@ export class ForestAudioController {
     lowpass.frequency.value = Math.min(18000, lowpassHz * ev.tone);
     source.connect(env);
     env.connect(lowpass);
-    lowpass.connect(s.steps.player.bus);
-    const voice: Voice = { kind: "step", source, nodes: [env, lowpass], done: false };
+    const panner=ctx.createPanner();panner.panningModel='HRTF';panner.rolloffFactor=0;
+    setPosition(panner,s.pose?.x??0,(s.pose?.y??EAR_HEIGHT)-EAR_HEIGHT+0.1,s.pose?.z??0);
+    lowpass.connect(panner);panner.connect(s.steps.player.bus);
+    const voice: Voice = { kind: "step", source, nodes: [env, lowpass, panner], done: false };
     s.voices.add(voice);
     s.steps.player.voices++;
     source.onended = () => this.finishVoice(s, voice, false);

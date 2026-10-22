@@ -4,6 +4,8 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 
 ## Spis
 
+- [multiplayer-m1a.md](multiplayer-m1a.md) - multiplayer LAN, przestrzenne audio, osobny zapis online, wspólny zegar serwera, uruchamianie i testy odbioru.
+
 - [architektura.md](architektura.md) - moduły, komendy i zdarzenia, pauza czasu, dane vs kod.
 - [model-danych.md](model-danych.md) - stan gry, ekwipunek i kontenery, skrzynie, depozyt trolla, docelowy zapis.
 - [swiat-w0.md](swiat-w0.md) - rdzeń świata po W0: współrzędne i sektory, teren, indeks przestrzenny, walkable, punkty i strefy.

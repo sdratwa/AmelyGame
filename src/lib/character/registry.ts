@@ -57,7 +57,7 @@ export type CatalogItem = {
 export function glbLods(item: CatalogItem): readonly GlbLod[] {
   if (item.source.kind !== "glb") return [];
   const rest = (item.source.lods ?? []).filter((l) => l.level !== 0);
-  return [{ level: 0, file: item.source.file }, ...rest].sort((a, b) => a.level - b.level);
+  return [{ level: 0 as const, file: item.source.file }, ...rest].sort((a, b) => a.level - b.level);
 }
 
 /** Plik dla poziomu LOD (dziś zawsze LOD0, dopóki nie ma uproszczonych wersji; brakujący poziom wraca do najbliższego niższego). */

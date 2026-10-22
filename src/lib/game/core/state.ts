@@ -66,6 +66,8 @@ export type GameState = {
   view: View;
   tutorialDone: boolean;
   elapsed: number;
+  /** Czas świata online z serwera; pole sesji, nigdy nie pochodzi z SaveV4. */
+  worldElapsed?: number;
   health: number;
   drainAcc: number;
   wallet: number;

@@ -50,6 +50,7 @@ export type Command =
   | { type: "forest.pose"; pose: ForestPose }
   | { type: "appearance.set"; appearance: CharacterAppearanceV1 }
   | { type: "tick"; dt: number }
+  | { type: "world.clock"; elapsed: number }
   | { type: "enter"; view: View }
   | { type: "leave" }
   | { type: "buy"; item: ItemId }
@@ -94,6 +95,10 @@ function execute(state: GameState, command: Command): CommandResult {
       return setForestPose(state, command.pose);
     case "appearance.set":
       return setAppearance(state, command.appearance);
+    case "world.clock":
+      return Number.isFinite(command.elapsed) && command.elapsed >= 0 && state.worldElapsed !== command.elapsed
+        ? result({ ...state, worldElapsed: command.elapsed })
+        : unchanged(state);
     case "tick":
       return tick(state, command.dt);
     case "enter":
@@ -159,7 +164,7 @@ const sameList = (a: string[], b: string[]) =>
 /** Jedyne API zmian stanu gry: zwraca nowy stan i zdarzenia będące skutkiem komendy. */
 export function applyCommand(state: GameState, command: Command): CommandResult {
   let outcome = execute(state, command);
-  if (command.type !== "tick" && outcome.state !== state) {
+  if (command.type !== "tick" && command.type !== "world.clock" && outcome.state !== state) {
     const settled = settleQuests(outcome.state);
     if (settled.events.length > 0) outcome = { state: settled.state, events: [...outcome.events, ...settled.events] };
   }

@@ -23,7 +23,7 @@ export function tick(state: GameState, dtSeconds: number): CommandResult {
 
   const dt = Math.max(0, dtSeconds);
   const elapsed = state.elapsed + dt;
-  const clock = getClock(elapsed);
+  const clock = getClock(state.worldElapsed ?? elapsed);
   const rate = drainPerSecond(clock.season, clock.isDay, isSheltered(state));
   let acc = state.drainAcc + rate * dt;
   let health = state.health;

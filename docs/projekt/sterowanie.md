@@ -12,7 +12,7 @@
 | J | dziennik |
 | M | minimapa |
 | O (albo F3) | panel diagnostyczny |
-| Esc | zamknięcie okna; zwolnienie myszy; kolejny Esc wraca do miasta |
+| Esc | zamknięcie okna; zwolnienie myszy; kolejny Esc otwiera menu pauzy |
 
 Lista w ekranie pomocy w lesie pochodzi z jednego źródła: `FOREST_CONTROLS` w `src/lib/input/shortcuts.ts`.
 
@@ -30,7 +30,7 @@ Wspólna logika: `src/lib/input/shortcuts.ts` (testy: `shortcuts.test.ts`).
 - Nie działają, gdy fokus jest w polu do wpisywania: `input` tekstowy (nie przyciski, pola wyboru), `textarea`, `select`, `contenteditable`, elementy z rolą `textbox`/`searchbox`/`combobox`.
 - F3 nie wpisuje znaku, więc działa także z fokusem w polu; z Ctrl/Cmd/Alt i przy powtórzeniu jest ignorowane.
 - Litera jest dopasowana po wydrukowanym znaku (`key`), a dla układów bez liter łacińskich po pozycji klawisza (`code`). Shift nie przeszkadza (można trzymać bieg).
-- Podczas pointer lock zdarzenia `keydown` nadal docierają do okna, więc `O`, `F3`, `E`, `I`, `J`, `M` działają. `Esc` zwalnia mysz (przeglądarka), kolejny `Esc` opuszcza las (istniejący strażnik 0,7 s).
+- Podczas pointer lock zdarzenia `keydown` nadal docierają do okna, więc `O`, `F3`, `E`, `I`, `J`, `M` działają. `Esc` zwalnia mysz (przeglądarka), kolejny `Esc` otwiera menu pauzy (strażnik 0,7 s). „Wróć do miasta” zmienia widok bez rozłączania online; „Wyjdź online” zapisuje postęp i opuszcza serwer. Pora dnia online płynie także przy otwartym menu.
 
 ## Panel diagnostyczny
 

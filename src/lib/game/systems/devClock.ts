@@ -18,6 +18,7 @@ export function nextClockTime(elapsed: number, hour: number): number {
 
 /** Komenda deweloperska: ręczne przesunięcie zegara gry do przodu (panel diagnostyczny). Nie zmienia nic poza `elapsed`. */
 export function devSetClock(state: GameState, elapsed: number): CommandResult {
+  if (state.worldElapsed !== undefined) return unchanged(state);
   if (!Number.isFinite(elapsed) || elapsed <= state.elapsed || elapsed - state.elapsed > MAX_JUMP) return unchanged(state);
   return result({ ...state, elapsed });
 }

@@ -33,7 +33,7 @@ export function TopBar({
   onOpenJournal: () => void;
   onOpenMenu: () => void;
 }) {
-  const clock = getClock(state.elapsed);
+  const clock = getClock(state.worldElapsed ?? state.elapsed);
   const pct = Math.round((state.health / MAX_HEALTH) * 100);
   const cold = clock.season === "winter" && !sheltered;
   const low = pct <= 25;
