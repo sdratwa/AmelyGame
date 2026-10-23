@@ -1,4 +1,5 @@
 import type { SharedWorld } from "./sharedWorld";
+import type { CharacterAppearanceV1 } from "../character/appearance";
 export const PROTOCOL = 3;
 export const NET = { hz: 20, interpolationMs: 100, maxPlayers: 8 };
 export type Motion = {
@@ -28,8 +29,10 @@ export type WorldConfig = {
   generatorVersion: number;
   fingerprint: string;
 };
+/** Wygląd graczy po `playerId`; brak wpisu = wygląd domyślny. Wysyłany osobno od snapshotów ruchu (zmienia się rzadko). */
+export type Appearances = Record<string, CharacterAppearanceV1>;
 export type Snapshot = { serverTime: number; worldElapsed: number; players: Player[] };
-export type Welcome = { config: WorldConfig; player: Player; worldElapsed: number; world: SharedWorld };
+export type Welcome = { config: WorldConfig; player: Player; worldElapsed: number; world: SharedWorld; appearances?: Appearances };
 export const SOUND_REGISTRY: Record<
   "HELP_SHOUT",
   {

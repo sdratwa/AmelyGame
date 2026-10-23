@@ -10,10 +10,12 @@ import {
   idleMotion,
   PROTOCOL,
   validMotion,
+  type Appearances,
   type Snapshot,
   type Welcome,
 } from "./protocol";
 import { PlayerStepEmitter, stepGain } from "../audio/playerSpatial";
+import { DEFAULT_APPEARANCE, withAppearance } from "../character/appearance";
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 describe("M1a", () => {
   it("fresh server and client generation produce identical gameplay geometry", () => {
@@ -133,6 +135,21 @@ describe("M1a", () => {
       expect(snapshot.worldElapsed).toBeGreaterThan(wb.worldElapsed);
       expect(wa.player.playerId).not.toBe(wb.player.playerId);
       expect(wa.player.x).not.toBe(wb.player.x);
+      let shared: Appearances = {};
+      b.onMessage("appearances", (m: Appearances) => {
+        shared = m;
+      });
+      a.onMessage("appearances", () => {});
+      const red = withAppearance(DEFAULT_APPEARANCE, { topColor: "#ff0000" });
+      a.send("appearance", { ...red, bottomColor: "nie-kolor", topId: "top.nieznany" });
+      await delay(120);
+      // Serwer przypisuje wygląd nadawcy i normalizuje dane; drugi gracz nie dostaje własnego wpisu jako cudzego.
+      expect(Object.keys(shared)).toEqual([wa.player.playerId]);
+      expect(shared[wa.player.playerId]).toEqual({ ...red, bottomColor: DEFAULT_APPEARANCE.bottomColor, topId: null });
+      expect(shared[wb.player.playerId]).toBeUndefined();
+      a.send("appearance", "śmieci");
+      await delay(60);
+      expect(Object.keys(shared)).toEqual([wa.player.playerId]);
       a.send("motion", {
         ...idleMotion(0, 1, 0),
         sequence: 1,

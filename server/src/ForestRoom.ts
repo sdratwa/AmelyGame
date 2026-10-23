@@ -4,6 +4,7 @@ import { createSoundEvent } from "../../src/lib/multiplayer/soundEvents";
 import { Room, type Client } from "@colyseus/core";
 import { randomUUID } from "node:crypto";
 import { createInstance } from "../../src/lib/multiplayer/world";
+import { normalizeAppearance, type CharacterAppearanceV1 } from "../../src/lib/character/appearance";
 import {
   NET,
   PROTOCOL,
@@ -18,6 +19,15 @@ export class ForestRoom extends Room {
   private store?: WorldStore;
   private sharedWorld = emptySharedWorld();
   private players = new Map<string, Player>();
+  private appearances = new Map<string, CharacterAppearanceV1>();
+  private appearanceMap() {
+    const map: Record<string, CharacterAppearanceV1> = {};
+    for (const [sessionId, appearance] of this.appearances) {
+      const p = this.players.get(sessionId);
+      if (p) map[p.playerId] = appearance;
+    }
+    return map;
+  }
   private soundSequence = 0;
   private readonly worldStartedAt = performance.now();
   private worldElapsed() {
@@ -76,8 +86,15 @@ export class ForestRoom extends Room {
           config: this.world.config,
           world: this.sharedWorld,
           player: this.players.get(client.sessionId),
+          appearances: this.appearanceMap(),
         }),
     );
+    this.onMessage("appearance", (client, data) => {
+      if (!this.players.has(client.sessionId) || !this.allow(client) || !data || typeof data !== "object") return;
+      // Serwer nie ufa klientowi: wygląd jest normalizowany (znane elementy rejestru, poprawne kolory), a przypisany do sesji nadawcy.
+      this.appearances.set(client.sessionId, normalizeAppearance(data));
+      this.broadcast("appearances", this.appearanceMap());
+    });
     this.onMessage("ping", (client, value) => {
       if (this.allow(client) && typeof value === "number")
         client.send("pong", value);
@@ -157,6 +174,7 @@ export class ForestRoom extends Room {
   onLeave(client: Client) {
     const p = this.players.get(client.sessionId);
     this.players.delete(client.sessionId);
+    this.appearances.delete(client.sessionId);
     this.slots.delete(client.sessionId);
     this.limits.delete(client.sessionId);
     this.broadcast("snapshot", {

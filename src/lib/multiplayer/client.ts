@@ -2,10 +2,12 @@ import type { SharedWorld, WorldCommand, WorldReply } from "./sharedWorld";
 import type { SaveV4 } from "../game/save/schema";
 import { SoundEventGate } from "./soundEvents";
 import type { PlayerSoundEvent } from "./protocol";
+import type { CharacterAppearanceV1 } from "../character/appearance";
 import { Client, type Room } from "@colyseus/sdk";
 import {
   NET,
   PROTOCOL,
+  type Appearances,
   type Motion,
   type Player,
   type Snapshot,
@@ -50,6 +52,10 @@ export class MultiplayerClient {
   config: WorldConfig | null = null;
   local: Player | null = null;
   players: Player[] = [];
+  /** Wygląd graczy po `playerId` (z serwera); brak wpisu = domyślny. */
+  appearances: Appearances = {};
+  private sentAppearance = "";
+  private sentAppearanceAt = 0;
   status = "rozłączony";
   notice = "";
   ping = 0;
@@ -75,6 +81,9 @@ export class MultiplayerClient {
       room.onMessage("worldReply", (reply: WorldReply) => {
         this.pending.get(reply.requestId)?.(reply);
         this.receiveWorld(reply.world);
+      });
+      room.onMessage("appearances", (a: Appearances) => {
+        if (a && typeof a === "object") this.appearances = a;
       });
       room.onMessage("snapshot", (s: Snapshot) => {
         this.worldElapsed = s.worldElapsed;
@@ -112,6 +121,8 @@ export class MultiplayerClient {
         this.sounds.clear();
         this.status = "rozłączony";
         this.players = [];
+        this.appearances = {};
+        this.sentAppearance = "";
         this.history = [];
         if (this.timer) clearInterval(this.timer);
       });
@@ -139,6 +150,8 @@ export class MultiplayerClient {
             this.worldElapsed = w.worldElapsed;
             this.config = w.config;
             this.local = w.player;
+            this.appearances = w.appearances ?? {};
+            this.sentAppearance = "";
             this.status = "połączony";
             resolve();
           },
@@ -160,6 +173,18 @@ export class MultiplayerClient {
   }
   setInterpolation(ms: number) {
     this.interpolationMs = Math.max(50, Math.min(250, ms));
+  }
+  /**
+   * Wysyła własny wygląd serwerowi, gdy różni się od ostatnio wysłanego (po połączeniu i po każdej zmianie).
+   * Można wołać co klatkę: zmiany są ograniczane czasowo, a ostatnia zawsze dojdzie.
+   */
+  syncAppearance(appearance: CharacterAppearanceV1, now = performance.now()) {
+    if (this.status !== "połączony" || !this.room) return;
+    const key = JSON.stringify(appearance);
+    if (key === this.sentAppearance || now - this.sentAppearanceAt < 150) return;
+    this.sentAppearance = key;
+    this.sentAppearanceAt = now;
+    this.room.send("appearance", appearance);
   }
   recordJump() {
     this.jumpSequence++;
@@ -217,6 +242,8 @@ export class MultiplayerClient {
     void this.room?.leave();
     this.room = null;
     this.players = [];
+    this.appearances = {};
+    this.sentAppearance = "";
     this.history = [];
     this.sounds.clear();
     this.sequence = 0;

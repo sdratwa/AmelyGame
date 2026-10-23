@@ -1,6 +1,6 @@
 import { NET } from "../multiplayer/protocol";
 import * as THREE from "three";
-import { RemotePlayers } from "./remotePlayers";
+import { RemotePlayers, createRemoteTemplate } from "./remotePlayers";
 import type { MultiplayerClient } from "../multiplayer/client";
 import { getForestAudio } from "../audio/controller";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
@@ -323,6 +323,8 @@ export class ForestRenderer {
   private npcDialogListener: (() => void) | null = null;
   multiplayer: MultiplayerClient | null = null;
   private remotePlayers: RemotePlayers | null = null;
+  /** Czysty (bez ubrania lokalnego gracza) wzorzec modelu dla graczy zdalnych; tworzony przed `AppearanceRig` lokalnego. */
+  private remoteTemplate: PlayerAsset | null = null;
   private netElapsed = 0;
   private stepSink: StepSink | null = null;
   private stepForest: ForestWorld | null = null;
@@ -983,6 +985,8 @@ export class ForestRenderer {
   private disposeTpp(): void {
     this.remotePlayers?.dispose();
     this.remotePlayers = null;
+    this.remoteTemplate?.dispose();
+    this.remoteTemplate = null;
     getForestAudio().clearRemotePlayers();
     const t = this.tpp;
     if (!t) return;
@@ -1234,6 +1238,8 @@ export class ForestRenderer {
     if (asset) {
       try {
         const shadows = this.shadowsOn();
+        this.remoteTemplate?.dispose();
+        this.remoteTemplate = createRemoteTemplate(asset);
         model = new PlayerModel(asset, { castShadow: shadows, receiveShadow: shadows, targetHeight: rig.config.characterHeight, modelYawDeg: rig.config.modelYawDeg });
         animator = new PlayerAnimator(asset, model.hipsName);
         this.scene.add(model.group);
@@ -1707,10 +1713,11 @@ export class ForestRenderer {
     this.particleUniforms.uCenter.value.copy(this.camera.position);
     this.particleUniforms.uSize.value = 0.05;
 
-    if (this.multiplayer && this.tpp?.model) {
-      this.remotePlayers ??= new RemotePlayers(this.scene, this.tpp.model.asset);
+    if (this.multiplayer && this.tpp?.model && this.remoteTemplate) {
+      this.remotePlayers ??= new RemotePlayers(this.scene, this.remoteTemplate);
+      this.multiplayer.syncAppearance(this.playerAppearance);
       const players = this.multiplayer.remote();
-      this.remotePlayers.update(players, dt);
+      this.remotePlayers.update(players, dt, this.multiplayer.appearances);
       getForestAudio().remotePlayersMotion(players, dt);
       const s = this.tpp.rig.controller.state;
       getForestAudio().setPose({
