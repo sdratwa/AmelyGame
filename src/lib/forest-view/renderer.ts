@@ -25,6 +25,8 @@ import { DEFAULT_APPEARANCE, devFitOverrides, normalizeAppearance, type Characte
 import { mergeMove } from "@/lib/input/analog";
 import { TPP_BUTTONS } from "@/lib/input/gamepadConfig";
 import type { InputHub } from "@/lib/input/inputHub";
+import { applyTouchToTpp, externalMove, type ExternalMove } from "@/lib/input/touchAdapter";
+import type { TouchInput } from "@/lib/input/touchInput";
 import { FrameStats } from "./frameStats";
 import { buildGroundMesh, buildWaterMesh, createGroundBuilder, desertWeightFn, type GroundMeshData, type GroundStyle } from "./ground";
 import { GRADE_UNIFORM_DECL, GROUND_DETAIL_FRAGMENT, NOISE_GLSL, PRO_GROUND_ALBEDO, PRO_GROUND_DECL, PRO_GROUND_NORMAL, PaletteStore, gradeFragment } from "./grading";
@@ -364,6 +366,9 @@ export class ForestRenderer {
   private inputHub: InputHub | null = null;
   private detachInputHub: (() => void) | null = null;
   private readonly moveOut: MoveInput = { forward: 0, right: 0, sprint: false };
+  private touchInput: TouchInput | null = null;
+  private readonly extMove: ExternalMove = { x: 0, y: 0, sprint: false };
+  private readonly touchLook = { x: 0, y: 0 };
   private locked = false;
   private loading: string | null = "Przygotowanie sceny";
   private error: string | null = null;
@@ -704,7 +709,14 @@ export class ForestRenderer {
     if (suspended) {
       this.keys.clear();
       this.tpp?.rig.input.releaseAll();
+      this.touchInput?.reset();
     }
+  }
+
+  /** Podłącza wejście dotykowe (telefon): joystick, kamera i przyciski czytane w `frame`. `null` odłącza. */
+  setTouchInput(touch: TouchInput | null): void {
+    this.touchInput?.reset();
+    this.touchInput = touch;
   }
 
   get isStreaming(): boolean {
@@ -1617,8 +1629,8 @@ export class ForestRenderer {
     const forward = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
     const right = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);
     const sprint = k.has("ShiftLeft") || k.has("ShiftRight");
-    const pad = this.inputHub;
-    return mergeMove(forward, right, sprint, pad?.move.x ?? 0, pad?.move.y ?? 0, pad?.sprint ?? false, this.suspended, this.moveOut);
+    const ext = externalMove(this.touchInput, this.inputHub, this.extMove);
+    return mergeMove(forward, right, sprint, ext.x, ext.y, ext.sprint, this.suspended, this.moveOut);
   }
 
   // ---- pętla ----
@@ -1668,8 +1680,9 @@ export class ForestRenderer {
         const tpp = this.tpp;
         if (tpp) {
           tpp.rig.blockers = ctl.blockers;
+          // Ruch, skok, kucanie i kamera z dotyku (joystick ma pierwszeństwo przed padem); bez dotyku ruch idzie z pada.
+          applyTouchToTpp(this.touchInput, pad, { input: tpp.rig.input, camera: tpp.rig.camera }, this.extMove, this.touchLook);
           if (pad) {
-            tpp.rig.input.setExternal(pad.move.x, pad.move.y, pad.sprint);
             const gp = pad.pad;
             if (gp.status === "ready") {
               if (gp.pressed[TPP_BUTTONS.jump] === 1) tpp.rig.input.requestJump();
@@ -1680,6 +1693,11 @@ export class ForestRenderer {
           this.updateTpp(dt, ctl);
         } else {
           if (pad && (pad.look.x !== 0 || pad.look.y !== 0)) ctl.lookAnalog(pad.look.x, pad.look.y, dt, pad.lookYawRate, pad.lookPitchRate);
+          const touch = this.touchInput;
+          if (touch?.isEnabled) {
+            touch.consumeLook(this.touchLook);
+            if (this.touchLook.x !== 0 || this.touchLook.y !== 0) ctl.look(this.touchLook.x, this.touchLook.y);
+          }
           ctl.update(dt, this.moveInput());
         }
         const walked = dt > MAX_STEP_FRAME_DT ? 0 : Math.hypot(ctl.state.x - px, ctl.state.z - pz);

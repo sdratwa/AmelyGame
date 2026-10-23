@@ -6,6 +6,8 @@ import { getInputHub } from "@/lib/input/browser";
 import { controllerSettings, DEFAULT_CONTROLLER_SETTINGS, type ControllerSettings } from "@/lib/input/controllerSettings";
 import type { PadStatus } from "@/lib/input/gamepadInput";
 import { hintLabel } from "@/lib/input/prompts";
+import { isTouchUi, parseTouchOverride, TOUCH_UI_STORAGE_KEY, type TouchOverride } from "@/lib/input/touchMode";
+import { touchSettings, DEFAULT_TOUCH_SETTINGS, type TouchSettings } from "@/lib/input/touchSettings";
 
 /** Subskrypcja akcji wejścia (pad; klawiatura korzysta z tych samych funkcji akcji w komponentach). */
 export function useInputActions(handler: ActionHandler, priority = 0): void {
@@ -47,5 +49,58 @@ export function useControllerSettings(): ControllerSettings {
     (cb) => controllerSettings.subscribe(cb),
     () => controllerSettings.get(),
     () => DEFAULT_CONTROLLER_SETTINGS,
+  );
+}
+
+let touchOverride: TouchOverride | undefined;
+
+function readTouchOverride(): TouchOverride {
+  if (touchOverride === undefined) {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(TOUCH_UI_STORAGE_KEY);
+    } catch {
+      stored = null;
+    }
+    touchOverride = parseTouchOverride(window.location.search, stored);
+  }
+  return touchOverride;
+}
+
+function touchUiSnapshot(): boolean {
+  return isTouchUi({
+    coarsePointer: window.matchMedia("(pointer: coarse)").matches,
+    hoverNone: window.matchMedia("(hover: none)").matches,
+    maxTouchPoints: navigator.maxTouchPoints ?? 0,
+    minDim: Math.min(window.innerWidth, window.innerHeight),
+    override: readTouchOverride(),
+  });
+}
+
+function subscribeTouchUi(cb: () => void): () => void {
+  const queries = [window.matchMedia("(pointer: coarse)"), window.matchMedia("(hover: none)")];
+  for (const q of queries) q.addEventListener("change", cb);
+  window.addEventListener("resize", cb);
+  window.addEventListener("orientationchange", cb);
+  return () => {
+    for (const q of queries) q.removeEventListener("change", cb);
+    window.removeEventListener("resize", cb);
+    window.removeEventListener("orientationchange", cb);
+  };
+}
+
+/**
+ * Tryb interfejsu dotykowego (telefon): możliwości urządzenia + rozmiar ekranu (patrz `touchMode.ts`), nie sama szerokość
+ * okna. Zwraca boolean, więc resize (np. zwijanie paska Safari) nie powoduje renderów, dopóki tryb się nie zmieni.
+ */
+export function useTouchUi(): boolean {
+  return useSyncExternalStore(subscribeTouchUi, touchUiSnapshot, () => false);
+}
+
+export function useTouchSettings(): TouchSettings {
+  return useSyncExternalStore(
+    (cb) => touchSettings.subscribe(cb),
+    () => touchSettings.get(),
+    () => DEFAULT_TOUCH_SETTINGS,
   );
 }

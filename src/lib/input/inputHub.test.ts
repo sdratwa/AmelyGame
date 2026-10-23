@@ -267,3 +267,18 @@ describe("InteractGate", () => {
     expect(runs).toBe(1);
   });
 });
+
+describe("InputHub: źródło dotykowe", () => {
+  it("akcja z dotyku (emit) dociera do handlerów ze źródłem touch, a priorytet i połknięcie działają", () => {
+    const s = setup(false);
+    const sources: string[] = [];
+    s.hub.subscribe((e) => {
+      sources.push(`${e.source}:${e.action}`);
+      return e.action === "interact";
+    }, 10);
+    expect(s.hub.emit("interact", "touch", 1)).toBe(true);
+    expect(s.hub.emit("inventory", "touch", 2)).toBe(false);
+    expect(sources).toEqual(["touch:interact", "touch:inventory"]);
+    expect(s.events).toEqual(["inventory"]); // interakcja została połknięta przez handler o wyższym priorytecie
+  });
+});

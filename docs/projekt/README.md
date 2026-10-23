@@ -18,6 +18,7 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 - [m1-c1-skrzynie-minimapa.md](m1-c1-skrzynie-minimapa.md) - M1 + C1: model skrzyni GLB, skrzynie w lesie, klawisz E, ekwipunek (I), pozyskiwanie drewna i kamienia, minimapa (M), zapis.
 - [audio-las.md](audio-las.md) - AUDIO F1: ambient dzień/noc z crossfade, losowe ptaki 3D, wilki o północy, kroki gracza i trolla (FOOTSTEPS V2), kontroler, ustawienia, panel AUDIO, potok `npm run assets:audio`, ograniczenia.
 - [sterowanie.md](sterowanie.md) - sterowanie w lesie (macOS i Windows), skróty, panel diagnostyczny, zasady przechwytywania klawiszy.
+- [sterowanie-dotyk.md](sterowanie-dotyk.md) - telefon (iPhone): kompaktowy HUD, wysuwany plecak, joystick, kamera dotykiem, przyciski akcji, safe area, test ręczny.
 - [gamepad.md](gamepad.md) - Gamepad V1: warstwa wejścia (InputHub, akcje, mapowanie), analogowy ruch i kamera, nawigacja po interfejsie, podpowiedzi zależne od urządzenia, ustawienia, wibracje, ograniczenia.
 - [test-reczny-gamepad-v1.md](test-reczny-gamepad-v1.md) - scenariusz ręcznego testu pada (macOS + Chrome + DualSense), 16 kroków.
 - [plan-testow.md](plan-testow.md) - testy mechanik, generatora, zapisu.

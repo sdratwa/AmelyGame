@@ -51,6 +51,10 @@ Panel nie przechwytuje myszy (poza przyciskiem "Powtórz spotkanie"), więc moż
 3. Kliknij w scenę (pointer lock) i naciśnij O: panel nadal się przełącza.
 4. Otwórz ekwipunek (I) i dziennik (J): działają jak wcześniej.
 
+## Telefon (dotyk)
+
+Na telefonie (dotyk, mały ekran) włącza się osobny interfejs: joystick, kamera przeciągnięciem, przyciski Skok / Kucnij / Użyj, kompaktowy HUD i wysuwany plecak. Szczegóły i test ręczny: [sterowanie-dotyk.md](sterowanie-dotyk.md).
+
 ## Pad (DualSense, Xbox)
 
 Pełna obsługa kontrolera przez Gamepad API: lewy analog ruch, prawy analog kamera (bez pointer lock), L3 bieg, ✕/A interakcja i zatwierdzanie, ○/B cofanie, △/Y ekwipunek, □/X dziennik, L1 minimapa, OPTIONS menu gry, R1/R2 (oraz D-pad lewo/prawo) slot paska, D-pad i lewy analog nawigacja po oknach i mieście. Podpowiedzi w interfejsie przełączają się automatycznie między klawiaturą a padem. Architektura, mapowanie i ograniczenia: [gamepad.md](gamepad.md); test: [test-reczny-gamepad-v1.md](test-reczny-gamepad-v1.md).

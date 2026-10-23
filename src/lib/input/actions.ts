@@ -4,7 +4,12 @@
  * jako zdarzenia `ActionEvent`.
  */
 
-export type InputSource = "keyboard" | "mouse" | "gamepad";
+export type InputSource = "keyboard" | "mouse" | "gamepad" | "touch";
+
+/** Źródła, które nie wywołują własnych zdarzeń DOM i przechodzą wyłącznie przez `InputHub.emit` (pad, dotyk). */
+export function isHubSource(source: InputSource): boolean {
+  return source === "gamepad" || source === "touch";
+}
 
 /** Akcje jednorazowe (jedno naciśnięcie = jedno zdarzenie). */
 export type InputAction =

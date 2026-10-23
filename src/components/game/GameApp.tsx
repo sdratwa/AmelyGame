@@ -2,13 +2,15 @@
 
 import dynamic from "next/dynamic";
 import { GameCommands } from "@/lib/multiplayer/commands";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   boardEntries,
   boardHasUnread,
   getClock,
   initialState,
+  formatClock,
   journalEntries,
+  MAX_HEALTH,
   INVENTORY_SLOTS,
   isSheltered,
   ITEMS,
@@ -27,6 +29,8 @@ import { cn } from "@/lib/utils";
 import type { QualityId } from "@/lib/assets";
 
 import { InventoryBar, TopBar } from "./Hud";
+import { MobileHud } from "./mobile/MobileHud";
+import { MobileInventoryDrawer } from "./mobile/MobileInventoryDrawer";
 import {
   BootScreen,
   ContinueScreen,
@@ -46,7 +50,8 @@ import { ShopInterior } from "./ShopInterior";
 import { WorldMap } from "./WorldMap";
 import { isGameLetterShortcut } from "@/lib/input/shortcuts";
 import { setFreeForest, startBrowserInput } from "@/lib/input/browser";
-import { useInputActions } from "@/components/input/hooks";
+import { useInputActions, useTouchUi } from "@/components/input/hooks";
+import { isHubSource } from "@/lib/input/actions";
 import { PauseMenu } from "./PauseMenu";
 import { ControllerSettingsDialog } from "./ControllerSettingsDialog";
 
@@ -108,10 +113,19 @@ function DevResetButton({ onReset }: { onReset: () => void }) {
   );
 }
 
-export function GameApp({ multiplayer, exitSaverRef }: {
+/** Ekrany przed grą (menu, imię, ładowanie): odstęp od notcha i krawędzi; na desktopie `env()` = 0. */
+const safe = (node: ReactNode) => <div className="safe-pad h-full">{node}</div>;
+
+type GameAppProps = {
   multiplayer?: import("@/lib/multiplayer/client").MultiplayerClient;
   exitSaverRef?: { current: (() => Promise<boolean>) | null };
-}) {
+  /** Telefon: wyjście z trybu online i ponowne łączenie z kompaktowego HUD (zamiast nagłówka `GameEntry`). */
+  onExitOnline?: () => Promise<void>;
+  onReconnect?: () => Promise<void>;
+};
+
+export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExitOnline, onReconnect }: GameAppProps) {
+  const touchUi = useTouchUi();
   const [state, setState] = useState(initialState);
   const [commands] = useState(() => new GameCommands(initialState, setState, multiplayer));
   const dispatch = commands.dispatch;
@@ -342,7 +356,7 @@ export function GameApp({ multiplayer, exitSaverRef }: {
 
   // Pad: te same panele i ten sam pasek ekwipunku co klawiatura (Y/△ ekwipunek, X/□ dziennik, OPTIONS menu, R1/R2 sloty).
   useInputActions((e) => {
-    if (e.source !== "gamepad" || !playing) return false;
+    if (!isHubSource(e.source) || !playing) return false;
     switch (e.action) {
       case "inventory":
         togglePanel("inventory");
@@ -378,11 +392,13 @@ export function GameApp({ multiplayer, exitSaverRef }: {
     document.exitPointerLock?.();
     setPanel("journal");
   }, []);
-  const openMenu = () => {
-    if (!playing || state.dialog) return;
+  const hasDialog = !!state.dialog;
+  const openMenu = useCallback(() => {
+    if (!playing || hasDialog) return;
     document.exitPointerLock?.();
     setPanel((cur) => (cur === null ? "pause" : cur));
-  };
+  }, [playing, hasDialog]);
+  const openFullInventory = useCallback(() => setPanel((cur) => (cur === null ? "inventory" : cur)), []);
   const readBoard = useCallback((id: QuestId) => dispatch({ type: "board.read", id }), [dispatch]);
   const acceptQuest = useCallback((id: QuestId) => dispatch({ type: "quest.accept", id }), [dispatch]);
 
@@ -397,20 +413,20 @@ export function GameApp({ multiplayer, exitSaverRef }: {
   const devReset = multiplayer ? null : <DevResetButton onReset={resetSave} />;
 
   if (state.phase === "name") {
-    if (boot.status === "loading") return <BootScreen />;
+    if (boot.status === "loading") return safe(<BootScreen />);
     const result = boot.result;
     const retry = () => {
       setBoot({ status: "loading" });
       setBootNonce((n) => n + 1);
     };
     if (multiplayer) {
-      return <div role="alert" className="p-6">Nie można wczytać postępu online. Zapis pozostaje zachowany.
+      return safe(<div role="alert" className="p-6">Nie można wczytać postępu online. Zapis pozostaje zachowany.
         <button onClick={retry}>Spróbuj ponownie</button>
-      </div>;
+      </div>);
     }
     const newGame = () => setWantsNewGame(true);
     if (!wantsNewGame && result.kind === "ok") {
-      return (
+      return safe(
         <>
           <ContinueScreen
             save={result.save}
@@ -425,19 +441,19 @@ export function GameApp({ multiplayer, exitSaverRef }: {
             onNewGame={newGame}
           />
           {devReset}
-        </>
+        </>,
       );
     }
     const problem = wantsNewGame ? null : toProblem(result);
     if (problem) {
-      return (
+      return safe(
         <>
           <SaveProblemScreen problem={problem} onNewGame={newGame} onRetry={retry} />
           {devReset}
-        </>
+        </>,
       );
     }
-    return (
+    return safe(
       <>
         <NameScreen
           initial={state.name}
@@ -448,12 +464,12 @@ export function GameApp({ multiplayer, exitSaverRef }: {
           }}
         />
         {devReset}
-      </>
+      </>,
     );
   }
 
   if (state.phase === "loading") {
-    return <LoadingScreen name={state.name} onDone={onWorldReady} />;
+    return safe(<LoadingScreen name={state.name} onDone={onWorldReady} />);
   }
 
   const saveStatus: SaveStatus = saving
@@ -463,11 +479,39 @@ export function GameApp({ multiplayer, exitSaverRef }: {
       : { kind: "idle", lastAt: lastSavedAt };
   const clock = getClock(state.worldElapsed ?? state.elapsed);
   const sheltered = isSheltered(state);
+  const healthPct = Math.round((state.health / MAX_HEALTH) * 100);
+  const cold = clock.season === "winter" && !sheltered;
+  const inForest = state.view === "forest";
 
   return (
     <div className="relative flex h-full flex-col">
-      <TopBar state={state} sheltered={sheltered} onOpenJournal={openJournal} onOpenMenu={openMenu} />
-      <main className="relative min-h-0 flex-1">
+      {touchUi ? (
+        <MobileHud
+          healthPct={healthPct}
+          wallet={state.wallet}
+          isDay={clock.isDay}
+          clockText={formatClock(clock)}
+          season={clock.season}
+          dayInSeason={clock.dayInSeason}
+          cold={cold}
+          sheltered={sheltered}
+          onOpenJournal={openJournal}
+          onOpenMenu={openMenu}
+          multiplayer={multiplayer}
+          onExitOnline={onExitOnline}
+          onReconnect={onReconnect}
+        />
+      ) : (
+        <TopBar state={state} sheltered={sheltered} onOpenJournal={openJournal} onOpenMenu={openMenu} />
+      )}
+      <main
+        className={cn("relative min-h-0 flex-1", touchUi && "absolute inset-0")}
+        style={
+          touchUi && !inForest
+            ? { paddingTop: "calc(max(0.25rem, var(--sat)) + 2.5rem)", paddingLeft: "var(--sal)", paddingRight: "var(--sar)", paddingBottom: "var(--sab)" }
+            : undefined
+        }
+      >
         {state.view === "world" && (
           <WorldMap
             clock={clock}
@@ -508,7 +552,12 @@ export function GameApp({ multiplayer, exitSaverRef }: {
           />
         )}
 
-        {state.view !== "shop" && <QuestTracker quest={trackedQuest(state)} />}
+        {state.view !== "shop" && (
+          <QuestTracker
+            quest={trackedQuest(state)}
+            touchTop={`calc(max(0.25rem, var(--sat)) + ${inForest ? "6.25rem" : "4.25rem"})`}
+          />
+        )}
 
         {state.toast && (
           <div
@@ -516,7 +565,8 @@ export function GameApp({ multiplayer, exitSaverRef }: {
             data-testid="toast"
             role="status"
             className={cn(
-              "pointer-events-none absolute inset-x-3 bottom-3 z-30 mx-auto w-fit max-w-full rounded-full px-4 py-2 text-sm font-semibold shadow-xl",
+              "pointer-events-none absolute inset-x-3 z-30 mx-auto w-fit max-w-full rounded-full px-4 py-2 text-sm font-semibold shadow-xl",
+              touchUi ? "top-[calc(max(0.25rem,var(--sat))+2.75rem)]" : "bottom-3",
               state.toast.tone === "error"
                 ? "bg-red-500 text-white"
                 : "bg-emerald-400 text-emerald-950",
@@ -555,7 +605,19 @@ export function GameApp({ multiplayer, exitSaverRef }: {
         }}
       />
       <ControllerSettingsDialog open={settingsOpen} onClose={() => setPanel("pause")} />
-      <InventoryBar state={state} onSelect={select} onEat={eat} />
+      {touchUi ? (
+        <MobileInventoryDrawer
+          slots={state.slots}
+          selected={state.selected}
+          dead={state.dead}
+          onSelect={select}
+          onEat={eat}
+          onOpenFull={openFullInventory}
+          aboveControls={inForest}
+        />
+      ) : (
+        <InventoryBar state={state} onSelect={select} onEat={eat} />
+      )}
       {state.dead && <DeathOverlay onRespawn={() => dispatch({ type: "respawn" })} />}
       {saveError && (
         <p
@@ -569,4 +631,4 @@ export function GameApp({ multiplayer, exitSaverRef }: {
       {devReset}
     </div>
   );
-}
+});

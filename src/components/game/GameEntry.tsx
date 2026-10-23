@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTouchUi } from "@/components/input/hooks";
 import { GameApp } from "./GameApp";
 import { MultiplayerClient } from "@/lib/multiplayer/client";
 import { getForestAudio } from "@/lib/audio/controller";
@@ -17,7 +18,8 @@ export function GameEntry() {
       client.disconnect();
     };
   }, [client]);
-  async function join() {
+  const touchUi = useTouchUi();
+  const join = useCallback(async () => {
     setBusy(true);
     setError("");
     try {
@@ -34,11 +36,25 @@ export function GameEntry() {
     } finally {
       setBusy(false);
     }
-  }
+  }, [client]);
+  /** Wyjście online: zapis postępu, rozłączenie i powrót do menu (nagłówek na desktopie, przycisk w HUD na telefonie). */
+  const exitOnline = useCallback(async () => {
+    setBusy(true);
+    try {
+      if (exitSaverRef.current && !(await exitSaverRef.current())) return;
+      client.disconnect();
+      setMode("menu");
+    } finally {
+      setBusy(false);
+    }
+  }, [client]);
+  const reconnect = useCallback(async () => {
+    await join();
+  }, [join]);
   if (mode === "solo") return <GameApp />;
   if (mode === "menu")
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-5">
+      <div className="safe-pad flex h-full flex-col items-center justify-center gap-5">
         <h1 className="text-3xl">Miasto</h1>
         <button onClick={() => setMode("solo")}>Gra solo</button>
         <button disabled={busy} onClick={() => void join()}>
@@ -48,6 +64,19 @@ export function GameEntry() {
       </div>
     );
   const audio = getForestAudio();
+  if (touchUi) {
+    // Telefon: bez nagłówka; status online, liczba graczy i wyjście są kompaktowymi chipami w HUD gry.
+    return (
+      <div className="relative h-full min-h-0">
+        <GameApp multiplayer={client} exitSaverRef={exitSaverRef} onExitOnline={exitOnline} onReconnect={reconnect} />
+        {error && (
+          <p role="alert" className="pointer-events-none absolute left-1/2 top-[calc(max(0.25rem,var(--sat))+3rem)] z-50 -translate-x-1/2 rounded-full bg-red-600/90 px-3 py-1 text-xs text-white">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="relative z-10 shrink-0 bg-slate-900 px-3 py-2 text-sm text-white">
@@ -57,16 +86,7 @@ export function GameEntry() {
 
         <button className="mr-4"
           disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              if (exitSaverRef.current && !await exitSaverRef.current()) return;
-              client.disconnect();
-              setMode("menu");
-            } finally {
-              setBusy(false);
-            }
-          }}
+          onClick={() => void exitOnline()}
         >
           Wyjdź online
         </button>

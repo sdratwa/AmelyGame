@@ -11,11 +11,17 @@ export const metadata: Metadata = {
   title: "Gra Miasto",
   description:
     "Przygodowa gra przeglądarkowa: eksploruj miasto, przetrwaj zimę i znajdź swój dom.",
+  // iPhone: po "Dodaj do ekranu początkowego" gra działa bez paska Safari.
+  appleWebApp: { capable: true, title: "Miasto", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  // Bez `cover` iOS zostawia puste pasy przy notchu, a `env(safe-area-inset-*)` zawsze wynosi 0.
+  viewportFit: "cover",
   themeColor: "#0b1220",
 };
 

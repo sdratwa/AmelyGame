@@ -117,6 +117,26 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Safe area (iPhone: notch, wyspa, pasek domowy). Wymaga viewport-fit=cover (layout.tsx); na desktopie wartości = 0. */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+/* Ekrany poza lasem (menu, imię, ładowanie): treść nie wchodzi pod notch ani krawędzie. */
+@layer components {
+  .safe-pad {
+    padding: var(--sat) var(--sar) var(--sab) var(--sal);
+  }
+}
+
+html,
+body {
+  overscroll-behavior: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

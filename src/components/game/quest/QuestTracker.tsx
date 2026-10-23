@@ -1,9 +1,51 @@
+"use client";
+
+import { useState } from "react";
 import type { QuestView } from "@/lib/game/engine";
+import { useTouchUi } from "@/components/input/hooks";
 import { ObjectiveList } from "./ObjectiveList";
 
-export function QuestTracker({ quest }: { quest: QuestView | null }) {
+/** `touchTop`: odstęp od góry kompaktowej wersji na telefonie (pod HUD i innymi chipami). */
+export function QuestTracker({ quest, touchTop = "3.25rem" }: { quest: QuestView | null; touchTop?: string }) {
+  const touch = useTouchUi();
+  const [open, setOpen] = useState(false);
   if (!quest || !quest.stage) return null;
   const stageNo = quest.progress.currentStage + 1;
+  if (touch) {
+    return (
+      <aside
+        data-testid="quest-tracker"
+        aria-label="Aktywne zadanie"
+        className="pointer-events-none absolute z-20 w-44 max-w-[45%] rounded-xl border border-white/10 bg-slate-950/55 text-white backdrop-blur-sm"
+        style={{ top: touchTop, left: "max(0.5rem, var(--sal))" }}
+      >
+        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="pointer-events-auto block w-full p-2 text-left">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-amber-300">Zadanie {open ? "▾" : "▸"}</p>
+          <p data-testid="tracker-title" className="text-[11px] font-bold leading-tight">
+            {quest.def.title}
+          </p>
+          <p data-testid="tracker-stage" className="mt-0.5 text-[10px] leading-snug text-slate-300">
+            Etap {stageNo}/{quest.def.stages.length}: {quest.stage.title}
+          </p>
+        </button>
+        {open && (
+          <div className="max-h-[40dvh] overflow-y-auto px-2 pb-2">
+            <ObjectiveList objectives={quest.objectives} testId="tracker-objectives" compact />
+            {quest.parallel.length > 0 && (
+              <div className="mt-1.5 border-t border-white/10 pt-1.5">
+                <ObjectiveList objectives={quest.parallel} testId="tracker-parallel" compact />
+              </div>
+            )}
+            {quest.hint && (
+              <p data-testid="tracker-hint" className="mt-1.5 border-t border-white/10 pt-1.5 text-[10px] leading-snug text-slate-300">
+                {quest.hint}
+              </p>
+            )}
+          </div>
+        )}
+      </aside>
+    );
+  }
   return (
     <aside
       data-testid="quest-tracker"

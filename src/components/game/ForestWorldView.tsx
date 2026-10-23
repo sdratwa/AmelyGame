@@ -20,7 +20,12 @@ import { getInputHub, rumble } from "@/lib/input/browser";
 import { preferredInitialFocus } from "@/lib/input/domNavigator";
 import { padForestHelp } from "@/lib/input/prompts";
 import { InputHint } from "@/components/input/InputHint";
-import { useInputActions, useInputDevice } from "@/components/input/hooks";
+import { useInputActions, useInputDevice, useTouchSettings, useTouchUi } from "@/components/input/hooks";
+import { isHubSource } from "@/lib/input/actions";
+import { TouchInput } from "@/lib/input/touchInput";
+import { TouchControls } from "./mobile/TouchControls";
+import { TouchForestMenu } from "./mobile/TouchForestMenu";
+import { TOUCH_MINIMAP_SIZE, TouchMinimap } from "./mobile/TouchMinimap";
 import { nearestCreature } from "@/lib/forest-view/diagnostics";
 import { getForestAudio } from "@/lib/audio/controller";
 import { nextClockTime } from "@/lib/game/systems/devClock";
@@ -306,6 +311,9 @@ export function ForestWorldView({
   const [snap, setSnap] = useState<InteractorSnapshot>(NO_INTERACTION);
   const [minimap, setMinimap] = useState(readMinimap);
   const device = useInputDevice();
+  const touchUi = useTouchUi();
+  const touchPrefs = useTouchSettings();
+  const [touch] = useState(() => new TouchInput());
   const [interactor] = useState(() => new ForestInteractor());
   const harvestedSeen = useRef(gameState.harvested.length);
   const changeAppearance = useCallback((next: CharacterAppearanceV1) => dispatchRef.current({ type: "appearance.set", appearance: next }), []);
@@ -367,6 +375,7 @@ export function ForestWorldView({
     renderer.multiplayer = multiplayer ?? null;
     rendererRef.current = renderer;
     renderer.setInputHub(getInputHub());
+    renderer.setTouchInput(touch);
     ready.current = false;
     renderer.onNpcDialog(() => {
       // Okno testowe PRAWIDŁOWY/ZŁY tylko w trybie deweloperskim przy otwartym panelu diagnostycznym (O/F3);
@@ -392,13 +401,14 @@ export function ForestWorldView({
       if (poseReaderRef) poseReaderRef.current = null;
       report();
       rendererRef.current = null;
+      renderer.setTouchInput(null);
       renderer.onNpcDialog(null);
       renderer.setStepSink(null);
       audio.setSurfaceResolver(null);
       trollDialogRef.current = false;
       renderer.dispose();
     };
-  }, [seed, genVersion, multiplayer, poseReaderRef]);
+  }, [seed, genVersion, multiplayer, poseReaderRef, touch]);
 
   const loading = !fatal && (stats === null || stats.loading !== null) && !stats?.error;
   useEffect(() => {
@@ -421,6 +431,13 @@ export function ForestWorldView({
   const buildOpen = snap.buildWindow;
   useGamePause(dispatch, "ui.panel", "ui.bridge_build", buildOpen);
   const frozen = suspended || windowOpen || buildOpen || trollDialog || trollMessage !== null;
+  // Sterowanie dotykowe działa tylko w trybie telefonu i gdy scena nie jest zawieszona (okno, dialog, menu).
+  useEffect(() => {
+    touch.setEnabled(touchUi && !frozen);
+  }, [touch, touchUi, frozen]);
+  useEffect(() => {
+    touch.setLookSensitivity(touchPrefs.lookSensitivity);
+  }, [touch, touchPrefs.lookSensitivity]);
   const npcDialog = trollDialog || trollMessage !== null || gameState.dialog !== null;
   const saveId = gameState.world?.saveId ?? null;
   const getPose = useCallback(() => rendererRef.current?.getPose() ?? null, []);
@@ -595,6 +612,11 @@ export function ForestWorldView({
     });
   }, []);
 
+  /** Przycisk "Użyj" na telefonie: ta sama ścieżka co pad (hub, bramka podwójnej interakcji, zjedzenie przedmiotu). */
+  const interactFromTouch = useCallback(() => {
+    getInputHub().emit("interact", "touch", performance.now());
+  }, []);
+
   /** Minimapa (M / L1) działa tylko w wolnym lesie; to samo sprawdzenie dla klawiatury i pada. */
   const requestMinimapToggle = useCallback(() => {
     if (!suspendedRef.current && !trollDialogRef.current && ready.current) toggleMinimap();
@@ -603,7 +625,7 @@ export function ForestWorldView({
   // Pad: interakcja i minimapa używają tych samych funkcji co klawiatura. Gdy nic nie przejmie interakcji,
   // ✕/A robi to co E w pasku ekwipunku: zjada zaznaczony przedmiot (jeśli leczy).
   useInputActions((e) => {
-    if (e.source !== "gamepad") return;
+    if (!isHubSource(e.source)) return;
     if (e.action === "interact") {
       if (!triggerInteract() && ready.current && !suspendedRef.current && !trollDialogRef.current) {
         const st = stateRef.current;
@@ -697,13 +719,35 @@ export function ForestWorldView({
         </div>
       )}
 
-      {!loading && !error && minimap && (
+      {!loading && !error && minimap && !touchUi && (
         <div className="absolute bottom-3 right-3 z-10 hidden sm:block">
           <Minimap multiplayer={multiplayer} seed={seed} state={gameState} getPose={getPose} size={190} />
         </div>
       )}
 
-      <div className="absolute left-3 top-3 z-10 flex flex-col items-start gap-2 sm:left-5 sm:top-5">
+      {/* Telefon: minimapa w prawym dolnym rogu z przełącznikiem (sama mapa nie przechwytuje dotyku). */}
+      {!loading && !error && touchUi && (
+        <TouchMinimap on={minimap} onToggle={toggleMinimap}>
+          <Minimap multiplayer={multiplayer} seed={seed} state={gameState} getPose={getPose} size={TOUCH_MINIMAP_SIZE} />
+        </TouchMinimap>
+      )}
+
+      {!loading && !error && touchUi && !frozen && (
+        <TouchControls touch={touch} interactReady={snap.prompt !== null || talkable} onInteract={interactFromTouch} />
+      )}
+
+      {touchUi && (
+        <TouchForestMenu
+          quality={quality}
+          onQualityChange={onQualityChange}
+          minimap={minimap}
+          onToggleMinimap={toggleMinimap}
+          onLeave={onLeave}
+          top="calc(max(0.25rem, var(--sat)) + 4rem)"
+        />
+      )}
+
+      <div className={cn("absolute left-3 top-3 z-10 flex-col items-start gap-2 sm:left-5 sm:top-5", touchUi ? "hidden" : "flex")}>
         <Button data-testid="leave-forest" variant="secondary" onClick={onLeave}>
           ← Wróć do miasta
         </Button>
@@ -748,7 +792,7 @@ export function ForestWorldView({
         )}
       </div>
 
-      {!loading && !error && !locked && !suspended && !trollDialog && device === "keyboard" && (
+      {!loading && !error && !locked && !suspended && !trollDialog && device === "keyboard" && !touchUi && (
         <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center">
           <p data-testid="forest-click-hint" className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white backdrop-blur">
             Kliknij w scenę, aby sterować myszą
