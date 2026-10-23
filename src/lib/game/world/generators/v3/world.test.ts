@@ -10,10 +10,10 @@ const key = (o: WorldObject) => JSON.stringify(o);
 const ref = (seed: number): WorldRef => ({ seed, genVersion: 3 });
 
 describe("generator świata v3 (las Pro, warstwa autorytatywna)", () => {
-  it("jest zarejestrowany i jest bieżącą wersją nowych gier", () => {
+  it("jest zarejestrowany; bieżącą wersją nowych gier jest v5 (fizyka skał), a v3 pozostaje zamrożony", () => {
     expect(WORLD_GEN_V3).toBe(3);
     expect(hasGenerator(3)).toBe(true);
-    expect(CURRENT_GEN_VERSION).toBe(4);
+    expect(CURRENT_GEN_VERSION).toBe(5);
   });
 
   it("jest deterministyczny i zwraca niezależne kopie", () => {

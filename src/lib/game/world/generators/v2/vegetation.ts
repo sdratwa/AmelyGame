@@ -2,6 +2,7 @@ import { mulberry32, streamSeed, type Rng } from "../../../core/rng";
 import { objectId, sectorBounds, sectorCount, type Bounds, type RegionDef } from "../../bounds";
 import { valueNoise2 } from "../../noise";
 import { makeObject, type WorldObject } from "../../objects";
+import { buildRockProfile } from "../../rockPhysics";
 import type { HeightField } from "../../terrain";
 import type { ForestGeometry } from "./geometry";
 import { buildPaving } from "./paving";
@@ -173,6 +174,11 @@ export type VegetationOptions = {
    * kamyków i bruku. Domyślnie wszystko (`all`). Identyfikatory i pozycje drzew i skał są takie same w obu trybach.
    */
   layers?: "gameplay" | "all";
+  /**
+   * Fizyka skał v1 (generator v5): skały dostają `WorldObject.rock` (wysokość i powierzchnia stania). Nie zmienia pozycji,
+   * ID, kolizji kołowych ani losowań; bez tej opcji wynik jest bit w bit taki jak w generatorach v2-v4.
+   */
+  rockPhysics?: boolean;
 };
 
 type Draft = { c: Cand; kind: string };
@@ -990,11 +996,14 @@ export class VegetationGenerator {
       yaw: c.yaw,
     };
     if (c.scaleXYZ) {
+      const collider = { shape: "circle", r: q3(c.collR) } as const;
+      const rock = this.o.rockPhysics ? buildRockProfile({ kind: d.kind, variant: sp.variant, scaleXYZ: c.scaleXYZ, yaw: c.yaw, tilt: c.tilt, collider }) : null;
       return makeObject({
         ...base,
         scaleXYZ: c.scaleXYZ,
         tilt: c.tilt,
-        collider: { shape: "circle", r: q3(c.collR) },
+        collider,
+        ...(rock ? { rock } : {}),
         tags: [`size_${c.rockClass}`],
         radius: sp.footprint * Math.max(...c.scaleXYZ),
       });

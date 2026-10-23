@@ -3,6 +3,7 @@ import { generateWorldV1 } from "./generators/v1";
 import { generateWorldV2 } from "./generators/v2/world";
 import { generateWorldV3 } from "./generators/v3/world";
 import { generateWorldV4 } from "./generators/v4/world";
+import { generateWorldV5 } from "./generators/v5/world";
 import type { WorldBase } from "./types";
 
 type Generator = (seed: number) => WorldBase;
@@ -13,10 +14,11 @@ const GENERATORS: Record<number, Generator> = {
   2: generateWorldV2,
   3: generateWorldV3,
   4: generateWorldV4,
+  5: generateWorldV5,
 };
 
-/** Nowe gry: v3 (las z paczką Pro). Zapisy v2 nadal działają na zamrożonym generatorze v2. */
-export const CURRENT_GEN_VERSION = 4;
+/** Nowe gry: v5 (v4 + fizyka skał). Zapisy v2-v4 nadal działają na zamrożonych generatorach (skały jako przeszkody bez wysokości). */
+export const CURRENT_GEN_VERSION = 5;
 
 const CACHE_LIMIT = 6;
 const cache = new Map<string, WorldBase>();

@@ -13,6 +13,7 @@ import { dispatchWithReactions } from "@/lib/game/systems/npcReactions";
 import { forestObject } from "@/lib/game/world/lookup";
 import { harvestOf } from "@/lib/game/world/harvest";
 import { safeForestPose } from "@/lib/game/world/generators/v2";
+import { movementDiagRows } from "@/lib/tpp/movementDiagnostics";
 import { resolveTppConfig } from "@/lib/tpp/storedDefaults";
 import { cn } from "@/lib/utils";
 import { FOREST_CONTROLS, isDiagnosticsShortcut, isGameLetterShortcut } from "@/lib/input/shortcuts";
@@ -153,6 +154,19 @@ function DiagnosticsPanel({
       <div data-testid="diag-nearest">
         najbliższy NPC/zwierzę: {nearest ? `${nearest.name} ${nearest.distance.toFixed(1)} m` : "brak"}
       </div>
+      </DiagSection>
+      <DiagSection id="movement" summary={stats.tpp ? (stats.tpp.grounded ? "na ziemi" : "w powietrzu") : undefined}>
+        {stats.tpp ? (
+          <div data-testid="diag-movement">
+            {movementDiagRows(stats.tpp).map((r) => (
+              <div key={r.label}>
+                {r.label}: {r.value}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div>ruch: brak danych (widok pierwszoosobowy)</div>
+        )}
       </DiagSection>
       <LanternDiagnostics stats={stats.lantern ?? null} />
       <DiagSection id="npc">

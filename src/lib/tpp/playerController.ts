@@ -1,3 +1,4 @@
+import { ROCK_PHYSICS } from "@/lib/game/world/rockPhysics";
 import type { WalkBlock, WalkWorld, WorldFlags } from "@/lib/game/world/walk";
 import type { Blocker } from "@/lib/npc/patrol";
 import type { TppConfig } from "./config";
@@ -8,16 +9,36 @@ export const MAX_TPP_DT = 0.1;
 const STEP_DOWN_LIMIT = 0.4;
 /** Szybkość doganiania terenu przez stopy po ziemi (1/s): usuwa drgania na nierównościach, nie wprowadza zauważalnego opóźnienia. */
 const GROUND_FOLLOW = 28;
+/** Największy ruch poziomy (m) i pionowy (m) w jednym kroku cząstkowym, gdy w pobliżu są skały z profilem pionowym. */
+const SUBSTEP_MAX_HORIZONTAL = 0.12;
+const SUBSTEP_MAX_VERTICAL = 0.08;
+const SUBSTEP_MAX_TIME = 1 / 120;
+const MAX_SUBSTEPS = 16;
 
 /** Zwrot "do przodu" dla kąta yaw (jak w `FirstPersonController`: Three.js patrzy w -Z, yaw rośnie w lewo). */
 export const forwardOfYaw = (yaw: number) => ({ x: -Math.sin(yaw), z: -Math.cos(yaw) });
 const NPC_BLOCK: WalkBlock = { reason: "object", by: "npc" };
 
-/** Świat widziany przez kontroler: chodzenie 2D (`WalkWorld`) plus wysokość podłoża i opcjonalne punkty zaczepienia. */
+/** Rodzaj powierzchni, na której stoi postać. */
+export type SurfaceKind = "terrain" | "bridge" | "rock";
+
+/** Powierzchnia podparcia: rodzaj, identyfikator skały (null dla terenu i mostu) i wysokość (m). */
+export type SupportInfo = { kind: SurfaceKind; id: string | null; y: number };
+
+/** Ostatnie lądowanie: powierzchnia i prędkość uderzenia (m/s). */
+export type LandingInfo = SupportInfo & { impact: number };
+
+/**
+ * Świat widziany przez kontroler: chodzenie 2D (`WalkWorld`) plus wysokość podłoża i opcjonalne punkty zaczepienia.
+ * Funkcje skał (`rocksNear`, `findLandingSurface`, `supportSurfaceAt`) są opcjonalne: bez nich skały nie mają wysokości
+ * (świat 2D, zamrożone wersje generatora i uproszczone światy testowe).
+ */
 export type PlayerWorld = {
-  walk: Pick<WalkWorld, "move" | "config">;
-  /** Wysokość powierzchni, po której chodzi gracz (teren albo pokład mostu). */
+  walk: Pick<WalkWorld, "move" | "config"> & Partial<Pick<WalkWorld, "rocksNear" | "findLandingSurface" | "supportSurfaceAt">>;
+  /** Wysokość podłoża pod punktem (teren albo pokład mostu). Skały mają osobne API `supportSurfaceAt` / `findLandingSurface`. */
   groundAt(x: number, z: number): number;
+  /** Rodzaj podłoża zwracanego przez `groundAt` (diagnostyka); brak = teren. */
+  groundKindAt?(x: number, z: number): "terrain" | "bridge";
   flags?(): WorldFlags | undefined;
   blockers?(): readonly Blocker[];
   /** Czy nad postacią jest miejsce na wstanie; brak = zawsze (świat 2D nie ma sufitów). */
@@ -48,6 +69,10 @@ export type PlayerState = {
   /** Spadek bez skoku (zejście z krawędzi). */
   falling: boolean;
   lastBlock: string | null;
+  /** Powierzchnia, na której postać stoi (null w powietrzu). */
+  support: SupportInfo | null;
+  /** Ostatnie lądowanie (do diagnostyki). */
+  lastLanding: LandingInfo | null;
 };
 
 const wrapPi = (a: number) => {
@@ -91,7 +116,14 @@ export class PlayerController {
       justLanded: false,
       falling: false,
       lastBlock: null,
+      support: null,
+      lastLanding: null,
     };
+    this.state.support = this.terrainSupport(start.x, start.z);
+  }
+
+  private terrainSupport(x: number, z: number, y = this.world.groundAt(x, z)): SupportInfo {
+    return { kind: this.world.groundKindAt?.(x, z) ?? "terrain", id: null, y };
   }
 
   /** Czas lotu skoku z ziemi na równym terenie (s). */
@@ -112,6 +144,19 @@ export class PlayerController {
     s.bodyYaw = yaw;
     s.grounded = true;
     s.airTime = 0;
+    s.falling = false;
+    s.support = this.terrainSupport(x, z, s.y);
+  }
+
+  /**
+   * Powierzchnia, na którą postać opadłaby teraz (najwyższa pod stopami: teren, most albo wierzch skały); do diagnostyki.
+   * Skała jest brana pod uwagę tylko wtedy, gdy stopy są nad jej powierzchnią, więc u podstawy skały wynikiem jest teren.
+   */
+  potentialLanding(): SupportInfo {
+    const s = this.state;
+    const ground = this.terrainSupport(s.x, s.z);
+    const rock = this.world.walk.supportSurfaceAt?.(s.x, s.z, s.y, 0, Infinity);
+    return rock && rock.y >= ground.y ? { kind: "rock", id: rock.id, y: rock.y } : ground;
   }
 
   /** Lokalny kierunek ruchu względem ciała: `forward` i `right` w m/s (do wyboru animacji). */
@@ -176,6 +221,7 @@ export class PlayerController {
         s.airTime = 0;
         s.justJumped = true;
         s.falling = false;
+        s.support = null;
       }
     }
 
@@ -202,23 +248,20 @@ export class PlayerController {
       s.vz += (dvz / dv) * rate;
     }
 
-    // Przemieszczenie przez istniejące kolizje świata.
-    if (Math.abs(s.vx) > 1e-5 || Math.abs(s.vz) > 1e-5) {
-      const from = { x: s.x, z: s.z };
-      let result = this.world.walk.move(from, { x: s.x + s.vx * step, z: s.z + s.vz * step }, this.world.flags?.());
-      result = this.avoidBlockers(from, result);
-      const ax = result.x - s.x;
-      const az = result.z - s.z;
-      if (result.blocked.length > 0) {
-        // Przeszkoda: prędkość odpowiada faktycznemu przesunięciu, żeby nie narastała pod ścianą.
-        s.vx = ax / step;
-        s.vz = az / step;
-        s.lastBlock = `${result.blocked[0].reason}${result.blocked[0].by ? `:${result.blocked[0].by}` : ""}`;
-      } else {
-        s.lastBlock = null;
-      }
-      s.x = result.x;
-      s.z = result.z;
+    // Przemieszczenie i pion: jeden spójny krok symulacji. Daleko od skał z profilem pionowym to jeden krok cząstkowy
+    // (jak dawniej); w pobliżu skał krok jest dzielony tak, by stopy i środek kapsuły nie przeskakiwały bryły skały.
+    const moving = Math.abs(s.vx) > 1e-5 || Math.abs(s.vz) > 1e-5;
+    const n = this.substepCount(step, moving);
+    const h = step / n;
+    const x0 = s.x;
+    const z0 = s.z;
+    const acc: { block: WalkBlock | null } = { block: null };
+    for (let i = 0; i < n; i++) this.substep(h, moving, acc);
+    if (moving && acc.block) {
+      // Przeszkoda: prędkość odpowiada faktycznemu przesunięciu, żeby nie narastała pod ścianą.
+      s.vx = (s.x - x0) / step;
+      s.vz = (s.z - z0) / step;
+      s.lastBlock = `${acc.block.reason}${acc.block.by ? `:${acc.block.by}` : ""}`;
     } else {
       s.lastBlock = null;
     }
@@ -237,31 +280,102 @@ export class PlayerController {
       s.bodyYaw += Math.abs(diff) <= maxTurn ? diff : Math.sign(diff) * maxTurn;
     }
 
-    // Pion: po ziemi stopy doganiają teren (bez skoków na nierównościach); poza krawędzią i po skoku działa grawitacja.
-    const ground = this.world.groundAt(s.x, s.z);
+    return s;
+  }
+
+  /** Liczba kroków cząstkowych: 1 poza zasięgiem skał z profilem pionowym, w ich pobliżu tyle, by kroki były krótkie. */
+  private substepCount(step: number, moving: boolean): number {
+    const s = this.state;
+    const walk = this.world.walk;
+    if (!walk.rocksNear || (s.grounded && !moving)) return 1;
+    const travel = Math.hypot(s.vx, s.vz) * step;
+    const rise = s.grounded ? 0 : Math.abs(s.vy) * step + 0.5 * this.config.gravity * step * step;
+    if (!walk.rocksNear(s.x, s.z, walk.config.playerRadius + travel + rise + 0.3)) return 1;
+    const n = Math.ceil(Math.max(travel / SUBSTEP_MAX_HORIZONTAL, rise / SUBSTEP_MAX_VERTICAL, step / SUBSTEP_MAX_TIME));
+    return Math.min(MAX_SUBSTEPS, Math.max(1, n));
+  }
+
+  private integrateAir(h: number): void {
+    const s = this.state;
+    s.airTime += h;
+    s.vy -= this.config.gravity * h;
+    s.y += s.vy * h;
+  }
+
+  private land(surface: SupportInfo): void {
+    const s = this.state;
+    s.lastLanding = { ...surface, impact: Math.abs(s.vy) };
+    s.y = surface.y;
+    s.vy = 0;
+    s.grounded = true;
+    s.justLanded = true;
+    s.falling = false;
+    s.support = surface;
+  }
+
+  /**
+   * Powierzchnia pod stopami stojącej postaci: teren albo pokład (`groundAt`) oraz wierzch skały, ale tylko taki, który
+   * leży w zasięgu "dogonienia" (kilka cm nad stopami, do `STEP_DOWN_LIMIT` pod nimi). Wierzch skały znacznie wyżej niż
+   * stopy nie jest podłożem, więc stojąc u jej podstawy postać nie wskakuje na szczyt.
+   */
+  private groundSurface(x: number, z: number, y: number): SupportInfo {
+    const ground = this.terrainSupport(x, z);
+    const rock = this.world.walk.supportSurfaceAt?.(x, z, y, ROCK_PHYSICS.stepUp, STEP_DOWN_LIMIT);
+    return rock && rock.y >= ground.y ? { kind: "rock", id: rock.id, y: rock.y } : ground;
+  }
+
+  /**
+   * Jeden krok cząstkowy `h` (s): (A) całkowanie pionu i lądowanie na skale nad bieżącym punktem, (B) ruch poziomy z
+   * wysokością stóp (skała blokuje tylko, gdy stopy są niżej niż jej szczyt z zapasem), (C) dogonienie powierzchni
+   * albo utrata gruntu, (D) spadanie po zejściu z krawędzi, (E) lądowanie w nowym punkcie (skała, potem teren).
+   */
+  private substep(h: number, moving: boolean, acc: { block: WalkBlock | null }): void {
+    const s = this.state;
+    const walk = this.world.walk;
+    const startedAir = !s.grounded;
+    const prevY = s.y;
+
+    if (startedAir) {
+      this.integrateAir(h);
+      if (s.vy <= 0) {
+        const rock = walk.findLandingSurface?.(s.x, s.z, prevY, s.y);
+        if (rock) this.land({ kind: "rock", id: rock.id, y: rock.y });
+      }
+    }
+
+    if (moving) {
+      const from = { x: s.x, z: s.z };
+      const body = { footY: Math.min(prevY, s.y), supportId: s.support?.kind === "rock" ? s.support.id : null, slideStep: ROCK_PHYSICS.edgeSlideSpeed * h };
+      let result = walk.move(from, { x: s.x + s.vx * h, z: s.z + s.vz * h }, this.world.flags?.(), body);
+      result = this.avoidBlockers(from, result);
+      if (result.blocked.length > 0 && !acc.block) acc.block = result.blocked[0];
+      s.x = result.x;
+      s.z = result.z;
+    }
+
     if (s.grounded) {
-      if (s.y - ground > STEP_DOWN_LIMIT) {
+      const surface = this.groundSurface(s.x, s.z, s.y);
+      if (s.y - surface.y > STEP_DOWN_LIMIT) {
         s.grounded = false;
         s.vy = 0;
         s.airTime = 0;
         s.falling = true;
+        s.support = null;
       } else {
-        s.y += (ground - s.y) * (1 - Math.exp(-GROUND_FOLLOW * step));
-        if (Math.abs(ground - s.y) < 1e-4) s.y = ground;
+        s.y += (surface.y - s.y) * (1 - Math.exp(-GROUND_FOLLOW * h));
+        if (Math.abs(surface.y - s.y) < 1e-4) s.y = surface.y;
+        s.support = surface;
       }
     }
-    if (!s.grounded) {
-      s.airTime += step;
-      s.vy -= c.gravity * step;
-      s.y += s.vy * step;
-      if (s.y <= ground && s.vy <= 0) {
-        s.y = ground;
-        s.vy = 0;
-        s.grounded = true;
-        s.justLanded = true;
-        s.falling = false;
+    if (!s.grounded && !startedAir) this.integrateAir(h);
+
+    if (!s.grounded && s.vy <= 0) {
+      const rock = walk.findLandingSurface?.(s.x, s.z, prevY, s.y);
+      if (rock) this.land({ kind: "rock", id: rock.id, y: rock.y });
+      else {
+        const ground = this.terrainSupport(s.x, s.z);
+        if (s.y <= ground.y) this.land(ground);
       }
     }
-    return s;
   }
 }

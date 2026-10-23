@@ -1,5 +1,6 @@
 import { boundsContain, regionAt, type RegionDef } from "./bounds";
 import { pushOutOfCollider, type WorldObject } from "./objects";
+import { ROCK_PHYSICS, rockSupports, rockSurfaceY, rockSurfaceYClamped, rockWallTop } from "./rockPhysics";
 import { shapeContains, shapeIntersectsCircle, type Shape } from "./shape";
 import { SpatialIndex } from "./spatialIndex";
 import type { HeightField } from "./terrain";
@@ -31,6 +32,19 @@ export type WalkBlock = {
   reason: "out_of_bounds" | "too_steep" | "barrier" | "object";
   by?: string;
 };
+
+/**
+ * Pionowe położenie ciała dla ruchu poziomego: wysokość stóp (m, bezwzględna) i skała, na której ciało stoi (jej bok nie
+ * blokuje). Bez tego parametru `move` traktuje każdy collider jak przeszkodę o nieskończonej wysokości (stare zachowanie).
+ * `slideStep` (m) to największe zsunięcie z boku skały w tym kroku, gdy ciało opada przy jej krawędzi.
+ */
+export type BodyVertical = { footY: number; supportId?: string | null; slideStep?: number };
+
+/** Górna powierzchnia skały, na której można stanąć. */
+export type RockSurface = { id: string; y: number; object: WorldObject };
+
+type RockRule = "pass" | "block" | "slide";
+type MoveCtx = { body: BodyVertical; from: { x: number; z: number }; rules: Map<string, RockRule> };
 
 export type WalkWorldOptions = {
   regions: readonly RegionDef[];
@@ -103,12 +117,149 @@ export class WalkWorld {
     return null;
   }
 
-  /** Obiekt, którego collider koliduje z graczem w tym punkcie (bez wypychania). */
-  objectBlocking(x: number, z: number, radius = this.config.playerRadius): WorldObject | null {
+  /**
+   * Obiekt, którego collider koliduje z graczem w tym punkcie (bez wypychania). Z `body` skały o skończonej wysokości
+   * blokują tylko wtedy, gdy stopy nie są dość wysoko (patrz `BodyVertical`).
+   */
+  objectBlocking(x: number, z: number, radius = this.config.playerRadius, body?: BodyVertical): WorldObject | null {
+    return this.blockingObject(x, z, radius, body ? { body, from: { x, z }, rules: new Map() } : undefined);
+  }
+
+  private blockingObject(x: number, z: number, radius: number, ctx?: MoveCtx): WorldObject | null {
     for (const o of this.index.queryRadius(x, z, radius)) {
+      if (ctx && o.rock && this.rockRule(o, ctx) !== "block") continue;
       if (pushOutOfCollider(o, x, z, radius).hit) return o;
     }
     return null;
+  }
+
+  /**
+   * Czy skała `o` blokuje ciało rozpoczynające krok w `ctx.from` na wysokości stóp `ctx.body.footY`:
+   * - skała, na której ciało stoi, nie blokuje (`pass`);
+   * - ciało już zachodzące na skałę (zeszło z wierzchu i opada przy krawędzi): nad powierzchnią `pass`, poniżej `slide`
+   *   (zsuwa się wzdłuż boku zamiast być teleportowane);
+   * - ciało spoza skały wchodzi nad nią tylko ze stopami powyżej szczytu o zapas `clearance`, inaczej `block`.
+   */
+  private rockRule(o: WorldObject, ctx: MoveCtx): RockRule {
+    const memo = ctx.rules.get(o.id);
+    if (memo) return memo;
+    const { body, from } = ctx;
+    let rule: RockRule;
+    if (o.id === body.supportId) rule = "pass";
+    else if (pushOutOfCollider(o, from.x, from.z, this.config.playerRadius).hit) {
+      rule = body.footY >= rockSurfaceYClamped(o, from.x, from.z) - ROCK_PHYSICS.landingEpsilon ? "pass" : o.collider?.shape === "circle" ? "slide" : "block";
+    } else rule = body.footY >= rockWallTop(o) + ROCK_PHYSICS.clearance ? "pass" : "block";
+    ctx.rules.set(o.id, rule);
+    return rule;
+  }
+
+  /**
+   * Wysuwa ciało zachodzące na skałę (reguła `slide`) na zewnątrz, nie szybciej niż `slideStep`: wzdłuż promienia od środka
+   * wierzchu skały (zejście z krawędzi wierzchu kontynuuje ruch od niego), a gdy skała nie ma wierzchu, od środka kolizji.
+   * Ciało nie jest teleportowane: opuszcza bryłę stopniowo, tak szybko, jak zsunęłoby się z boku skały.
+   */
+  private applySlides(cur: { x: number; z: number }, ctx: MoveCtx): { x: number; z: number } {
+    const pr = this.config.playerRadius;
+    const step = ctx.body.slideStep ?? ROCK_PHYSICS.edgeSlideSpeed / 60;
+    let { x, z } = cur;
+    for (const o of this.index.queryRadius(x, z, pr, { filter: (item) => !!item.rock })) {
+      if (this.rockRule(o, ctx) !== "slide" || o.collider?.shape !== "circle") continue;
+      const reach = o.collider.r + pr;
+      const d1 = Math.hypot(x - o.x, z - o.z);
+      if (d1 >= reach) continue;
+      // Ruch w głąb bryły jest wykluczony: nie bliżej środka kolizji niż na początku kroku.
+      const d0 = Math.hypot(ctx.from.x - o.x, ctx.from.z - o.z);
+      if (d1 < d0 && d1 > 1e-6) {
+        x = o.x + ((x - o.x) * d0) / d1;
+        z = o.z + ((z - o.z) * d0) / d1;
+      }
+      const p = o.rock!;
+      const cx = p.standable ? o.x + p.topOffset[0] : o.x;
+      const cz = p.standable ? o.z + p.topOffset[1] : o.z;
+      let ux = x - cx;
+      let uz = z - cz;
+      let len = Math.hypot(ux, uz);
+      if (len < 1e-6) {
+        // Dokładnie nad środkiem wierzchu: kierunek ostatniego ruchu, a bez ruchu od środka kolizji.
+        ux = x - ctx.from.x;
+        uz = z - ctx.from.z;
+        len = Math.hypot(ux, uz);
+        if (len < 1e-6) {
+          ux = x - o.x;
+          uz = z - o.z;
+          len = Math.hypot(ux, uz);
+          if (len < 1e-6) {
+            ux = 1;
+            uz = 0;
+            len = 1;
+          }
+        }
+      }
+      ux /= len;
+      uz /= len;
+      // Odległość wzdłuż promienia do wyjścia z okręgu kolizji: |q + t u - o|^2 = reach^2.
+      const qx = x - o.x;
+      const qz = z - o.z;
+      const b = qx * ux + qz * uz;
+      const exit = -b + Math.sqrt(Math.max(0, b * b - (qx * qx + qz * qz - reach * reach)));
+      const t = Math.min(exit, step);
+      x += ux * t;
+      z += uz * t;
+    }
+    return { x, z };
+  }
+
+  /**
+   * Skała z profilem, która według reguł ruchu (`BodyVertical`) blokuje ciało stojące w (x, z) po przejściu z `from`
+   * (np. punkty cięciwy między dwiema próbkami ruchu); `tolerance` skraca promień ciała, by dotyk brzegiem nie liczył się jako wejście.
+   * Służy walidacji ruchu po stronie serwera: nie wypycha ani nie zmienia pozycji.
+   */
+  rockBlockingAt(x: number, z: number, from: { x: number; z: number }, body: BodyVertical, tolerance = 0): WorldObject | null {
+    const ctx: MoveCtx = { body, from: { x: from.x, z: from.z }, rules: new Map() };
+    const pr = this.config.playerRadius - tolerance;
+    for (const o of this.index.queryRadius(x, z, pr, { filter: (item) => !!item.rock })) {
+      if (this.rockRule(o, ctx) === "block" && pushOutOfCollider(o, x, z, pr).hit) return o;
+    }
+    return null;
+  }
+
+  /** Czy w pobliżu (x, z) jest skała z profilem pionowym; tanie sprawdzenie, czy w ogóle potrzebne są kroki cząstkowe. */
+  rocksNear(x: number, z: number, radius: number): boolean {
+    return this.index.queryRadius(x, z, radius, { filter: (o) => !!o.rock }).length > 0;
+  }
+
+  /**
+   * Górna powierzchnia skały, na którą z góry opada stopa: środek ciała nad obszarem podparcia, stopy przeszły z
+   * `prevFootY` (nie niżej niż o tolerancję pod powierzchnią) do `footY` (na powierzchni lub pod nią), a w miejscu
+   * lądowania nic innego nie blokuje kapsuły. Wybiera najwyższą z takich powierzchni.
+   */
+  findLandingSurface(x: number, z: number, prevFootY: number, footY: number): RockSurface | null {
+    let best: RockSurface | null = null;
+    for (const o of this.index.queryRadius(x, z, 0, { filter: (item) => !!item.rock?.standable })) {
+      if (!rockSupports(o, x, z)) continue;
+      const y = rockSurfaceY(o, x, z);
+      if (prevFootY < y - ROCK_PHYSICS.landingEpsilon || footY > y) continue;
+      if (best && best.y >= y) continue;
+      if (this.objectBlocking(x, z, this.config.playerRadius, { footY: y, supportId: o.id })) continue;
+      best = { id: o.id, y, object: o };
+    }
+    return best;
+  }
+
+  /**
+   * Powierzchnia skały podtrzymująca ciało stojące: wierzch w przedziale [`footY - maxDown`, `footY + maxUp`] nad
+   * środkiem ciała (najwyższy z nich). Skała, której wierzch jest znacznie wyżej niż stopy, NIE jest zwracana, więc
+   * stojąc u jej podstawy nie "wskakuje się" na szczyt.
+   */
+  supportSurfaceAt(x: number, z: number, footY: number, maxUp: number = ROCK_PHYSICS.stepUp, maxDown = Infinity): RockSurface | null {
+    let best: RockSurface | null = null;
+    for (const o of this.index.queryRadius(x, z, 0, { filter: (item) => !!item.rock?.standable })) {
+      if (!rockSupports(o, x, z)) continue;
+      const y = rockSurfaceY(o, x, z);
+      if (y > footY + maxUp || y < footY - maxDown) continue;
+      if (!best || y > best.y) best = { id: o.id, y, object: o };
+    }
+    return best;
   }
 
   /** Czy gracz może stać w punkcie (x, z). Zwraca przyczynę blokady albo null. */
@@ -123,13 +274,14 @@ export class WalkWorld {
     return this.checkPoint(x, z, flags) === null;
   }
 
-  private pushOut(x: number, z: number, hits: Set<string>): { x: number; z: number } {
+  private pushOut(x: number, z: number, hits: Set<string>, ctx?: MoveCtx): { x: number; z: number } {
     let px = x;
     let pz = z;
     const pr = this.config.playerRadius;
     for (let iter = 0; iter < 4; iter++) {
       let moved = false;
       for (const o of this.index.queryRadius(px, pz, pr)) {
+        if (ctx && o.rock && this.rockRule(o, ctx) !== "block") continue;
         const out = pushOutOfCollider(o, px, pz, pr);
         if (out.hit) {
           px = out.x;
@@ -147,13 +299,14 @@ export class WalkWorld {
     from: { x: number; z: number },
     to: { x: number; z: number },
     flags: WorldFlags,
+    ctx?: MoveCtx,
   ): { x: number; z: number; blocked: WalkBlock[] } {
     const blocked: WalkBlock[] = [];
     const attempts = [to, { x: to.x, z: from.z }, { x: from.x, z: to.z }];
     for (let i = 0; i < attempts.length; i++) {
       const hits = new Set<string>();
-      const p = this.pushOut(attempts[i].x, attempts[i].z, hits);
-      const leftover = this.objectBlocking(p.x, p.z);
+      const p = this.pushOut(attempts[i].x, attempts[i].z, hits, ctx);
+      const leftover = this.blockingObject(p.x, p.z, this.config.playerRadius, ctx);
       const block = this.terrainBlock(p.x, p.z, flags) ?? (leftover ? ({ reason: "object", by: leftover.id } as const) : null);
       if (i === 0) {
         for (const id of [...hits].sort()) blocked.push({ reason: "object", by: id });
@@ -169,12 +322,16 @@ export class WalkWorld {
    * więc nie da się przeskoczyć cienkiej bariery. W każdym kroku kolizje z obiektami wypychają (ślizg
    * po przeszkodzie), a granice, zbyt strome zbocza i bariery zatrzymują – z próbą ślizgu wzdłuż osi,
    * a w ostateczności pozostaniem w miejscu. `blocked` opisuje pierwszą przeszkodę napotkaną w ruchu.
+   * Z `body` skały o skończonej wysokości (`WorldObject.rock`) blokują tylko ciało, którego stopy są niżej niż szczyt
+   * o zapas; bariery, granice, strome zbocza i pozostałe obiekty działają niezależnie od wysokości stóp.
    */
   move(
     from: { x: number; z: number },
     to: { x: number; z: number },
     flags: WorldFlags = NO_FLAGS,
+    body?: BodyVertical,
   ): { x: number; z: number; blocked: WalkBlock[] } {
+    const ctx: MoveCtx | undefined = body ? { body, from: { x: from.x, z: from.z }, rules: new Map() } : undefined;
     const dist = Math.hypot(to.x - from.x, to.z - from.z);
     const n = Math.min(256, Math.max(1, Math.ceil(dist / this.config.playerRadius)));
     const dx = (to.x - from.x) / n;
@@ -188,13 +345,14 @@ export class WalkWorld {
           ? to
           : { x: from.x + dx * i, z: from.z + dz * i }
         : { x: cur.x + dx, z: cur.z + dz };
-      const result = this.step(cur, target, flags);
+      const result = this.step(cur, target, flags, ctx);
       if (result.blocked.length > 0) {
         unobstructed = false;
         if (blocked.length === 0) blocked = result.blocked;
       }
       cur = { x: result.x, z: result.z };
     }
+    if (ctx) cur = this.applySlides(cur, ctx);
     return { x: cur.x, z: cur.z, blocked };
   }
 }

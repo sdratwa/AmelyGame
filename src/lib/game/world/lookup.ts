@@ -28,7 +28,14 @@ export function worldRefOf(key: WorldKey): WorldRef {
 const cacheKey = (ref: WorldRef) => `${ref.genVersion}:${ref.seed}`;
 
 function build(ref: WorldRef, layers: "gameplay" | "all"): ForestWorld {
-  if (ref.genVersion >= 3) return createForest(ref.seed, { pro: PRO_OPTIONS, layers, duneTrailReach: ref.genVersion >= 4 ? DUNE_TRAIL_REACH_V4 : undefined });
+  if (ref.genVersion >= 3) {
+    return createForest(ref.seed, {
+      pro: PRO_OPTIONS,
+      layers,
+      duneTrailReach: ref.genVersion >= 4 ? DUNE_TRAIL_REACH_V4 : undefined,
+      rockPhysics: ref.genVersion >= 5 ? true : undefined,
+    });
+  }
   return createForest(ref.seed, layers === "all" ? {} : { layers });
 }
 

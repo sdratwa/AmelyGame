@@ -1,11 +1,12 @@
 import { pushOutOfCollider } from "@/lib/game/world/objects";
+import { rockWallTop } from "@/lib/game/world/rockPhysics";
 import type { HeightField } from "@/lib/game/world/terrain";
 import type { WalkWorld, WorldFlags } from "@/lib/game/world/walk";
 import type { Blocker } from "@/lib/npc/patrol";
 import type { AnimIntent } from "./animationState";
 import { ThirdPersonCamera, type CameraPose, type CameraWorld } from "./cameraRig";
 import { mergeTppConfig, TPP_DEFAULTS, type TppConfig } from "./config";
-import { PlayerController, type PlayerState, type PlayerWorld } from "./playerController";
+import { PlayerController, type LandingInfo, type PlayerState, type PlayerWorld, type SupportInfo } from "./playerController";
 import { PlayerInput } from "./playerInput";
 
 /** Dane diagnostyczne (panel deweloperski); wypełniane bez alokacji w klatce, czytane rzadko. */
@@ -23,6 +24,16 @@ export type TppSnapshot = {
   cameraYawDeg: number;
   cameraPitchDeg: number;
   lastBlock: string | null;
+  /** Prędkość pionowa (m/s); `y` to wysokość stóp. */
+  vy: number;
+  /** Powierzchnia podparcia (null w powietrzu): rodzaj, identyfikator skały i wysokość. */
+  support: SupportInfo | null;
+  /** Skała, na której postać stoi (null poza skałą). */
+  rockId: string | null;
+  /** Ostatnie lądowanie. */
+  lastLanding: LandingInfo | null;
+  /** Powierzchnia, na którą postać opadłaby teraz (teren, most albo wierzch skały pod stopami), z wysokością. */
+  landingCandidate: SupportInfo | null;
 };
 
 /** Wysokość (nad podłożem), do której obiekt zasłania kamerę: drzewa w całości, skały do ok. 2,6 m skali, reszta niska. */
@@ -62,6 +73,11 @@ export class ThirdPersonRig {
     cameraYawDeg: 0,
     cameraPitchDeg: 0,
     lastBlock: null,
+    vy: 0,
+    support: null,
+    rockId: null,
+    lastLanding: null,
+    landingCandidate: null,
   };
 
   constructor(
@@ -74,6 +90,7 @@ export class ThirdPersonRig {
     const playerWorld: PlayerWorld = {
       walk,
       groundAt: (x, z) => this.groundAt(x, z),
+      groundKindAt: (x, z) => this.groundKindAt(x, z),
       flags: () => this.flags,
       blockers: () => this.blockers,
     };
@@ -83,7 +100,9 @@ export class ThirdPersonRig {
         let top = 0;
         for (const o of walk.index.queryRadius(x, z, r)) {
           if (!o.collider || !pushOutOfCollider(o, x, z, r).hit) continue;
-          const t = obstacleTopOf(o.kind, Math.max(o.scale ?? 1, o.scaleXYZ?.[1] ?? 1));
+          // Skała z profilem: zasłania kamerę dokładnie do swojego szczytu (a nie do szacunku ze skali), więc kamera nie
+          // zacina się przy postaci stojącej na wierzchu.
+          const t = o.rock ? Math.max(0, rockWallTop(o) - this.groundAt(x, z)) : obstacleTopOf(o.kind, Math.max(o.scale ?? 1, o.scaleXYZ?.[1] ?? 1));
           if (t > top) top = t;
         }
         return top;
@@ -109,6 +128,12 @@ export class ThirdPersonRig {
     const t = this.terrain.height(x, z);
     const deck = this.deckHeight?.(x, z);
     return deck == null ? t : Math.max(t, deck);
+  }
+
+  /** Rodzaj podłoża z `groundAt`: teren albo pokład mostu. */
+  groundKindAt(x: number, z: number): "terrain" | "bridge" {
+    const deck = this.deckHeight?.(x, z);
+    return deck != null && deck > this.terrain.height(x, z) ? "bridge" : "terrain";
   }
 
   teleport(x: number, z: number, yaw: number): void {
@@ -162,6 +187,11 @@ export class ThirdPersonRig {
     o.cameraYawDeg = ((((this.camera.yaw * DEG) % 360) + 540) % 360) - 180;
     o.cameraPitchDeg = this.camera.pitch * DEG;
     o.lastBlock = s.lastBlock;
+    o.vy = s.vy;
+    o.support = s.support;
+    o.rockId = s.support?.kind === "rock" ? s.support.id : null;
+    o.lastLanding = s.lastLanding;
+    o.landingCandidate = this.controller.potentialLanding();
     return o;
   }
 

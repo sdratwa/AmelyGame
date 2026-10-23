@@ -159,7 +159,7 @@ export function ContinueScreen({
       >
         Kontynuuj
       </Button>
-      {onUpgrade && <Button variant="secondary" size="lg" onClick={onUpgrade} className="mt-3 h-12 w-full text-base">Napraw teren w zapisie (kopia zostanie zachowana)</Button>}
+      {onUpgrade && <Button variant="secondary" size="lg" onClick={onUpgrade} className="mt-3 h-12 w-full text-base">{save.world.genVersion === 4 ? "Włącz skakanie po kamieniach w zapisie (kopia zostanie zachowana)" : "Napraw teren w zapisie (kopia zostanie zachowana)"}</Button>}
       <Button
         data-testid="new-game-button"
         variant="secondary"

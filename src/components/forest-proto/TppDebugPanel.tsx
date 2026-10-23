@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
+import { movementDiagRows } from "@/lib/tpp/movementDiagnostics";
 import type { TppDiagnostics } from "@/lib/forest-view";
 import { mergeTppConfig, TPP_DEFAULTS, TPP_RANGES, type TppConfig } from "@/lib/tpp/config";
 import { clearTppOverrides, loadTppOverrides, saveTppOverrides } from "@/lib/tpp/storedDefaults";
@@ -97,8 +98,12 @@ export function TppDebugPanel({
           <dd>{f(data.bodyYawDeg, 0)}°</dd>
           <dt className="text-slate-400">Kamera</dt>
           <dd>{f(data.cameraDistance)} m, yaw {f(data.cameraYawDeg, 0)}°, pitch {f(data.cameraPitchDeg, 0)}°</dd>
-          <dt className="text-slate-400">Blokada</dt>
-          <dd>{data.lastBlock ?? "-"}</dd>
+          {movementDiagRows(data).map((r) => (
+            <Fragment key={r.label}>
+              <dt className="text-slate-400">{r.label}</dt>
+              <dd>{r.value}</dd>
+            </Fragment>
+          ))}
           <dt className="text-slate-400">FPS</dt>
           <dd>{f(fps, 0)}</dd>
         </dl>

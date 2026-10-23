@@ -5,6 +5,8 @@ import { Room, type Client } from "@colyseus/core";
 import { randomUUID } from "node:crypto";
 import { createInstance } from "../../src/lib/multiplayer/world";
 import { playersOverlap } from "../../src/lib/multiplayer/playerCollision";
+import { checkMotion, initialTrack, type MotionTrack } from "../../src/lib/multiplayer/motionPhysics";
+import { forestBridgeOf } from "../../src/lib/game/world/lookup";
 import { normalizeAppearance, type CharacterAppearanceV1 } from "../../src/lib/character/appearance";
 import {
   NET,
@@ -21,6 +23,8 @@ export class ForestRoom extends Room {
   private store?: WorldStore;
   private sharedWorld = emptySharedWorld();
   private players = new Map<string, Player>();
+  /** Ostatnia PRZYJĘTA próbka ruchu sesji (walidacja pionowa i skał, `motionPhysics`). */
+  private tracks = new Map<string, MotionTrack>();
   private appearances = new Map<string, CharacterAppearanceV1>();
   private appearanceMap() {
     const map: Record<string, CharacterAppearanceV1> = {};
@@ -40,12 +44,12 @@ export class ForestRoom extends Room {
     string,
     { time: number; count: number; sound: number }
   >();
-  onCreate(options: { worldInstanceId?: string; worldSavePath?: string; migrateWorldV3?: boolean }) {
+  onCreate(options: { worldInstanceId?: string; worldSavePath?: string; migrateWorldV3?: boolean; migrateWorldV4?: boolean }) {
     this.roomId = options.worldInstanceId ?? "world_001";
     if (options.worldInstanceId && options.worldInstanceId !== "world_001")
       this.world = createInstance(options.worldInstanceId);
     if (options.worldSavePath) {
-      this.store = new WorldStore(options.worldSavePath, this.world.config, options.migrateWorldV3 === true);
+      this.store = new WorldStore(options.worldSavePath, this.world.config, options.migrateWorldV3 === true, options.migrateWorldV4 === true);
       this.sharedWorld = this.store.load();
       for (const id of this.sharedWorld.harvested) this.world.walk.removeObject(id);
     }
@@ -78,6 +82,12 @@ export class ForestRoom extends Room {
       )
         return;
       if ([...this.players.values()].some((other) => other !== p && playersOverlap(data, other))) return;
+      // Fizyka skał: stan niemożliwy do osiągnięcia skokiem (np. "stanie" na wysokiej skale) jest ignorowany. Kroki ciągłe
+      // oceniane są względem ostatniej przyjętej próbki; serwer nie koryguje klienta (M1a: klient autorytatywny dla ruchu).
+      const now = performance.now() / 1000;
+      const verdict = checkMotion({ walk: this.world.walk, deckHeightAt: this.sharedWorld.bridgeBuilt ? this.deckHeightAt() : null }, this.tracks.get(client.sessionId) ?? null, data, now);
+      if (!verdict.ok) return;
+      this.tracks.set(client.sessionId, verdict.track);
       Object.assign(p, data);
     });
     // Lampa naftowa: stan zmienia wyłącznie właściciel sesji. Treść wiadomości to tylko flaga (żadnego playerId, żadnych
@@ -150,6 +160,10 @@ export class ForestRoom extends Room {
       1000 / NET.hz,
     );
   }
+  private deckHeightAt() {
+    const bridge = forestBridgeOf({ seed: this.world.config.worldSeed, genVersion: this.world.config.generatorVersion });
+    return (x: number, z: number) => bridge.deckHeightAt(x, z);
+  }
   private allow(c: Client) {
     const l = this.limits.get(c.sessionId);
     if (!l) return false;
@@ -180,11 +194,13 @@ export class ForestRoom extends Room {
       lanternOn: false,
     };
     this.players.set(client.sessionId, p);
+    this.tracks.set(client.sessionId, initialTrack(p.x, p.y, p.z, performance.now() / 1000));
     this.broadcast("notice", `${p.name} dołącza do lasu.`);
   }
   onLeave(client: Client) {
     const p = this.players.get(client.sessionId);
     this.players.delete(client.sessionId);
+    this.tracks.delete(client.sessionId);
     this.appearances.delete(client.sessionId);
     this.slots.delete(client.sessionId);
     this.limits.delete(client.sessionId);

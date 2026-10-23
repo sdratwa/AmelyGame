@@ -23,3 +23,20 @@ it("migracja wspólnego świata v3→v4 zachowuje stan i oryginalny plik", () =>
   expect(readFileSync(`${path}.v3.bak`, "utf8")).toBe(oldRaw);
   expect(JSON.parse(readFileSync(path, "utf8")).config).toEqual(config);
 });
+
+it("migracja wspólnego świata v4→v5 wymaga jawnej flagi, zachowuje stan i oryginalny plik", () => {
+  const dir = mkdtempSync(join(tmpdir(), "miasto-world-"));
+  paths.push(dir);
+  const path = join(dir, "world.json");
+  const config = createInstance().config;
+  const oldConfig = { ...config, generatorVersion: 4, fingerprint: fingerprintWorld(generateWorld(config.worldSeed, 4)) };
+  const world = { revision: 3, bridgeBuilt: false, harvested: [] };
+  const oldRaw = JSON.stringify({ version: 1, config: oldConfig, world });
+  writeFileSync(path, oldRaw);
+  expect(() => new WorldStore(path, config).load()).toThrow("MIGRATE_WORLD_V4=1");
+  expect(() => new WorldStore(path, config, true).load()).toThrow("MIGRATE_WORLD_V4=1");
+  expect(new WorldStore(path, config, false, true).load()).toEqual(world);
+  expect(readFileSync(`${path}.v4.bak`, "utf8")).toBe(oldRaw);
+  expect(JSON.parse(readFileSync(path, "utf8")).config).toEqual(config);
+  expect(new WorldStore(path, config).load()).toEqual(world);
+});

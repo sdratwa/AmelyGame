@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { initialState, reducer } from "../game/engine";
 import { serializeState } from "../game/save/serialize";
 import { LocalStorageSaveStore, type KeyValueStorage } from "../game/save/store";
-import { fingerprintWorld, generateWorld } from "../game/world/registry";
+import { CURRENT_GEN_VERSION, fingerprintWorld, generateWorld } from "../game/world/registry";
 import { loadOnlineGame, onlineSavePrefix } from "./save";
 import type { Player, WorldConfig } from "./protocol";
 
-const config: WorldConfig = { worldId: "forest_start", worldInstanceId: "world_001", worldSeed: 2030, generatorVersion: 4, fingerprint: fingerprintWorld(generateWorld(2030, 4)) };
+const config: WorldConfig = { worldId: "forest_start", worldInstanceId: "world_001", worldSeed: 2030, generatorVersion: CURRENT_GEN_VERSION, fingerprint: fingerprintWorld(generateWorld(2030, CURRENT_GEN_VERSION)) };
 const player = { playerId: "first-session", name: "Odkrywca", x: 12, z: 18, bodyYaw: 0 } as Player;
 function storage(): KeyValueStorage {
   const data = new Map<string, string>();

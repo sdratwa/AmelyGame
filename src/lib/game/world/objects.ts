@@ -2,6 +2,8 @@
  * Obiekty świata i ich kolizje. Dane kolizji należą do wersjonowanego modelu świata
  * (wynik generatora), nie zależą od wyglądu ani geometrii modeli GLB.
  */
+import type { RockProfile } from "./rockPhysics";
+
 export type Collider =
   | { shape: "circle"; r: number }
   | { shape: "box"; halfX: number; halfZ: number; yaw: number };
@@ -25,6 +27,11 @@ export type WorldObject = {
   /** Promień obwiedni używany przez indeks przestrzenny; zawsze >= zasięg collidera. */
   radius: number;
   collider?: Collider;
+  /**
+   * Profil pionowy skały (od generatora v5): skończona wysokość i opcjonalna powierzchnia stania. Brak = obiekt o
+   * nieskończonej wysokości (drzewo, skrzynia, poręcz, skała ze starszych wersji świata), który zawsze blokuje ruch poziomy.
+   */
+  rock?: RockProfile;
   tags?: readonly string[];
 };
 

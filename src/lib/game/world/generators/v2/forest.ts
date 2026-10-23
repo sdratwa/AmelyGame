@@ -37,6 +37,8 @@ export type ForestOptions = {
   layers?: "gameplay" | "all";
   /** v4: pełny zasięg wygaszania wydm; v3 zachowuje 8 m. */
   duneTrailReach?: number;
+  /** v5: profile kolizji skał (wysokość i powierzchnia stania); starsze wersje świata ich nie mają. */
+  rockPhysics?: boolean;
 };
 
 export type ForestSector = {
@@ -110,6 +112,7 @@ export type ForestWorldInit = {
   dunes?: boolean;
   layers?: "gameplay" | "all";
   duneTrailReach?: number;
+  rockPhysics?: boolean;
 };
 
 /**
@@ -158,6 +161,7 @@ export class ForestWorld {
       paving: this.pro?.paving ?? undefined,
       tuning: this.pro?.tuning,
       layers: init.layers,
+      rockPhysics: init.rockPhysics,
     });
   }
 
@@ -313,6 +317,7 @@ export function createForest(seed: number, options: ForestOptions = {}): ForestW
     dunes: true,
     layers: options.layers,
     duneTrailReach: options.duneTrailReach,
+    rockPhysics: options.rockPhysics,
   });
 }
 

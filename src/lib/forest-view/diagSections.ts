@@ -8,6 +8,7 @@ export const DIAG_SECTIONS_KEY = "miasto.diag.sections.v1";
 /** Wszystkie sekcje panelu (kolejność = kolejność na ekranie) wraz z ustawieniem domyślnym. */
 export const DIAG_SECTIONS = [
   { id: "perf", title: "Wydajność i świat", defaultOpen: true },
+  { id: "movement", title: "Ruch i podparcie (dev)", defaultOpen: false },
   { id: "lantern", title: "Lampa naftowa (dev)", defaultOpen: true },
   { id: "npc", title: "NPC troll", defaultOpen: false },
   { id: "bridge", title: "Most", defaultOpen: false },
