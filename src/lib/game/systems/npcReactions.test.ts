@@ -5,7 +5,7 @@ import type { GameEvent } from "../core/events";
 import type { GameState } from "../core/state";
 import { hydrateState } from "../save/hydrate";
 import { serializeState } from "../save/serialize";
-import { validateSaveV4 } from "../save/validate";
+import { validateSaveV5 } from "../save/validate";
 import { anchorsOf, inForest, near, newPlaying, run, unlockToolOrder } from "../testkit";
 import { dispatchWithReactions, reactionsFor, type NpcReaction } from "./npcReactions";
 
@@ -89,16 +89,16 @@ describe("adapter reakcji NPC: zdarzenia silnika -> animacja trolla", () => {
   });
 });
 
-describe("zapis SaveV4 i stan questa po integracji modeli 3D", () => {
-  it("zapis nie zawiera niczego z warstwy prezentacji (animacje, patrol, pivoty pokryw) i zachowuje kształt SaveV4", () => {
+describe("zapis SaveV5 i stan questa po integracji modeli 3D", () => {
+  it("zapis nie zawiera niczego z warstwy prezentacji (animacje, patrol, pivoty pokryw) i zachowuje kształt SaveV5", () => {
     let s = unlockToolOrder(fresh());
     s = step(s, { type: "chest.open", id: "chest.bridge.saw", at: near(chestAt(s, "chest.bridge.saw"), 1.2) }).state;
     const save = serializeState(s, 1)!;
-    expect(save.version).toBe(4);
+    expect(save.version).toBe(5);
     expect(Object.keys(save.troll).sort()).toEqual(["attempts", "deposit", "lockUntil", "phase"]);
     const text = JSON.stringify(save).toLowerCase();
     for (const word of ["angry", "patrol", "hinge", "pivot", "animation", "lid"]) expect(text, word).not.toContain(word);
-    const valid = validateSaveV4(JSON.parse(JSON.stringify(save)));
+    const valid = validateSaveV5(JSON.parse(JSON.stringify(save)));
     expect(valid.ok).toBe(true);
     expect(serializeState(hydrateState(save), 1)).toEqual(save);
   });

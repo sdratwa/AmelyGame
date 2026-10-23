@@ -1,6 +1,6 @@
 import type { SharedWorld } from "./sharedWorld";
 import type { CharacterAppearanceV1 } from "../character/appearance";
-export const PROTOCOL = 3;
+export const PROTOCOL = 4;
 export const NET = { hz: 20, interpolationMs: 100, maxPlayers: 8 };
 export type Motion = {
   sequence: number;
@@ -21,7 +21,20 @@ export type Player = Motion & {
   playerId: string;
   sessionId: string;
   name: string;
+  /**
+   * Czy gracz ma zapaloną lampę naftową. Autorytatywny stan trzyma serwer (zmienia go tylko wiadomość `lantern` od
+   * właściciela sesji, nigdy `motion`), a trafia do wszystkich w zwykłych migawkach, więc dołączający później i
+   * ponownie połączeni widzą aktualny stan. Parametry światła i migotanie liczy lokalnie każdy klient.
+   */
+  lanternOn: boolean;
 };
+/** Wiadomość klient -> serwer: włącz/wyłącz własną lampę. Identyfikator gracza ustala serwer z sesji, nie z treści. */
+export type LanternMessage = { enabled: boolean };
+export function validLantern(v: unknown): v is LanternMessage {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const keys = Object.keys(v);
+  return keys.length === 1 && keys[0] === "enabled" && typeof (v as LanternMessage).enabled === "boolean";
+}
 export type WorldConfig = {
   worldId: string;
   worldInstanceId: string;

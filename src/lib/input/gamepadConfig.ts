@@ -81,7 +81,8 @@ export const BUTTON_BINDINGS: readonly ButtonBinding[] = [
   { button: BTN.r1, game: "slotPrev" },
   { button: BTN.r2, game: "slotNext" },
   { button: BTN.options, game: "pause", ui: "pause" },
-  { button: BTN.up, ui: "navUp", repeat: true },
+  // Krzyżak w górę: lampa naftowa w lesie (wolny przycisk; w interfejsie dalej nawigacja).
+  { button: BTN.up, game: "lantern", ui: "navUp", repeat: true },
   { button: BTN.down, ui: "navDown", repeat: true },
   { button: BTN.left, game: "slotPrev", ui: "navLeft", repeat: true },
   { button: BTN.right, game: "slotNext", ui: "navRight", repeat: true },
@@ -158,6 +159,7 @@ export const KEYBOARD_LABELS: Record<HintAction, string | null> = {
   inventory: "I",
   journal: "J",
   minimap: "M",
+  lantern: "L",
   pause: null,
   slotPrev: "1-8",
   slotNext: "1-8",
@@ -184,6 +186,8 @@ export function buttonForHint(action: HintAction): number | null {
       return bindingButton("journal", "game");
     case "minimap":
       return bindingButton("minimap", "game");
+    case "lantern":
+      return bindingButton("lantern", "game");
     case "pause":
       return bindingButton("pause", "game");
     case "slotPrev":

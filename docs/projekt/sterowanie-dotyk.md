@@ -24,6 +24,10 @@ Ręczne wymuszenie (do testów): `?touch=1` / `?touch=0` albo `localStorage["mia
 
 `mobile/MobileInventoryDrawer.tsx` + `inventoryDrawer.ts` (czysty reducer). Stany: schowany (sama ikona plecaka, dolny środek ekranu), `mini` (jeden rząd slotów, nazwa przedmiotu, "Zjedz") i `expanded` (większe sloty, opis, "Pełna lista rzeczy" otwiera istniejące okno ekwipunku). Pusty ekwipunek to jedna linia "Plecak pusty". Stan UI nie trafia do zapisu.
 
+## Lampa naftowa
+
+Mały przycisk "Lampa" (`data-testid="touch-lantern"`) stoi nad skokiem, z dala od joysticka, skoku, kucania i "Użyj"; ta sama ścieżka co L i pad (`InputHub`, akcja `lantern`). W wysuwanym plecaku jest wiersz lampy nad slotami (stałe wyposażenie, nie zajmuje miejsc; "Plecak pusty" dotyczy tylko przedmiotów). Telefon: pula 2 świateł, brak cieni lampy, mniejsza tekstura blasku. Szczegóły: [lampa-naftowa.md](lampa-naftowa.md).
+
 ## Sterowanie
 
 `mobile/TouchControls.tsx` (warstwa nad sceną lasu) zapisuje do `TouchInput`, a renderer czyta go raz na klatkę przez `touchAdapter.ts` (`applyTouchToTpp`, `externalMove`), czyli przez te same wejścia co pad: `PlayerInput.setExternal`, `requestJump`, `requestCrouchToggle`, `camera.look`.

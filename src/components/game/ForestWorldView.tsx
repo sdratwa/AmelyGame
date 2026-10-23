@@ -40,6 +40,7 @@ import { AppearanceControls } from "@/components/character/AppearanceControls";
 import type { AppearanceStats } from "@/lib/forest-view";
 import type { CharacterAppearanceV1 } from "@/lib/character";
 import { Minimap } from "./Minimap";
+import { LanternDiagnostics } from "./LanternDiagnostics";
 import { useGamePause } from "./quest/useGamePause";
 import type { DialogOutcome } from "@/lib/npc/encounter";
 import type { TrollMaterialMode } from "@/lib/npc/trollMaterials";
@@ -224,6 +225,7 @@ function DiagnosticsPanel({
           </div>
         ))}
       </div>
+      <LanternDiagnostics stats={stats.lantern ?? null} />
       <AudioDiagnostics
         snapshot={audio}
         onSetHour={onSetHour}
@@ -318,6 +320,10 @@ export function ForestWorldView({
   const harvestedSeen = useRef(gameState.harvested.length);
   const changeAppearance = useCallback((next: CharacterAppearanceV1) => dispatchRef.current({ type: "appearance.set", appearance: next }), []);
   const ready = useRef(false);
+  const touchUiRef = useRef(touchUi);
+  useEffect(() => {
+    touchUiRef.current = touchUi;
+  }, [touchUi]);
   const callbacks = useRef({ onPose, onLeave, onPause });
   const guard = useRef({ suspended, suspendedEnd: 0, unlockedAt: 0, locked: false });
 
@@ -364,6 +370,8 @@ export function ForestWorldView({
           // Domyślny widok rozgrywki: postać w trzeciej osobie (ta sama konfiguracja co w /dev/third-person).
           thirdPerson: { config: resolveTppConfig() },
           appearance: init.appearance,
+          // Lampa naftowa: stan z gry (stateRef jest aktualny także po ponownym utworzeniu renderera) i profil telefonu.
+          lantern: { enabled: stateRef.current.lantern.enabled, mobile: touchUiRef.current },
         },
         onStats: setStats,
       });
@@ -424,6 +432,8 @@ export function ForestWorldView({
   useEffect(() => rendererRef.current?.setBridgeBuilt(bridgeBuilt), [bridgeBuilt]);
   // Zmiana wyglądu w trakcie gry (panel deweloperski): wymiana elementów bez restartu świata, kontrolera i animacji.
   useEffect(() => rendererRef.current?.setPlayerAppearance(gameState.appearance), [gameState.appearance]);
+  // Lampa naftowa: renderer tylko wyświetla stan z gry (włączona/wyłączona); parametry światła są lokalne (Diagnostyka).
+  useEffect(() => rendererRef.current?.setLanternEnabled(gameState.lantern.enabled), [gameState.lantern.enabled]);
 
   const windowOpen = snap.window !== null;
   useGamePause(dispatch, "ui.panel", "ui.chest", windowOpen);
@@ -617,6 +627,14 @@ export function ForestWorldView({
     getInputHub().emit("interact", "touch", performance.now());
   }, []);
 
+  /** Lampa naftowa (L / krzyżak w górę / przycisk dotykowy): jedno polecenie silnika, tylko w wolnym lesie. */
+  const requestLanternToggle = useCallback(() => {
+    if (!suspendedRef.current && !trollDialogRef.current && ready.current) dispatchRef.current({ type: "lantern.toggle" });
+  }, []);
+  const lanternFromTouch = useCallback(() => {
+    getInputHub().emit("lantern", "touch", performance.now());
+  }, []);
+
   /** Minimapa (M / L1) działa tylko w wolnym lesie; to samo sprawdzenie dla klawiatury i pada. */
   const requestMinimapToggle = useCallback(() => {
     if (!suspendedRef.current && !trollDialogRef.current && ready.current) toggleMinimap();
@@ -636,6 +654,10 @@ export function ForestWorldView({
     }
     if (e.action === "minimap") {
       requestMinimapToggle();
+      return true;
+    }
+    if (e.action === "lantern") {
+      requestLanternToggle();
       return true;
     }
     return false;
@@ -664,6 +686,10 @@ export function ForestWorldView({
         requestMinimapToggle();
         return;
       }
+      if (isGameLetterShortcut(e, "l")) {
+        requestLanternToggle();
+        return;
+      }
       if (e.key !== "Escape") return;
       const g = guard.current;
       const now = performance.now();
@@ -673,7 +699,7 @@ export function ForestWorldView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [requestMinimapToggle, restartEncounter]);
+  }, [requestMinimapToggle, requestLanternToggle, restartEncounter]);
 
   const error = fatal ?? stats?.error ?? null;
   const percent = Math.round((stats?.loadProgress ?? 0) * 100);
@@ -733,7 +759,7 @@ export function ForestWorldView({
       )}
 
       {!loading && !error && touchUi && !frozen && (
-        <TouchControls touch={touch} interactReady={snap.prompt !== null || talkable} onInteract={interactFromTouch} />
+        <TouchControls touch={touch} interactReady={snap.prompt !== null || talkable} onInteract={interactFromTouch} lanternOn={gameState.lantern.enabled} onLantern={lanternFromTouch} />
       )}
 
       {touchUi && (

@@ -1,8 +1,9 @@
 import { migrateV1ToV2 } from "./migrations/v1ToV2";
 import { migrateV2ToV3 } from "./migrations/v2ToV3";
 import { migrateV3ToV4 } from "./migrations/v3ToV4";
-import { CURRENT_SAVE_VERSION, type SaveV4 } from "./schema";
-import { validateSaveV4, type ValidationResult } from "./validate";
+import { migrateV4ToV5 } from "./migrations/v4ToV5";
+import { CURRENT_SAVE_VERSION, type SaveV5 } from "./schema";
+import { validateSaveV5, type ValidationResult } from "./validate";
 
 /** Krok migracji vN -> vN+1: czysta funkcja na kopii danych; ma zwrócić obiekt z version = N+1. */
 export type MigrationStep = (payload: Record<string, unknown>) => Record<string, unknown>;
@@ -11,20 +12,20 @@ export type MigrationStep = (payload: Record<string, unknown>) => Record<string,
 export type SchemaConfig = {
   current: number;
   steps: Readonly<Record<number, MigrationStep>>;
-  validate: (payload: unknown) => ValidationResult<SaveV4>;
+  validate: (payload: unknown) => ValidationResult<SaveV5>;
 };
 
-/** Migracje dla realnych zapisów: v1 -> v2 (quest "Most do nieznanego", nowy generator świata), v2 -> v3 (usunięcie telefonu), v3 -> v4 (wygląd postaci). */
-export const MIGRATIONS: Readonly<Record<number, MigrationStep>> = { 1: migrateV1ToV2, 2: migrateV2ToV3, 3: migrateV3ToV4 };
+/** Migracje dla realnych zapisów: v1 -> v2 (quest "Most do nieznanego", nowy generator świata), v2 -> v3 (usunięcie telefonu), v3 -> v4 (wygląd postaci), v4 -> v5 (lampa naftowa). */
+export const MIGRATIONS: Readonly<Record<number, MigrationStep>> = { 1: migrateV1ToV2, 2: migrateV2ToV3, 3: migrateV3ToV4, 4: migrateV4ToV5 };
 
 export const DEFAULT_SCHEMA: SchemaConfig = {
   current: CURRENT_SAVE_VERSION,
   steps: MIGRATIONS,
-  validate: validateSaveV4,
+  validate: validateSaveV5,
 };
 
 export type MigrationResult =
-  | { ok: true; save: SaveV4 }
+  | { ok: true; save: SaveV5 }
   | { ok: false; error: string };
 
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;

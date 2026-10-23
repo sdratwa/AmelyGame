@@ -1,5 +1,5 @@
 /**
- * Ustawienia kontrolera zapisywane lokalnie (poza zapisem gry `SaveV4`). Wartości są walidowane i ograniczane do
+ * Ustawienia kontrolera zapisywane lokalnie (poza zapisem gry `SaveV5`). Wartości są walidowane i ograniczane do
  * dozwolonych zakresów; uszkodzone dane wracają do wartości domyślnych.
  */
 

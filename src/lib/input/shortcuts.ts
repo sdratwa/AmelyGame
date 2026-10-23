@@ -79,6 +79,7 @@ export const FOREST_CONTROLS: readonly ControlEntry[] = [
   { keys: ["I"], label: "ekwipunek" },
   { keys: ["J"], label: "dziennik" },
   { keys: ["M"], label: "minimapa" },
+  { keys: ["L"], label: "lampa naftowa" },
   { keys: ["O", "F3"], label: "panel diagnostyczny" },
   { keys: ["Esc"], label: "zamknięcie okna, zwolnienie myszy" },
 ];

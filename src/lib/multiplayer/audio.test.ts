@@ -7,6 +7,7 @@ const player: Player = {
   playerId: "a",
   sessionId: "s",
   name: "A",
+  lanternOn: false,
 };
 function count(speed: number, grounded = true) {
   const e = new PlayerStepEmitter();

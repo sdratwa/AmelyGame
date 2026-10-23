@@ -2,7 +2,7 @@ import type { ItemStack } from "../content/items";
 import type { GameState } from "../core/state";
 import { normalizeAppearance } from "@/lib/character/appearance";
 import { generateWorld, hasGenerator } from "../world";
-import type { SaveV4 } from "./schema";
+import type { SaveV5 } from "./schema";
 
 const stacks = (list: readonly (ItemStack | null)[]) => list.map((s) => (s ? { id: s.id, count: s.count } : null));
 const record = <T extends object>(map: Record<string, T>) =>
@@ -12,7 +12,7 @@ const record = <T extends object>(map: Record<string, T>) =>
  * Stan gry z zapisu. Dane sesji (widok, dialog, komunikaty, stos pauz) startują od zera:
  * po wczytaniu gracz zawsze wraca na mapę świata. Kotwice świata są odtwarzane z (seed, wersja generatora).
  */
-export function hydrateState(save: SaveV4): GameState {
+export function hydrateState(save: SaveV5): GameState {
   const anchors = hasGenerator(save.world.genVersion)
     ? (generateWorld(save.world.seed, save.world.genVersion).forest?.anchors ?? null)
     : null;
@@ -42,6 +42,7 @@ export function hydrateState(save: SaveV4): GameState {
     forestPose: save.player.forestPose ? { ...save.player.forestPose } : null,
     // Zapis może pochodzić z nowszej/starszej listy elementów: nieznane ID dają puste miejsce, a nie błąd wczytania.
     appearance: normalizeAppearance(save.player.appearance),
+    lantern: { enabled: save.player.lantern.enabled },
     quests: {
       accepted: record(save.quests.accepted),
       completed: record(save.quests.completed),

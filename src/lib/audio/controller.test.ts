@@ -1125,7 +1125,7 @@ describe("M1a remote positional footsteps", () => {
     r.audio.enter({ elapsed: at(12), saveId: "online" });
     await flush(1000);
     r.audio.setPose({ x: 0, y: 1.4, z: 0, yaw: 0 });
-    const p = { ...idleMotion(2, 0, 0), playerId: "a", sessionId: "a", name: "A", speed: 2.2 };
+    const p = { ...idleMotion(2, 0, 0), playerId: "a", sessionId: "a", name: "A", speed: 2.2, lanternOn: false };
     const q = { ...p, playerId: "b", sessionId: "b", z: 3 };
     for(let i=0;i<40;i++) r.audio.remotePlayersMotion([{...p,x:2+i*0.11},{...q,x:2+i*0.11}],0.05);
     const details = r.audio.spatialDiagnostics();

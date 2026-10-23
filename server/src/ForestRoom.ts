@@ -9,6 +9,7 @@ import {
   NET,
   PROTOCOL,
   SOUND_REGISTRY,
+  validLantern,
   validMotion,
   type Player,
 } from "../../src/lib/multiplayer/protocol";
@@ -76,6 +77,13 @@ export class ForestRoom extends Room {
       )
         return;
       Object.assign(p, data);
+    });
+    // Lampa naftowa: stan zmienia wyłącznie właściciel sesji. Treść wiadomości to tylko flaga (żadnego playerId, żadnych
+    // parametrów światła); do pozostałych dociera w najbliższej migawce, razem z pozycją.
+    this.onMessage("lantern", (client, data) => {
+      const p = this.players.get(client.sessionId);
+      if (!p || !this.allow(client) || !validLantern(data)) return;
+      p.lanternOn = data.enabled;
     });
     this.onMessage(
       "hello",
@@ -167,6 +175,7 @@ export class ForestRoom extends Room {
       playerId: randomUUID(),
       sessionId: client.sessionId,
       name: `Odkrywca ${slot + 1}`,
+      lanternOn: false,
     };
     this.players.set(client.sessionId, p);
     this.broadcast("notice", `${p.name} dołącza do lasu.`);

@@ -408,6 +408,7 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
   const leave = useCallback(() => dispatch({ type: "leave" }), [dispatch]);
   const select = useCallback((slot: number) => dispatch({ type: "select", slot }), [dispatch]);
   const eat = useCallback(() => dispatch({ type: "eat" }), [dispatch]);
+  const toggleLantern = useCallback(() => dispatch({ type: "lantern.toggle" }), [dispatch]);
   const enter = useCallback((view: View) => dispatch({ type: "enter", view }), [dispatch]);
 
   const devReset = multiplayer ? null : <DevResetButton onReset={resetSave} />;
@@ -591,7 +592,7 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
         onSave={saveNow}
         onClose={closePanel}
       />
-      <InventoryPanel open={inventoryOpen} state={state} onClose={closePanel} onReadBlueprint={() => setPanel("blueprint")} />
+      <InventoryPanel open={inventoryOpen} state={state} onClose={closePanel} onReadBlueprint={() => setPanel("blueprint")} onToggleLantern={toggleLantern} />
       <BlueprintDialog open={blueprintOpen} state={state} onClose={closePanel} />
       <PauseMenu
         open={pauseOpen}
@@ -613,10 +614,12 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
           onSelect={select}
           onEat={eat}
           onOpenFull={openFullInventory}
+          lanternOn={state.lantern.enabled}
+          onToggleLantern={toggleLantern}
           aboveControls={inForest}
         />
       ) : (
-        <InventoryBar state={state} onSelect={select} onEat={eat} />
+        <InventoryBar state={state} onSelect={select} onEat={eat} onToggleLantern={toggleLantern} inForest={inForest} />
       )}
       {state.dead && <DeathOverlay onRespawn={() => dispatch({ type: "respawn" })} />}
       {saveError && (

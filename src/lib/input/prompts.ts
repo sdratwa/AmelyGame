@@ -34,6 +34,7 @@ const FOREST_HELP: readonly { actions: HintAction[]; text: string }[] = [
   { actions: ["inventory"], text: "ekwipunek" },
   { actions: ["journal"], text: "dziennik" },
   { actions: ["minimap"], text: "minimapa" },
+  { actions: ["lantern"], text: "lampa naftowa" },
   { actions: ["slotPrev", "slotNext"], text: "slot paska" },
   { actions: ["pause"], text: "menu" },
 ];

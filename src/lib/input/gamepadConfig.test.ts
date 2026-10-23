@@ -39,6 +39,19 @@ describe("mapowanie przycisków", () => {
     expect(by(BTN.right)?.game).toBe("slotNext");
   });
 
+  it("lampa naftowa: krzyżak w górę w lesie (wolny przycisk), nawigacja w interfejsie bez zmian; L na klawiaturze", () => {
+    const up = BUTTON_BINDINGS.find((x) => x.button === BTN.up);
+    expect(up?.game).toBe("lantern");
+    expect(up?.ui).toBe("navUp");
+    expect(buttonForHint("lantern")).toBe(BTN.up);
+    expect(hintLabel("lantern", "keyboard")).toBe("L");
+    expect(hintLabel("lantern", "playstation")).toBe("↑");
+    expect(hintLabel("lantern", "xbox")).toBe("↑");
+    // Żadna inna akcja w grze nie korzysta z tego przycisku, więc nie ma konfliktu mapowania.
+    expect(BUTTON_BINDINGS.filter((x) => x.button === BTN.up)).toHaveLength(1);
+    expect(BUTTON_BINDINGS.filter((x) => x.game === "lantern")).toHaveLength(1);
+  });
+
   it("żaden przycisk nie występuje w tabeli dwa razy", () => {
     const buttons = BUTTON_BINDINGS.map((b) => b.button);
     expect(new Set(buttons).size).toBe(buttons.length);

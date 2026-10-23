@@ -1,6 +1,6 @@
 import type { ItemStack } from "../content/items";
 import type { GameState } from "../core/state";
-import type { SaveV4 } from "./schema";
+import type { SaveV5 } from "./schema";
 
 const stacks = (list: readonly (ItemStack | null)[]) => list.map((s) => (s ? { id: s.id, count: s.count } : null));
 const record = <T extends object>(map: Record<string, T>) =>
@@ -11,11 +11,11 @@ const record = <T extends object>(map: Record<string, T>) =>
  * zostanie tu świadomie dodane (razem z wersją schematu i migracją).
  * Zwraca null, gdy gra nie jest w stanie nadającym się do zapisu.
  */
-export function serializeState(state: GameState, savedAt: number): SaveV4 | null {
+export function serializeState(state: GameState, savedAt: number): SaveV5 | null {
   if (state.phase !== "playing" || !state.world) return null;
   const bridge = state.bridge.built ? state.bridge : (state.savedBridge ?? state.bridge);
   return {
-    version: 4,
+    version: 5,
     saveId: state.world.saveId,
     savedAt,
     world: {
@@ -37,6 +37,7 @@ export function serializeState(state: GameState, savedAt: number): SaveV4 | null
       selected: state.selected,
       forestPose: state.forestPose ? { ...state.forestPose } : null,
       appearance: { ...state.appearance },
+      lantern: { enabled: state.lantern.enabled },
     },
     tutorial: { done: state.tutorialDone },
     houses: state.houses.map((h) => ({ ...h })),

@@ -1,4 +1,4 @@
-import { NET } from "../multiplayer/protocol";
+import { NET, type Player } from "../multiplayer/protocol";
 import * as THREE from "three";
 import { RemotePlayers, createRemoteTemplate } from "./remotePlayers";
 import type { MultiplayerClient } from "../multiplayer/client";
@@ -19,6 +19,9 @@ import { FirstPersonController, type MoveInput } from "./controller";
 import { ThirdPersonRig, type TppSnapshot } from "@/lib/tpp/thirdPersonRig";
 import type { TppConfig } from "@/lib/tpp/config";
 import { PlayerModel } from "./playerModel";
+import { findHandBone } from "./lantern/hand";
+import { lanternConfigStore, type LanternConfigStore } from "./lantern/configStore";
+import { LanternSystem, type LanternSource, type LanternStats } from "./lantern/system";
 import { PlayerAnimator, type PlayerAnimStats } from "./playerAnimator";
 import { AppearanceRig, type AppearanceStats } from "./appearance/appearanceRig";
 import { DEFAULT_APPEARANCE, devFitOverrides, normalizeAppearance, type CharacterAppearanceV1 } from "@/lib/character";
@@ -99,6 +102,8 @@ export type PanelStats = {
   /** Most i latarnie (panel dev); null, gdy most nie stoi albo model się nie wczytał. */
   bridge?: { built: boolean; triangles: number; bays: number; length: number; lamps: number; level: number; lights: number; markers: boolean } | null;
   bridgeError?: string | null;
+  /** Lampy naftowe (panel dev): liczba zapalonych, aktywne światła i strefy LOD; null poza lasem. */
+  lantern?: LanternStats | null;
 };
 
 /** Raport trasy przez 4 strefy prototypu Pro (plus droga główna): jeden wpis na odcinek, do porównania stref. */
@@ -162,6 +167,11 @@ export type StreamOptions = {
   thirdPerson?: { config?: Partial<TppConfig> };
   /** Wygląd postaci gracza (tryb TPP); domyślny z `DEFAULT_APPEARANCE`. Zmiana w trakcie gry: `setPlayerAppearance`. */
   appearance?: CharacterAppearanceV1;
+  /**
+   * Lampa naftowa: stan początkowy gracza lokalnego (z `GameState.lantern`) i profil telefonu (mniejsza pula świateł,
+   * zawsze bez cieni dynamicznych lampy). Dalsze zmiany stanu: `setLanternEnabled`.
+   */
+  lantern?: { enabled: boolean; mobile: boolean };
 };
 
 /** Dane panelu deweloperskiego TPP (odświeżane razem z `PanelStats`). */
@@ -339,6 +349,15 @@ export class ForestRenderer {
   private controller: FirstPersonController | null = null;
   private tpp: { rig: ThirdPersonRig; model: PlayerModel | null; animator: PlayerAnimator | null; appearance: AppearanceRig | null; placeholder: THREE.Group | null; detach: () => void; modelError: string | null } | null = null;
   private playerAppearance: CharacterAppearanceV1 = { ...DEFAULT_APPEARANCE };
+  /** Lampy naftowe wszystkich graczy (model w dłoni, światło z puli, blask z daleka); tworzone razem ze streamem lasu. */
+  private lanterns: LanternSystem | null = null;
+  /** Stan lampy gracza lokalnego (źródło prawdy to `GameState`, renderer tylko go wyświetla). */
+  private lanternOn = false;
+  private lanternMobile = false;
+  private readonly lanternStore: LanternConfigStore = lanternConfigStore();
+  private readonly lanternSources: LanternSource[] = [];
+  private lanternHeightFor: ForestWorld | null = null;
+  private lanternHeightAt: ((x: number, z: number) => number) | null = null;
   private tppAssetError: string | null = null;
   private library: AssetLibrary | null = null;
   private instancer: ForestInstancer | null = null;
@@ -400,6 +419,8 @@ export class ForestRenderer {
     }
     this.streamOptions = options.stream ?? null;
     if (options.stream?.appearance) this.playerAppearance = normalizeAppearance(options.stream.appearance);
+    this.lanternOn = options.stream?.lantern?.enabled ?? false;
+    this.lanternMobile = options.stream?.lantern?.mobile ?? false;
     this.openedChests = new Set(options.stream?.opened ?? []);
     this.harvestedIds = new Set(options.stream?.harvested ?? []);
     if (options.stream?.bridgeBuilt) this.worldFlags.add(BRIDGE_FLAG);
@@ -989,6 +1010,11 @@ export class ForestRenderer {
       this.stream.dispose();
       this.stream = null;
     }
+    // Lampy najpierw: odpinają się od kości dłoni, zanim model gracza zwolni swoje zasoby.
+    this.lanterns?.dispose();
+    this.lanterns = null;
+    this.lanternHeightFor = null;
+    this.lanternHeightAt = null;
     this.disposeTpp();
     this.disposeView();
     this.controller = null;
@@ -1218,6 +1244,10 @@ export class ForestRenderer {
       this.instancer = instancer;
       this.stream = stream;
       this.scene.add(stream.group, instancer.group);
+      // Stała pula świateł lamp powstaje razem ze sceną (zmiana liczby świateł przeładowałaby shadery w trakcie gry).
+      const mobile = this.lanternMobile;
+      this.lanterns = new LanternSystem(this.lanternStore.current, { poolSize: mobile ? 2 : 4, allowShadows: !mobile, glowTextureSize: mobile ? 32 : 64 });
+      this.scene.add(this.lanterns.group);
       instancer.setOverrides(this.overrides);
       const controller = new FirstPersonController(walk, forest.terrain, opts.pose);
       controller.flags = this.worldFlags;
@@ -1731,10 +1761,13 @@ export class ForestRenderer {
     this.particleUniforms.uCenter.value.copy(this.camera.position);
     this.particleUniforms.uSize.value = 0.05;
 
+    let remoteList: readonly Player[] = NO_PLAYERS;
     if (this.multiplayer && this.tpp?.model && this.remoteTemplate) {
       this.remotePlayers ??= new RemotePlayers(this.scene, this.remoteTemplate);
       this.multiplayer.syncAppearance(this.playerAppearance);
+      this.multiplayer.syncLantern(this.lanternOn);
       const players = this.multiplayer.remote();
+      remoteList = players;
       this.remotePlayers.update(players, dt, this.multiplayer.appearances);
       getForestAudio().remotePlayersMotion(players, dt);
       const s = this.tpp.rig.controller.state;
@@ -1762,6 +1795,7 @@ export class ForestRenderer {
         });
       }
     }
+    this.updateLanterns(dt, remoteList);
     this.renderer.render(this.scene, this.camera);
 
     const info = this.renderer.info;
@@ -1815,6 +1849,51 @@ export class ForestRenderer {
       t.placeholder.scale.y = s.capsuleHeight / t.rig.config.standHeight;
     }
     t.animator?.update(dt, t.rig.animIntent(), s, t.rig.config, t.rig.controller.expectedAirTime);
+  }
+
+  /** Włącza lub wyłącza lampę gracza lokalnego (stan pochodzi z gry; serwer dostaje go przez `MultiplayerClient.syncLantern`). */
+  setLanternEnabled(on: boolean): void {
+    this.lanternOn = on;
+  }
+
+  /** Statystyki lamp do panelu diagnostycznego (null przed utworzeniem sceny). */
+  getLanternStats(): LanternStats | null {
+    return this.lanterns?.stats() ?? null;
+  }
+
+  /**
+   * Klatka lamp: zbiera źródła (lokalny gracz i zdalni z migawki serwera), a system pokazuje model w dłoni, światło z
+   * puli i blask z daleka. Konfiguracja wizualna jest lokalna (panel Diagnostyka); nie zmienia stanu gry ani sieci.
+   */
+  private updateLanterns(dt: number, remote: readonly Player[]): void {
+    const system = this.lanterns;
+    if (!system) return;
+    const forest = this.stepForest;
+    if (forest !== this.lanternHeightFor) {
+      this.lanternHeightFor = forest;
+      this.lanternHeightAt = forest ? (x, z) => forest.terrain.height(x, z) : null;
+    }
+    system.setConfig(this.lanternStore.current);
+    const sources = this.lanternSources;
+    sources.length = 0;
+    const model = this.tpp?.model;
+    if (model) sources.push({ id: LOCAL_LANTERN_ID, enabled: this.lanternOn, hand: findHandBone(model.asset.scene), seed: 0.37, priority: true });
+    const others = this.remotePlayers;
+    if (others) {
+      for (const p of remote) sources.push({ id: p.playerId, enabled: p.lanternOn === true, hand: others.handBone(p.playerId), seed: hash(stringSeed(p.playerId)) * 97, priority: false });
+    }
+    const pos = this.camera.position;
+    const fog = this.scene.fog as THREE.FogExp2 | null;
+    system.update(sources, {
+      time: this.elapsed,
+      dt,
+      daylight: this.atmosphere.daylight,
+      fogDensity: fog?.density ?? 0,
+      camera: pos,
+      fovRad: THREE.MathUtils.degToRad(this.camera.fov),
+      viewportHeightPx: this.container.clientHeight,
+      heightAt: this.lanternHeightAt,
+    });
   }
 
   private advanceStream(pos: { x: number; z: number }, time: number): void {
@@ -1980,8 +2059,19 @@ export class ForestRenderer {
       appearance: this.tpp?.appearance?.stats() ?? null,
       bridge: this.bridgeStats(),
       bridgeError: this.bridgeError,
+      lantern: this.getLanternStats(),
     });
   }
+}
+
+const LOCAL_LANTERN_ID = "local";
+const NO_PLAYERS: readonly Player[] = [];
+
+/** Liczba z napisu (identyfikator gracza), do rozsynchronizowania migotania lamp. */
+function stringSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
 }
 
 function hash(i: number): number {

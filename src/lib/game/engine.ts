@@ -13,6 +13,7 @@ export * from "./core/pause";
 export * from "./core/apply";
 export type { CommandResult } from "./core/result";
 export * from "./content/items";
+export * from "./content/equipment";
 export * from "./content/houses";
 export { generateHouse } from "./systems/houses";
 export { drainPerSecond, isSheltered } from "./systems/vitals";

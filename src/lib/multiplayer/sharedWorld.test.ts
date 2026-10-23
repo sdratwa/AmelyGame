@@ -11,7 +11,7 @@ import { emptySharedWorld, resolveWorldCommand } from "./sharedWorld";
 import { createInstance } from "./world";
 import { grantItem, harvestTargets, newPlaying } from "../game/testkit";
 import { serializeState } from "../game/save/serialize";
-import { validateSaveV4 } from "../game/save/validate";
+import { validateSaveV5 } from "../game/save/validate";
 import { reducer } from "../game/core/apply";
 import { RECIPE_BRIDGE_01 } from "../game/content/quests";
 import { countOf } from "../game/systems/containers";
@@ -50,10 +50,10 @@ describe("shared multiplayer world", () => {
     const accepted = resolveWorldCommand(world, config, command, save);
     expect(resolveWorldCommand(accepted.world, config, command, save).accepted).toBe(false);
     const synced = reducer({ ...state, elapsed: 0 }, { type: "world.sync", world: { ...accepted.world, bridgeBuilt: true } });
-    expect(validateSaveV4(serializeState(synced, 0)).ok).toBe(true);
+    expect(validateSaveV5(serializeState(synced, 0)).ok).toBe(true);
     const reset = reducer({ ...synced, discovered: ["region.beyond_bridge"] }, { type: "world.sync", world });
     expect(reset.bridge.built).toBe(false);
-    expect(validateSaveV4(serializeState(reset, 0)).ok).toBe(true);
+    expect(validateSaveV5(serializeState(reset, 0)).ok).toBe(true);
   });
 
   it("merges existing online saves without resurrecting resources or losing a built bridge", () => {
@@ -126,7 +126,7 @@ describe("shared multiplayer world", () => {
       await until(() => sa.bridge.built && sb.bridge.built);
       for (const item of RECIPE_BRIDGE_01.requires) expect(countOf(sa.slots, item.id) + countOf(sb.slots, item.id)).toBe(item.count);
       expect(sa.harvested).toEqual(sb.harvested);
-      expect(validateSaveV4(serializeState(sb, 0)).ok).toBe(true);
+      expect(validateSaveV5(serializeState(sb, 0)).ok).toBe(true);
       syncBridgeColliders(ref, true);
       const layout = forestBridgeOf(ref);
       const walk = forestWalkOf(ref);

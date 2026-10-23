@@ -1,6 +1,6 @@
 import { applyCommand, type Command } from "../game/core/apply";
 import { hydrateState } from "../game/save/hydrate";
-import { validateSaveV4 } from "../game/save/validate";
+import { validateSaveV5 } from "../game/save/validate";
 import { forestObject } from "../game/world/lookup";
 import { harvestOf } from "../game/world/harvest";
 import type { WorldConfig } from "./protocol";
@@ -18,7 +18,7 @@ export function isWorldCommand(command: Command): command is WorldCommand {
 export function resolveWorldCommand(world: SharedWorld, config: WorldConfig, command: unknown, save: unknown): { accepted: boolean; world: SharedWorld } {
   if (!command || typeof command !== "object") return { accepted: false, world };
   if ((command as { type?: unknown }).type === "world.restore") {
-    const checked = validateSaveV4(save);
+    const checked = validateSaveV5(save);
     if (!checked.ok || checked.value.world.seed !== config.worldSeed || checked.value.world.genVersion !== config.generatorVersion || checked.value.world.fingerprint !== config.fingerprint) return { accepted: false, world };
     const ref = { seed: config.worldSeed, genVersion: config.generatorVersion };
     if (checked.value.harvested.some((id) => { const object = forestObject(ref, id); return !object || !harvestOf(object); })) return { accepted: false, world };
@@ -30,7 +30,7 @@ export function resolveWorldCommand(world: SharedWorld, config: WorldConfig, com
   }
   const c = command as WorldCommand;
   if (!isWorldCommand(c) || Object.keys(c).some((k) => !["type", "at", ...(c.type === "harvest" ? ["objectId"] : [])].includes(k))) return { accepted: false, world };
-  const checked = validateSaveV4(save);
+  const checked = validateSaveV5(save);
   if (!checked.ok || checked.value.world.seed !== config.worldSeed || checked.value.world.genVersion !== config.generatorVersion || checked.value.world.fingerprint !== config.fingerprint) return { accepted: false, world };
   const state = applySharedWorld({ ...hydrateState(checked.value), view: "forest" }, world);
   const out = applyCommand(state, c);

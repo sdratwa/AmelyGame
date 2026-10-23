@@ -79,6 +79,7 @@ describe("M1a", () => {
             playerId: "a",
             sessionId: "a",
             name: "A",
+            lanternOn: false,
           },
           0.05,
         )
@@ -89,7 +90,7 @@ describe("M1a", () => {
     for (let i = 0; i < 20; i++)
       expect(
         e.update(
-          { ...idleMotion(20, 0, 0), playerId: "a", sessionId: "a", name: "A" },
+          { ...idleMotion(20, 0, 0), playerId: "a", sessionId: "a", name: "A", lanternOn: false },
           0.05,
         ),
       ).toBe(false);

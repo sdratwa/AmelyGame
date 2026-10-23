@@ -7,7 +7,7 @@ import { AppearanceRig } from "./appearance/appearanceRig";
 import { PlayerModel } from "./playerModel";
 import { RemotePlayers, createRemoteTemplate } from "./remotePlayers";
 
-const player = (id: string): Player => ({ ...idleMotion(0, 0, 0), playerId: id, sessionId: id, name: id });
+const player = (id: string): Player => ({ ...idleMotion(0, 0, 0), playerId: id, sessionId: id, name: id, lanternOn: false });
 
 /** Kolory siatek `appearance-*` w całym drzewie sceny (ubrania i włosy), w kolejności przejścia. */
 const outfitColors = (root: THREE.Object3D) => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { House } from "../content/houses";
 import { ITEMS } from "../content/items";
 import { reducer } from "../core/apply";
+import { INVENTORY_SLOTS } from "../core/constants";
 import { inventoryProblems } from "../systems/containers";
 import { autoComplete } from "../testkit";
 import { fingerprintWorld, generateWorld } from "../world";
@@ -14,12 +15,13 @@ import { migratePayload } from "./migrate";
 import { migrateV1ToV2 } from "./migrations/v1ToV2";
 import { migrateV2ToV3 } from "./migrations/v2ToV3";
 import { migrateV3ToV4 } from "./migrations/v3ToV4";
+import { migrateV4ToV5 } from "./migrations/v4ToV5";
 import { DEFAULT_APPEARANCE } from "@/lib/character/appearance";
-import { CURRENT_SAVE_VERSION, type SaveV1, type SaveV4 } from "./schema";
+import { CURRENT_SAVE_VERSION, type SaveV1, type SaveV5 } from "./schema";
 import { serializeState } from "./serialize";
 import { LocalStorageSaveStore } from "./store";
 import { validateSaveV1 } from "./validateV1";
-import { validateSaveV4 } from "./validate";
+import { validateSaveV5 } from "./validate";
 
 const SEED = 31415;
 
@@ -51,18 +53,18 @@ function v1Save(seed = SEED, patch: Partial<SaveV1["player"]> = {}): SaveV1 {
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
-function migrated(v1: SaveV1): SaveV4 {
+function migrated(v1: SaveV1): SaveV5 {
   const out = migratePayload(clone(v1), 1);
   if (!out.ok) throw new Error(out.error);
   return out.save;
 }
 
-describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): dane gracza i miasto", () => {
+describe("migracja SaveV1 -> SaveV5 (łańcuch v1 -> v2 -> v3 -> v4 -> v5): dane gracza i miasto", () => {
   it("zachowuje miasto, domy (własność i poziom), pieniądze, zdrowie, czas, imię i tutorial", () => {
     const v1 = v1Save();
     const v2 = migrated(v1);
     expect(v2.version).toBe(CURRENT_SAVE_VERSION);
-    expect(v2.version).toBe(4);
+    expect(v2.version).toBe(5);
     expect(v2.saveId).toBe(v1.saveId);
     expect(v2.houses).toEqual(v1.houses);
     expect(v2.houses[0]).toMatchObject({ owned: true, level: 3 });
@@ -119,7 +121,7 @@ describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): dane gracz
   });
 });
 
-describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): generator świata", () => {
+describe("migracja SaveV1 -> SaveV5 (łańcuch v1 -> v2 -> v3 -> v4 -> v5): generator świata", () => {
   it("generator v2 zachowuje miasto: te same domy co v1 dla wielu seedów", () => {
     for (let i = 0; i < 25; i++) {
       const seed = (Math.imul(i + 3, 2654435761) ^ 0x1234567) >>> 0;
@@ -138,7 +140,7 @@ describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): generator 
   it("po migracji świat przechodzi weryfikację (odcisk, domy), a stary zapis tego samego seeda na v1 też nadal się odtwarza", () => {
     const v2 = migrated(v1Save());
     expect(verifyWorld(v2)).toEqual({ ok: true });
-    expect(verifyWorld(v1Save() as unknown as SaveV4)).toEqual({ ok: true });
+    expect(verifyWorld(v1Save() as unknown as SaveV5)).toEqual({ ok: true });
   });
 
   it("zapis z dopisaną historią zachowuje wcześniejsze wpisy", () => {
@@ -151,7 +153,7 @@ describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): generator 
   });
 });
 
-describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): pozycja w lesie", () => {
+describe("migracja SaveV1 -> SaveV5 (łańcuch v1 -> v2 -> v3 -> v4 -> v5): pozycja w lesie", () => {
   const forest = createForest(SEED);
 
   function findPose(valid: boolean) {
@@ -187,12 +189,12 @@ describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): pozycja w 
   });
 });
 
-describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): bezpieczeństwo i zgodność", () => {
+describe("migracja SaveV1 -> SaveV5 (łańcuch v1 -> v2 -> v3 -> v4 -> v5): bezpieczeństwo i zgodność", () => {
   it("stary zapis nadal da się odczytać i zwalidować jako SaveV1, a koperta wskazuje migrację", () => {
     const v1 = v1Save();
     expect(validateSaveV1(v1).ok).toBe(true);
-    expect(validateSaveV4(v1).ok).toBe(false);
-    const decoded = decodeSave(encodeSave(v1 as unknown as SaveV4));
+    expect(validateSaveV5(v1).ok).toBe(false);
+    const decoded = decodeSave(encodeSave(v1 as unknown as SaveV5));
     expect(decoded.kind).toBe("needs_migration");
     if (decoded.kind === "needs_migration") expect(decoded.from).toBe(1);
   });
@@ -218,14 +220,14 @@ describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): bezpiecze�
 
   it("magazyn: stary zapis jest migrowany, kopia przed migracją i .bak zawierają oryginał, a po migracji gra się ładuje", async () => {
     const storage = new MemoryStorage();
-    const raw = encodeSave(v1Save() as unknown as SaveV4);
+    const raw = encodeSave(v1Save() as unknown as SaveV5);
     storage.setItem("miasto.save", raw);
     const store = new LocalStorageSaveStore({ storage });
     const loaded = await store.load();
     expect(loaded.kind).toBe("ok");
     if (loaded.kind !== "ok") return;
     expect(loaded.migratedFrom).toBe(1);
-    expect(loaded.save.version).toBe(4);
+    expect(loaded.save.version).toBe(5);
     expect(storage.getItem("miasto.save.premigration.v1.0")).toBe(raw);
     expect(storage.getItem("miasto.save.bak")).toBe(raw);
 
@@ -251,7 +253,7 @@ describe("migracja SaveV1 -> SaveV4 (łańcuch v1 -> v2 -> v3 -> v4): bezpiecze�
     for (let i = 0; i < 12; i++) {
       const seed = (Math.imul(i + 11, 2654435761) ^ 0x7777) >>> 0;
       const v2 = migrated(v1Save(seed, { forestPose: { x: 10 + i, z: -3 * i, yaw: 0.1 } }));
-      expect(validateSaveV4(v2).ok).toBe(true);
+      expect(validateSaveV5(v2).ok).toBe(true);
       expect(verifyWorld(v2)).toEqual({ ok: true });
     }
   });
@@ -282,7 +284,7 @@ describe("migracja SaveV2 -> SaveV3: usunięcie telefonu", () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     const v3 = out.save;
-    expect(v3.version).toBe(4);
+    expect(v3.version).toBe(5);
     expect(v3.player.slots[0]).toBeNull();
     expect(v3.player.slots.slice(1)).toEqual(v2.player.slots.slice(1));
     expect(JSON.stringify(v3)).not.toContain("item.phone");
@@ -306,7 +308,7 @@ describe("migracja SaveV2 -> SaveV3: usunięcie telefonu", () => {
     expect(() => migrateV2ToV3({ ...clone(v2), troll: {} })).toThrow();
   });
 
-  it("zapis V2 bez telefonu (np. uszkodzony ręcznie) też przechodzi, a wynik jest poprawnym SaveV4", () => {
+  it("zapis V2 bez telefonu (np. uszkodzony ręcznie) też przechodzi, a wynik jest poprawnym SaveV5", () => {
     const v2 = v2With(fresh());
     v2.player.slots[0] = null;
     delete v2.player.ledger.gained["item.phone"];
@@ -346,16 +348,16 @@ describe("migracja SaveV2 -> SaveV3: usunięcie telefonu", () => {
     expect(reducer(state, { type: "tick", dt: 1 }).wallet).toBe(done.wallet);
   });
 
-  it("magazyn: zapis V2 jest migrowany do V4, kopia przed migracją zawiera oryginał, a gra się ładuje", async () => {
+  it("magazyn: zapis V2 jest migrowany do V5, kopia przed migracją zawiera oryginał, a gra się ładuje", async () => {
     const storage = new MemoryStorage();
     const v2 = v2With(fresh());
-    const raw = encodeSave(v2 as unknown as SaveV4);
+    const raw = encodeSave(v2 as unknown as SaveV5);
     storage.setItem("miasto.save", raw);
     const loaded = await new LocalStorageSaveStore({ storage }).load();
     expect(loaded.kind).toBe("ok");
     if (loaded.kind !== "ok") return;
     expect(loaded.migratedFrom).toBe(2);
-    expect(loaded.save.version).toBe(4);
+    expect(loaded.save.version).toBe(5);
     expect(storage.getItem("miasto.save.premigration.v2.0")).toBe(raw);
     const boot = await loadGame(new LocalStorageSaveStore({ storage }));
     expect(boot.kind).toBe("ok");
@@ -371,7 +373,7 @@ describe("migracja SaveV2 -> SaveV3: usunięcie telefonu", () => {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- fixtures celowo budują dawny format SaveV3 bez wyglądu */
-describe("migracja SaveV3 -> SaveV4: wygląd postaci", () => {
+describe("migracja SaveV3 -> SaveV5: wygląd postaci", () => {
   type Json = Record<string, any>;
   const fresh = () => hydrateState(migrated(v1Save(SEED, { forestPose: null })));
 
@@ -380,6 +382,7 @@ describe("migracja SaveV3 -> SaveV4: wygląd postaci", () => {
     const base = clone(serializeState(state, 1_000)) as unknown as Json;
     base.version = 3;
     delete base.player.appearance;
+    delete base.player.lantern;
     return base;
   }
 
@@ -402,7 +405,7 @@ describe("migracja SaveV3 -> SaveV4: wygląd postaci", () => {
     expect(() => migrateV3ToV4({ ...clone(v3), player: null })).toThrow();
   });
 
-  it("pełny łańcuch: zapis V3 przechodzi walidację V4, postęp (most, odznaki, pieniądze) zostaje, a gra się wczytuje z domyślnym wyglądem", () => {
+  it("pełny łańcuch: zapis V3 przechodzi walidację V5, postęp (most, odznaki, pieniądze) zostaje, a gra się wczytuje z domyślnym wyglądem", () => {
     const done = autoComplete(reducer(fresh(), { type: "leave" }));
     const out = migratePayload(v3Of(done), 3);
     expect(out.ok).toBe(true);
@@ -417,15 +420,82 @@ describe("migracja SaveV3 -> SaveV4: wygląd postaci", () => {
 
   it("magazyn: zapis V3 jest migrowany, kopia przed migracją zawiera oryginał, a gra się ładuje", async () => {
     const storage = new MemoryStorage();
-    const raw = encodeSave(v3Of(fresh()) as unknown as SaveV4);
+    const raw = encodeSave(v3Of(fresh()) as unknown as SaveV5);
     storage.setItem("miasto.save", raw);
     const loaded = await new LocalStorageSaveStore({ storage }).load();
     expect(loaded.kind).toBe("ok");
     if (loaded.kind !== "ok") return;
     expect(loaded.migratedFrom).toBe(3);
-    expect(loaded.save.version).toBe(4);
+    expect(loaded.save.version).toBe(5);
     expect(loaded.save.player.appearance).toEqual(DEFAULT_APPEARANCE);
     expect(storage.getItem("miasto.save.premigration.v3.0")).toBe(raw);
+    expect((await loadGame(new LocalStorageSaveStore({ storage }))).kind).toBe("ok");
+  });
+});
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- fixtures celowo budują dawny format SaveV4 bez lampy */
+describe("migracja SaveV4 -> SaveV5: stała lampa naftowa", () => {
+  type Json = Record<string, any>;
+  const fresh = () => hydrateState(migrated(v1Save(SEED, { forestPose: null })));
+
+  /** Dawny zapis V4: bieżący zapis bez `player.lantern`. */
+  function v4Of(state: ReturnType<typeof hydrateState>): Json {
+    const base = clone(serializeState(state, 1_000)) as unknown as Json;
+    base.version = 4;
+    delete base.player.lantern;
+    return base;
+  }
+
+  it("dodaje wyłączoną lampę i nie zmienia niczego poza wersją (ekwipunek, księga i depozyt bez zmian)", () => {
+    const v4 = v4Of(autoComplete(reducer(fresh(), { type: "leave" })));
+    const out = migrateV4ToV5(clone(v4));
+    expect(out.version).toBe(5);
+    expect((out.player as Json).lantern).toEqual({ enabled: false });
+    const { lantern: _l, ...playerRest } = out.player as Json;
+    void _l;
+    expect({ ...out, version: 4, player: playerRest }).toEqual(v4);
+    expect(JSON.stringify(out)).not.toContain("oil_lantern");
+  });
+
+  it("nie modyfikuje wejścia, jest deterministyczna i odrzuca zły format", () => {
+    const v4 = v4Of(fresh());
+    const snapshot = JSON.stringify(v4);
+    expect(migrateV4ToV5(clone(v4))).toEqual(migrateV4ToV5(clone(v4)));
+    expect(JSON.stringify(v4)).toBe(snapshot);
+    expect(() => migrateV4ToV5({ ...clone(v4), version: 5 })).toThrow();
+    expect(() => migrateV4ToV5({ ...clone(v4), player: null })).toThrow();
+  });
+
+  it("migracja nie duplikuje lampy: ponowne wczytanie i zapis dają ten sam stan, a sloty zachowują liczbę miejsc", () => {
+    const done = autoComplete(reducer(fresh(), { type: "leave" }));
+    const out = migratePayload(v4Of(done), 4);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const state = hydrateState(out.save);
+    expect(state.lantern).toEqual({ enabled: false });
+    expect(state.slots).toHaveLength(INVENTORY_SLOTS);
+    expect(state.slots).toEqual(done.slots);
+    expect(state.ledger).toEqual(done.ledger);
+    const again = migratePayload(clone(serializeState(state, 2_000)), 5);
+    expect(again.ok).toBe(true);
+    if (again.ok) expect(hydrateState(again.save).lantern).toEqual({ enabled: false });
+    // postęp zostaje
+    expect(state.bridge.built).toBe(true);
+    expect(state.wallet).toBe(done.wallet);
+  });
+
+  it("magazyn: zapis V4 jest migrowany, kopia przed migracją zawiera oryginał, a gra się ładuje z lampą", async () => {
+    const storage = new MemoryStorage();
+    const raw = encodeSave(v4Of(fresh()) as unknown as SaveV5);
+    storage.setItem("miasto.save", raw);
+    const loaded = await new LocalStorageSaveStore({ storage }).load();
+    expect(loaded.kind).toBe("ok");
+    if (loaded.kind !== "ok") return;
+    expect(loaded.migratedFrom).toBe(4);
+    expect(loaded.save.version).toBe(5);
+    expect(loaded.save.player.lantern).toEqual({ enabled: false });
+    expect(storage.getItem("miasto.save.premigration.v4.0")).toBe(raw);
     expect((await loadGame(new LocalStorageSaveStore({ storage }))).kind).toBe("ok");
   });
 });

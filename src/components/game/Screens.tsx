@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, getClock, trackedQuest } from "@/lib/game/engine";
 import { hydrateState } from "@/lib/game/save/hydrate";
-import type { SaveV4 } from "@/lib/game/save/schema";
+import type { SaveV5 } from "@/lib/game/save/schema";
 import { FrogLogo } from "./art";
 import { HintText } from "@/components/input/InputHint";
 import { PadKeyboard } from "@/components/input/PadKeyboard";
@@ -106,7 +106,7 @@ export function ContinueScreen({
   onContinue,
   onNewGame,
 }: {
-  save: SaveV4;
+  save: SaveV5;
   notice?: string;
   onContinue: () => void;
   onNewGame: () => void;

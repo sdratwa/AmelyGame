@@ -4,6 +4,7 @@ import { memo, useReducer } from "react";
 import { Backpack, ChevronDown, ChevronUp, X } from "lucide-react";
 import { INVENTORY_SLOTS, ITEMS, type GameState } from "@/lib/game/engine";
 import { cn } from "@/lib/utils";
+import { LanternDrawerRow } from "../LanternControl";
 import { drawerReducer, isInventoryEmpty } from "./inventoryDrawer";
 
 type Props = {
@@ -14,6 +15,9 @@ type Props = {
   onEat: () => void;
   /** Otwiera pełną listę rzeczy (istniejące okno ekwipunku). */
   onOpenFull: () => void;
+  /** Lampa naftowa: stałe wyposażenie, osobne od miejsc na przedmioty. */
+  lanternOn: boolean;
+  onToggleLantern: () => void;
   /** W pionie przycisk jest podniesiony nad sterowanie dotykowe (tylko las). */
   aboveControls: boolean;
 };
@@ -25,7 +29,7 @@ const EDGE_B = "max(0.75rem, var(--sab))";
  * "mini" (jeden rząd slotów), który można rozwinąć. Pusty ekwipunek to jedna linia, bez rzędu pustych slotów. Stan
  * otwarcia jest lokalny (nie należy do zapisu gry); wyboru slotu i jedzenia dokonuje ten sam silnik co na desktopie.
  */
-export const MobileInventoryDrawer = memo(function MobileInventoryDrawer({ slots, selected, dead, onSelect, onEat, onOpenFull, aboveControls }: Props) {
+export const MobileInventoryDrawer = memo(function MobileInventoryDrawer({ slots, selected, dead, onSelect, onEat, onOpenFull, lanternOn, onToggleLantern, aboveControls }: Props) {
   const [mode, act] = useReducer(drawerReducer, "closed");
   const selectedId = slots[selected]?.id ?? null;
   const selectedItem = selectedId ? ITEMS[selectedId] : null;
@@ -62,6 +66,7 @@ export const MobileInventoryDrawer = memo(function MobileInventoryDrawer({ slots
       )}
       style={{ bottom: EDGE_B }}
     >
+      <LanternDrawerRow enabled={lanternOn} disabled={dead} onToggle={onToggleLantern} />
       <div className="mb-1 flex items-center justify-between gap-2">
         <p className="min-w-0 flex-1 truncate text-xs">
           {empty ? (

@@ -11,6 +11,7 @@
 | I | ekwipunek |
 | J | dziennik |
 | M | minimapa |
+| L | lampa naftowa (zapal/zgaś); pad: krzyżak w górę; telefon: przycisk "Lampa" ([lampa-naftowa.md](lampa-naftowa.md)) |
 | O (albo F3) | panel diagnostyczny |
 | Esc | zamknięcie okna; zwolnienie myszy; kolejny Esc otwiera menu pauzy |
 
@@ -26,7 +27,7 @@ Konflikty: przed zmianą przeszukano wszystkie obsługi `keydown` (`ForestWorldV
 
 Wspólna logika: `src/lib/input/shortcuts.ts` (testy: `shortcuts.test.ts`).
 
-- Skróty literowe (E, I, J, M, O) nie działają przy powtórzeniu klawisza, z Ctrl/Cmd/Alt (np. Cmd+O, Option+O na macOS) ani podczas składania znaków (IME).
+- Skróty literowe (E, I, J, L, M, O) nie działają przy powtórzeniu klawisza, z Ctrl/Cmd/Alt (np. Cmd+O, Option+O na macOS) ani podczas składania znaków (IME).
 - Nie działają, gdy fokus jest w polu do wpisywania: `input` tekstowy (nie przyciski, pola wyboru), `textarea`, `select`, `contenteditable`, elementy z rolą `textbox`/`searchbox`/`combobox`.
 - F3 nie wpisuje znaku, więc działa także z fokusem w polu; z Ctrl/Cmd/Alt i przy powtórzeniu jest ignorowane.
 - Litera jest dopasowana po wydrukowanym znaku (`key`), a dla układów bez liter łacińskich po pozycji klawisza (`code`). Shift nie przeszkadza (można trzymać bieg).

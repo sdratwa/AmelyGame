@@ -4,6 +4,8 @@ Stan: implementacja przygotowana do ręcznej oceny. Testy M1a przechodzą; pełn
 
 ## Baza i zakres
 
+**Protokół 4 (LAMPA1):** `Player.lanternOn` i wiadomość `lantern`; po aktualizacji zrestartuj `npm run multiplayer` i odśwież klientów. Opis w [lampa-naftowa.md](lampa-naftowa.md).
+
 Gałąź `feature/multiplayer-m1a`, baza Cursora `d201c0496ed6bba170a06bbd1491d93efa13358a`, zgodna z pobranym stanem jego gałęzi na origin. Zachowane TPP, PlayerController, ForestRenderer, WalkWorld, generator v3, SaveV4 i kreator.
 
 Przypięte pakiety: `@colyseus/core` 0.18.23, `@colyseus/ws-transport` 0.18.4, `@colyseus/sdk` 0.18.6, `@colyseus/schema` 5.0.42, `tsx` 4.23.15. Synchronizacja używa wiadomości ze snapshotami, nie schematów całego modelu gry.

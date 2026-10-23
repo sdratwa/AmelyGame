@@ -27,7 +27,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pl" className={`${geistSans.variable} dark h-full antialiased`}>
+    <html
+      lang="pl"
+      className={`${geistSans.variable} dark h-full antialiased`}
+      // Rozszerzenia/przeglądarka (np. atrybut __gcrremoteframetoken) dopisują atrybuty
+      // do <html> przed hydracją; to nie jest błąd aplikacji.
+      suppressHydrationWarning
+    >
       <body className="h-dvh overflow-hidden bg-slate-950 text-slate-50">
         {children}
       </body>

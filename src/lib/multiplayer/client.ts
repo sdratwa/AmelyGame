@@ -1,5 +1,5 @@
 import type { SharedWorld, WorldCommand, WorldReply } from "./sharedWorld";
-import type { SaveV4 } from "../game/save/schema";
+import type { SaveV5 } from "../game/save/schema";
 import { SoundEventGate } from "./soundEvents";
 import type { PlayerSoundEvent } from "./protocol";
 import type { CharacterAppearanceV1 } from "../character/appearance";
@@ -30,7 +30,7 @@ export class MultiplayerClient {
     this.world = world;
     for (const listener of this.worldListeners) listener(world);
   }
-  requestWorld(command: WorldCommand | { type: "world.restore" }, save: SaveV4): Promise<WorldReply | null> {
+  requestWorld(command: WorldCommand | { type: "world.restore" }, save: SaveV5): Promise<WorldReply | null> {
     if (this.status !== "połączony" || !this.room) return Promise.resolve(null);
     const requestId = ++this.requestId;
     return new Promise<WorldReply | null>((resolve) => {
@@ -56,6 +56,9 @@ export class MultiplayerClient {
   appearances: Appearances = {};
   private sentAppearance = "";
   private sentAppearanceAt = 0;
+  /** Ostatnio wysłany (lub zgłoszony przez serwer po dołączeniu) stan lampy; po połączeniu serwer zaczyna od wyłączonej. */
+  private sentLantern = false;
+  private sentLanternAt = 0;
   status = "rozłączony";
   notice = "";
   ping = 0;
@@ -123,6 +126,7 @@ export class MultiplayerClient {
         this.players = [];
         this.appearances = {};
         this.sentAppearance = "";
+        this.sentLantern = false;
         this.history = [];
         if (this.timer) clearInterval(this.timer);
       });
@@ -152,6 +156,8 @@ export class MultiplayerClient {
             this.local = w.player;
             this.appearances = w.appearances ?? {};
             this.sentAppearance = "";
+            this.sentLantern = w.player.lanternOn === true;
+            this.sentLanternAt = 0;
             this.status = "połączony";
             resolve();
           },
@@ -185,6 +191,17 @@ export class MultiplayerClient {
     this.sentAppearance = key;
     this.sentAppearanceAt = now;
     this.room.send("appearance", appearance);
+  }
+  /**
+   * Zgłasza serwerowi stan własnej lampy naftowej, gdy różni się od ostatnio wysłanego. Można wołać co klatkę: bez
+   * zmiany nic nie wysyła, a po (ponownym) połączeniu stan lokalny sam trafia do serwera. Serwer przypisuje go do sesji nadawcy.
+   */
+  syncLantern(enabled: boolean, now = performance.now()) {
+    if (this.status !== "połączony" || !this.room) return;
+    if (enabled === this.sentLantern || now - this.sentLanternAt < 100) return;
+    this.sentLantern = enabled;
+    this.sentLanternAt = now;
+    this.room.send("lantern", { enabled });
   }
   recordJump() {
     this.jumpSequence++;
@@ -244,6 +261,7 @@ export class MultiplayerClient {
     this.players = [];
     this.appearances = {};
     this.sentAppearance = "";
+    this.sentLantern = false;
     this.history = [];
     this.sounds.clear();
     this.sequence = 0;

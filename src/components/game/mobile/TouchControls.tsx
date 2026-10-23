@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowUp, ChevronsDown, Hand } from "lucide-react";
+import { ArrowUp, ChevronsDown, Flame, Hand } from "lucide-react";
 import type { TouchInput } from "@/lib/input/touchInput";
 import { VirtualJoystick } from "@/lib/input/touchJoystick";
 import { touchZoneOf } from "@/lib/input/touchZones";
@@ -24,6 +24,9 @@ type Props = {
   onInteract: () => void;
   /** Jest cel interakcji w zasięgu: przycisk jest podświetlony. */
   interactReady: boolean;
+  /** Lampa naftowa zapalona (podświetla przycisk) i jej przełączenie (ta sama ścieżka co L i pad, przez `InputHub`). */
+  lanternOn: boolean;
+  onLantern: () => void;
 };
 
 /**
@@ -31,7 +34,7 @@ type Props = {
  * ekranu) i przyciski akcji. Wejście trafia do `TouchInput` (mutowalny stan czytany przez renderer w klatce); gałka i
  * baza są przesuwane bezpośrednio przez `style`, więc ruch palca nie powoduje renderów Reacta.
  */
-export function TouchControls({ touch, onInteract, interactReady }: Props) {
+export function TouchControls({ touch, onInteract, interactReady, lanternOn, onLantern }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const baseRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
@@ -170,6 +173,20 @@ export function TouchControls({ touch, onInteract, interactReady }: Props) {
       >
         <ChevronsDown className="size-5" aria-hidden />
         <span className="text-[9px] font-semibold leading-none">Kucnij</span>
+      </button>
+      {/* Mały przycisk lampy nad skokiem: z dala od joysticka (lewa strefa), skoku, kucania i "Użyj". */}
+      <button
+        type="button"
+        data-testid="touch-lantern"
+        data-on={lanternOn}
+        aria-label={lanternOn ? "Zgaś lampę" : "Zapal lampę"}
+        aria-pressed={lanternOn}
+        onPointerDown={press(onLantern)}
+        className={cn(ACTION_BASE, "size-12", lanternOn ? "border-amber-200 bg-amber-300/55 text-amber-950 shadow-[0_0_16px_rgba(255,189,85,0.6)]" : "")}
+        style={{ right: `calc(${EDGE_X} + 6rem)`, bottom: `calc(${EDGE_B} + 6.75rem)`, ...NO_CALLOUT }}
+      >
+        <Flame className="size-5" aria-hidden />
+        <span className="text-[9px] font-semibold leading-none">Lampa</span>
       </button>
       <button
         type="button"

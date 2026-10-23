@@ -1,5 +1,6 @@
 "use client";
 
+import { LanternBarSlot } from "./LanternControl";
 import { useEffect } from "react";
 import {
   ITEMS,
@@ -128,10 +129,15 @@ export function InventoryBar({
   state,
   onSelect,
   onEat,
+  onToggleLantern,
+  inForest,
 }: {
   state: GameState;
   onSelect: (slot: number) => void;
   onEat: () => void;
+  onToggleLantern: () => void;
+  /** Klawisz L działa tylko w lesie, więc tylko tam pokazujemy jego podpowiedź. */
+  inForest: boolean;
 }) {
   const selectedId = state.slots[state.selected]?.id ?? null;
   const selectedItem = selectedId ? ITEMS[selectedId] : null;
@@ -173,7 +179,8 @@ export function InventoryBar({
           </button>
         )}
       </div>
-      <div className="mx-auto grid max-w-xl grid-cols-8 gap-1.5 sm:gap-2" role="list" aria-label="Ekwipunek">
+      <div className="mx-auto flex max-w-[41rem] items-center gap-3">
+      <div className="grid min-w-0 flex-1 grid-cols-8 gap-1.5 sm:gap-2" role="list" aria-label="Ekwipunek">
         {Array.from({ length: INVENTORY_SLOTS }, (_, i) => {
           const stack = state.slots[i];
           const id = stack?.id ?? null;
@@ -209,6 +216,9 @@ export function InventoryBar({
             </button>
           );
         })}
+      </div>
+      <div className="h-9 w-px shrink-0 bg-white/15" aria-hidden />
+      <LanternBarSlot enabled={state.lantern.enabled} disabled={state.dead} onToggle={onToggleLantern} showHint={inForest} />
       </div>
     </footer>
   );

@@ -30,13 +30,14 @@ import {
 } from "../systems/session";
 import { devSetClock } from "../systems/devClock";
 import { setAppearance } from "../systems/appearance";
+import { setLantern, toggleLantern } from "../systems/lantern";
 import type { CharacterAppearanceV1 } from "@/lib/character/appearance";
 import { tick } from "../systems/vitals";
 import type { GameEvent } from "./events";
 import { addPause, clearPauseOwner, pauseReasons, removePause } from "./pause";
 import { result, unchanged, type CommandResult } from "./result";
 import { hydrateState } from "../save/hydrate";
-import type { SaveV4 } from "../save/schema";
+import type { SaveV5 } from "../save/schema";
 import type { ForestPose, GameState, View } from "./state";
 
 /**
@@ -47,9 +48,11 @@ export type Command =
   | { type: "setName"; name: string }
   | { type: "startLoading"; seed: number; saveId: string }
   | { type: "worldReady" }
-  | { type: "game.load"; save: SaveV4 }
+  | { type: "game.load"; save: SaveV5 }
   | { type: "forest.pose"; pose: ForestPose }
   | { type: "appearance.set"; appearance: CharacterAppearanceV1 }
+  | { type: "lantern.set"; enabled: boolean }
+  | { type: "lantern.toggle" }
   | { type: "tick"; dt: number }
   | { type: "world.sync"; world: SharedWorld }
   | { type: "world.clock"; elapsed: number }
@@ -97,6 +100,10 @@ function execute(state: GameState, command: Command): CommandResult {
       return setForestPose(state, command.pose);
     case "appearance.set":
       return setAppearance(state, command.appearance);
+    case "lantern.set":
+      return setLantern(state, command.enabled);
+    case "lantern.toggle":
+      return toggleLantern(state);
     case "world.sync":
       return result(applySharedWorld(state, command.world));
     case "world.clock":

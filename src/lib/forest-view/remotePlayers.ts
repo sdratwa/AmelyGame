@@ -5,6 +5,7 @@ import { PlayerModel } from "./playerModel";
 import { PlayerAnimator } from "./playerAnimator";
 import { TPP_DEFAULTS } from "../tpp/config";
 import type { Appearances, Player } from "../multiplayer/protocol";
+import { findHandBone } from "./lantern/hand";
 import { AppearanceRig } from "./appearance/appearanceRig";
 import { DEFAULT_APPEARANCE, devFitOverrides, normalizeAppearance, sameAppearance, type CharacterAppearanceV1 } from "@/lib/character";
 
@@ -35,12 +36,18 @@ export class RemotePlayers {
       label: THREE.Sprite;
       rig: AppearanceRig | null;
       applied: CharacterAppearanceV1 | null;
+      /** Kość prawej dłoni (do niej przypinamy lampę naftową). */
+      hand: THREE.Object3D | null;
     }
   >();
   constructor(
     private scene: THREE.Scene,
     private template: PlayerAsset,
   ) {}
+  /** Kość dłoni gracza zdalnego (null, gdy gracza nie ma albo szkielet jej nie ma). */
+  handBone(playerId: string): THREE.Object3D | null {
+    return this.actors.get(playerId)?.hand ?? null;
+  }
   update(players: Player[], dt: number, appearances: Appearances = {}) {
     for (const [id, a] of this.actors)
       if (!players.some((p) => p.playerId === id)) {
@@ -105,7 +112,7 @@ export class RemotePlayers {
           rig?.dispose();
           rig = null;
         }
-        a = { model, anim, jump: p.jumpSequence, label, rig, applied: null };
+        a = { model, anim, jump: p.jumpSequence, label, rig, applied: null, hand: findHandBone(scene) };
         this.actors.set(p.playerId, a);
       }
       if (a.rig) {

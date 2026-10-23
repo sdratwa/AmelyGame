@@ -21,6 +21,7 @@ export type GameEvent =
   | { type: "player.died"; deaths: number }
   | { type: "player.respawned" }
   | { type: "item.discarded"; item: ItemId; count: number }
+  | { type: "lantern.changed"; enabled: boolean }
   | { type: "quest.read"; id: QuestId }
   | { type: "quest.accepted"; id: QuestId }
   | { type: "quest.completed"; id: QuestId; money: number; badge: BadgeId | null }

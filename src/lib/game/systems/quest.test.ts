@@ -11,7 +11,7 @@ import { isTimePaused, pauseReasons } from "../core/pause";
 import type { GameState } from "../core/state";
 import { hydrateState } from "../save/hydrate";
 import { serializeState } from "../save/serialize";
-import { validateSaveV4 } from "../save/validate";
+import { validateSaveV5 } from "../save/validate";
 import { anchorsOf, autoComplete, harvestTarget, harvestTargets, inForest, near, newPlaying, run, unlockToolOrder, testWorldKey } from "../testkit";
 import { countOf, inventoryProblems } from "./containers";
 import { riddleFor } from "./forestQuest";
@@ -43,14 +43,14 @@ class Game {
     const s = this.state;
     expect(inventoryProblems(s.slots, s.troll.deposit, s.ledger)).toEqual([]);
     const save = serializeState(s, 1)!;
-    const valid = validateSaveV4(JSON.parse(JSON.stringify(save)));
+    const valid = validateSaveV5(JSON.parse(JSON.stringify(save)));
     expect(valid.ok ? [] : valid.problems).toEqual([]);
     expect(serializeState(hydrateState(save), 1)).toEqual(save);
   }
   /** Zapis i ponowne wczytanie gry (jak zamknięcie i otwarcie karty). */
   reload() {
     const save = JSON.parse(JSON.stringify(serializeState(this.state, 1)));
-    const valid = validateSaveV4(save);
+    const valid = validateSaveV5(save);
     if (!valid.ok) throw new Error(valid.problems.join("; "));
     this.state = hydrateState(valid.value);
     this.check();

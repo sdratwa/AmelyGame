@@ -6,7 +6,7 @@ import { inventoryProblems } from "../systems/containers";
 import { CHEST_CONTENTS } from "../systems/forestQuest";
 import { FINGERPRINT_PATTERN } from "../world/fingerprint";
 import { isHexColor } from "@/lib/character/appearance";
-import type { SaveV4 } from "./schema";
+import type { SaveV5 } from "./schema";
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; problems: string[] };
 
@@ -65,12 +65,12 @@ function checkAppearance(value: unknown, bad: (p: string, why: string) => void):
 }
 
 /** Walidacja ręczna (bez zewnętrznych bibliotek): sprawdza strukturę, typy i niezmienniki (ekwipunek, zadania, skrzynie). */
-export function validateSaveV4(input: unknown): ValidationResult<SaveV4> {
+export function validateSaveV5(input: unknown): ValidationResult<SaveV5> {
   const problems: string[] = [];
   const bad = (path: string, why: string) => problems.push(`${path}: ${why}`);
 
   if (!isObj(input)) return { ok: false, problems: ["save: oczekiwano obiektu"] };
-  if (input.version !== 4) bad("version", "oczekiwano 4");
+  if (input.version !== 5) bad("version", "oczekiwano 5");
   if (!isStr(input.saveId) || !SAVE_ID.test(input.saveId)) bad("saveId", "niepoprawny identyfikator");
   if (!isNum(input.savedAt) || input.savedAt < 0) bad("savedAt", "oczekiwano liczby >= 0");
 
@@ -126,6 +126,7 @@ export function validateSaveV4(input: unknown): ValidationResult<SaveV4> {
     if (!isInt(player.selected) || player.selected < 0 || player.selected >= INVENTORY_SLOTS) bad("player.selected", "poza zakresem");
     if (player.forestPose !== null && !isForestPose(player.forestPose)) bad("player.forestPose", "niepoprawna pozycja");
     checkAppearance(player.appearance, bad);
+    if (!isObj(player.lantern) || typeof player.lantern.enabled !== "boolean") bad("player.lantern", "oczekiwano { enabled: boolean }");
   }
 
   const tutorial = input.tutorial;
@@ -239,5 +240,5 @@ export function validateSaveV4(input: unknown): ValidationResult<SaveV4> {
   }
 
   if (problems.length > 0) return { ok: false, problems };
-  return { ok: true, value: input as unknown as SaveV4 };
+  return { ok: true, value: input as unknown as SaveV5 };
 }

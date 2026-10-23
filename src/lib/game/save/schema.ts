@@ -2,10 +2,11 @@ import type { House } from "../content/houses";
 import type { ItemStack } from "../content/items";
 import type { BadgeId, RegionId } from "../core/ids";
 import type { CharacterAppearanceV1 } from "@/lib/character/appearance";
+import type { LanternState } from "../content/equipment";
 import type { ChestState, ForestPose, Ledger, TrollPhase } from "../core/state";
 
 /** Bieżąca wersja formatu zapisu (SaveVN). Zmiana struktury = nowa wersja + migracja. */
-export const CURRENT_SAVE_VERSION = 4;
+export const CURRENT_SAVE_VERSION = 5;
 
 type LegacySlot = string | null;
 
@@ -42,12 +43,14 @@ export type SaveV1 = {
 };
 
 /**
- * SaveV4 (bieżący): SaveV3 + wygląd postaci gracza (`player.appearance`). SaveV3 to SaveV1 + ekwipunek ze stosami i
- * księgą, zadania, skrzynie, troll z depozytem, pozyskane obiekty, most, odkryte regiony i odznaki. Kotwice świata
- * (pozycje skrzyń itd.) NIE są zapisywane: wynikają z (seed, genVersion) i są chronione odciskiem świata.
+ * SaveV5 (bieżący): SaveV4 + stan stałej lampy naftowej (`player.lantern`, tylko flaga `enabled`; parametry światła i
+ * geometria nie należą do zapisu). SaveV4 to SaveV3 + wygląd postaci gracza (`player.appearance`). SaveV3 to SaveV1 +
+ * ekwipunek ze stosami i księgą, zadania, skrzynie, troll z depozytem, pozyskane obiekty, most, odkryte regiony i
+ * odznaki. Kotwice świata (pozycje skrzyń itd.) NIE są zapisywane: wynikają z (seed, genVersion) i są chronione
+ * odciskiem świata.
  */
-export type SaveV4 = {
-  version: 4;
+export type SaveV5 = {
+  version: 5;
   saveId: string;
   savedAt: number;
   world: SaveV1["world"];
@@ -64,6 +67,7 @@ export type SaveV4 = {
     selected: number;
     forestPose: ForestPose | null;
     appearance: CharacterAppearanceV1;
+    lantern: LanternState;
   };
   tutorial: { done: boolean };
   houses: House[];
@@ -78,6 +82,15 @@ export type SaveV4 = {
   bridge: { built: boolean; builtAt: number | null };
   discovered: RegionId[];
   badges: BadgeId[];
+};
+
+/**
+ * SaveV4 (zamrożony): poprzedni format, identyczny z SaveV5 poza brakiem `player.lantern`. Czytany wyłącznie przez
+ * migrację v4 -> v5, która dodaje wyłączoną lampę i nic poza nią.
+ */
+export type SaveV4 = Omit<SaveV5, "version" | "player"> & {
+  version: 4;
+  player: Omit<SaveV5["player"], "lantern">;
 };
 
 /**
@@ -106,7 +119,7 @@ export type SaveV2 = Omit<SaveV3, "version" | "player" | "troll"> & {
 };
 
 /** Aktualny format zapisu. */
-export type Save = SaveV4;
+export type Save = SaveV5;
 
 /** Klucze najwyższego poziomu – używane w testach pilnujących rozdziału danych trwałych od sesji. */
 export const SAVE_TOP_LEVEL_KEYS = [

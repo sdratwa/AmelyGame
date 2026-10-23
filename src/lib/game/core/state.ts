@@ -1,6 +1,7 @@
 import { INVENTORY_SLOTS, MAX_HEALTH, START_WALLET } from "./constants";
 import type { House } from "../content/houses";
 import type { ItemStack } from "../content/items";
+import { initialLantern, type LanternState } from "../content/equipment";
 import type { WorldAnchors } from "../world/anchors";
 import { DEFAULT_APPEARANCE, type CharacterAppearanceV1 } from "@/lib/character/appearance";
 import type { BadgeId, NpcId, QuestId, RegionId, RiddleId } from "./ids";
@@ -66,7 +67,7 @@ export type GameState = {
   view: View;
   tutorialDone: boolean;
   elapsed: number;
-  /** Czas świata online z serwera; pole sesji, nigdy nie pochodzi z SaveV4. */
+  /** Czas świata online z serwera; pole sesji, nigdy nie pochodzi z SaveV5. */
   worldElapsed?: number;
   health: number;
   drainAcc: number;
@@ -79,8 +80,10 @@ export type GameState = {
   houses: House[];
   world: WorldInfo | null;
   forestPose: ForestPose | null;
-  /** Wygląd postaci gracza (dane; zapisywany w SaveV4). Nie wpływa na rozgrywkę. */
+  /** Wygląd postaci gracza (dane; zapisywany w SaveV5). Nie wpływa na rozgrywkę. */
   appearance: CharacterAppearanceV1;
+  /** Stała lampa naftowa gracza (wyposażenie poza slotami): tylko włączona/wyłączona; zapisywana w SaveV5. */
+  lantern: LanternState;
   quests: QuestsState;
   chests: Record<string, ChestState>;
   troll: TrollState;
@@ -130,6 +133,7 @@ export const initialState: GameState = {
   world: null,
   forestPose: null,
   appearance: { ...DEFAULT_APPEARANCE },
+  lantern: initialLantern(),
   quests: initialQuests(),
   chests: {},
   troll: initialTroll(),

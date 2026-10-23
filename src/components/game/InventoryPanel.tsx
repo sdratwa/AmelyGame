@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { INVENTORY_SLOTS, ITEMS, RECIPE_BRIDGE_01, type GameState, type Item, type ItemCategory } from "@/lib/game/engine";
 import { cn } from "@/lib/utils";
 import { HintText } from "@/components/input/InputHint";
+import { LanternEquipmentSection } from "./LanternControl";
 
 const GROUPS: { id: string; title: string; categories: ItemCategory[] }[] = [
   { id: "tools", title: "Narzędzia", categories: ["tool"] },
@@ -21,7 +22,7 @@ function need(item: Item, questActive: boolean): number | null {
  * Lista rzeczy gracza (klawisz I): to ten sam ekwipunek co pasek u dołu, tylko w czytelnej formie z nazwami, opisami
  * i liczbami. Niczego nie zmienia i nie ma własnego stanu: wszystko pochodzi ze stanu gry.
  */
-export function InventoryPanel({ open, state, onClose, onReadBlueprint }: { open: boolean; state: GameState; onClose: () => void; onReadBlueprint?: () => void }) {
+export function InventoryPanel({ open, state, onClose, onReadBlueprint, onToggleLantern }: { open: boolean; state: GameState; onClose: () => void; onReadBlueprint?: () => void; onToggleLantern?: () => void }) {
   const totals = new Map<string, number>();
   for (const s of state.slots) if (s) totals.set(s.id, (totals.get(s.id) ?? 0) + s.count);
   const used = state.slots.filter(Boolean).length;
@@ -37,6 +38,7 @@ export function InventoryPanel({ open, state, onClose, onReadBlueprint }: { open
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[56vh] space-y-4 overflow-y-auto pr-1">
+          {onToggleLantern && <LanternEquipmentSection enabled={state.lantern.enabled} disabled={state.dead} onToggle={onToggleLantern} />}
           {totals.size === 0 && <p className="rounded-xl bg-white/5 p-3 text-sm text-slate-300">Ekwipunek jest pusty.</p>}
           {GROUPS.map((group) => {
             const items = [...totals]
@@ -91,7 +93,7 @@ export function InventoryPanel({ open, state, onClose, onReadBlueprint }: { open
             );
           })}
         </div>
-        <p className="border-t border-white/10 pt-3 text-xs text-slate-400">Narzędzi, surowców i przedmiotów zadań nie można wyrzucić.</p>
+        <p className="border-t border-white/10 pt-3 text-xs text-slate-400">Narzędzi, surowców i przedmiotów zadań nie można wyrzucić. Lampa naftowa jest stałym wyposażeniem: zawsze ją masz.</p>
       </DialogContent>
     </Dialog>
   );

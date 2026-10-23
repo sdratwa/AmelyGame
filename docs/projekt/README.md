@@ -54,6 +54,7 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 - [prototyp-lasu-pro.md](prototyp-lasu-pro.md): prototyp lasu 300 x 300 m z paczką Quaternius Pro (122 modele), 4 strefy, bruk drogi głównej, test FPS przez strefy; trasa `/dev/forest-pro`; kod napisany, testy i przeglądarka nie były uruchamiane.
 - [postac-wyglad.md](postac-wyglad.md): AVATAR1, personalizacja dziewczynki (fryzury, góra, dół, kolory), rejestr elementów, SaveV4, kreator `/dev/character-creator`; kod napisany, testy i przeglądarka nie były uruchamiane.
 - [tpp-sterowanie.md](tpp-sterowanie.md): TPP1 i TPP2 (TPP jest domyślnym sterowaniem w grze), sterowanie dziewczynką z GLB w trzeciej osobie (9 animacji, kamera, kapsuła, panel dev); trasa `/dev/third-person`; kod napisany, testy i przeglądarka nie były uruchamiane.
+- [lampa-naftowa.md](lampa-naftowa.md): LAMPA1, stała lampa naftowa (SaveV5, model w prawej dłoni, światło z puli, blask z daleka, synchronizacja protokół 4, panel Diagnostyka, test ręczny); kod, testy jednostkowe, lint, typecheck i build zaliczone, wygląd i FPS czekają na ocenę autora.
 - [jelen.md](jelen.md): animowany jeleń w lesie (pierwszy zwierzak): zasób, animacje, głowa, zachowanie, położenie, F3, wydajność.
 - [modele-skrzynia-troll.md](modele-skrzynia-troll.md): finalne modele skrzyni i trolla, animacje, koszt renderowania.
 - [troll-materialy.md](troll-materialy.md): matowe materiały trolla (przyczyna połysku i migotania oczu, klasy powierzchni, przełącznik ORIGINAL/MATTE w panelu O).
