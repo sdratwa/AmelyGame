@@ -46,8 +46,7 @@ export function AudioDiagnostics({
   const side = last ? (Math.abs(last.bearingDeg) < 30 ? "z przodu" : Math.abs(last.bearingDeg) > 150 ? "z tyłu" : last.bearingDeg > 0 ? "z prawej" : "z lewej") : "";
 
   return (
-    <div data-testid="audio-diagnostics" className="mt-1 border-t border-white/20 pt-1">
-      <div className="font-semibold">AUDIO</div>
+    <div data-testid="audio-diagnostics">
       {!d || !d.active ? (
         <div>{d?.error ? `błąd: ${d.error}` : "nieaktywne (poza lasem)"}</div>
       ) : (

@@ -28,24 +28,34 @@ export function TopBar({
   sheltered,
   onOpenJournal,
   onOpenMenu,
+  floating = false,
 }: {
   state: GameState;
   sheltered: boolean;
   onOpenJournal: () => void;
   onOpenMenu: () => void;
+  /** Las na komputerze: bez granatowego paska, tylko półprzezroczyste kapsułki nałożone na grę (jak na telefonie). */
+  floating?: boolean;
 }) {
   const clock = getClock(state.worldElapsed ?? state.elapsed);
   const pct = Math.round((state.health / MAX_HEALTH) * 100);
   const cold = clock.season === "winter" && !sheltered;
   const low = pct <= 25;
+  const chip = floating ? "bg-slate-900/60 backdrop-blur-sm" : "bg-white/10";
 
   return (
     <header
       data-testid="top-bar"
-      className="z-20 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 bg-slate-900/90 px-3 py-2 backdrop-blur sm:px-5 sm:py-3"
+      data-floating={floating}
+      className={cn(
+        "flex items-start justify-between gap-3 px-3 py-2 sm:px-5",
+        floating
+          ? "pointer-events-none absolute inset-x-0 top-0 z-30 py-2 sm:py-2"
+          : "z-20 shrink-0 border-b border-white/10 bg-slate-900/90 backdrop-blur sm:py-3",
+      )}
     >
-      <div className="min-w-0 flex-1 sm:max-w-xs">
-        <div className="flex items-center gap-2">
+      <div className={cn("min-w-0 flex-1 sm:max-w-xs", floating && "sm:max-w-[16rem]")}>
+        <div className={cn("flex items-center gap-2", floating && "rounded-full bg-slate-900/60 px-2.5 py-1 backdrop-blur-sm")}>
           <span className={cn("text-lg", low && "animate-pulse")} aria-hidden>
             ❤️
           </span>
@@ -69,11 +79,11 @@ export function TopBar({
             {pct}%
           </span>
         </div>
-        <div className="mt-1 h-5 text-xs font-medium" data-testid="status-line">
+        <div className={cn("text-xs font-medium", floating ? "mt-1" : "mt-1 h-5")} data-testid="status-line">
           {sheltered ? (
-            <span className="text-emerald-300">🏠 Schronienie – życie nie spada</span>
+            <span className={cn("text-emerald-300", floating && "rounded-full bg-slate-900/60 px-2 py-0.5 backdrop-blur-sm")}>🏠 Schronienie – życie nie spada</span>
           ) : cold ? (
-            <span className="text-sky-300">🥶 Jest zimno</span>
+            <span className={cn("text-sky-300", floating && "rounded-full bg-slate-900/60 px-2 py-0.5 backdrop-blur-sm")}>🥶 Jest zimno</span>
           ) : null}
         </div>
       </div>
@@ -81,22 +91,22 @@ export function TopBar({
       <div className="flex flex-col items-end gap-1 text-sm sm:flex-row sm:items-center sm:gap-4">
         <div
           data-testid="wallet"
-          className="flex items-center gap-1.5 rounded-full bg-amber-400/15 px-3 py-1 font-semibold tabular-nums text-amber-200"
+          className={cn("flex items-center gap-1.5 rounded-full px-3 py-1 font-semibold tabular-nums text-amber-200", floating ? "bg-slate-900/60 backdrop-blur-sm" : "bg-amber-400/15")}
         >
           <span aria-hidden>👛</span>
           {formatMoney(state.wallet)}
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-200 sm:text-sm">
-          <span data-testid="daytime" className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1">
+          <span data-testid="daytime" className={cn("flex items-center gap-1 rounded-full px-2.5 py-1", chip)}>
             <span aria-hidden>{clock.isDay ? "☀️" : "🌙"}</span>
             {clock.isDay ? "Dzień" : "Noc"} {formatClock(clock)}
           </span>
-          <span data-testid="season" className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1">
+          <span data-testid="season" className={cn("flex items-center gap-1 rounded-full px-2.5 py-1", chip)}>
             <span aria-hidden>{SEASON_EMOJI[clock.season]}</span>
             {SEASON_LABEL[clock.season]}
             <span className="hidden text-slate-400 sm:inline">· dzień {clock.dayInSeason}/30</span>
           </span>
-          <span data-testid="year" className="rounded-full bg-white/10 px-2.5 py-1 font-semibold tabular-nums">
+          <span data-testid="year" className={cn("rounded-full px-2.5 py-1 font-semibold tabular-nums", chip)}>
             {clock.year}
           </span>
           <button
@@ -104,7 +114,7 @@ export function TopBar({
             data-testid="open-journal"
             onClick={onOpenJournal}
             aria-label="Dziennik (J)"
-            className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-1 font-semibold text-amber-100 transition hover:bg-amber-400/30"
+            className={cn("pointer-events-auto flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold text-amber-100 transition", floating ? "bg-slate-900/60 backdrop-blur-sm hover:bg-slate-800/80" : "bg-amber-400/20 hover:bg-amber-400/30")}
           >
             <span aria-hidden>📖</span>
             Dziennik <InputHint action="journal" className="hidden bg-black/30 sm:inline" />
@@ -114,7 +124,7 @@ export function TopBar({
             data-testid="open-menu"
             onClick={onOpenMenu}
             aria-label="Menu gry"
-            className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 font-semibold text-slate-100 transition hover:bg-white/20"
+            className={cn("pointer-events-auto flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold text-slate-100 transition", floating ? "bg-slate-900/60 backdrop-blur-sm hover:bg-slate-800/80" : "bg-white/10 hover:bg-white/20")}
           >
             <span aria-hidden>☰</span>
             Menu <InputHint action="pause" className="hidden bg-black/30 sm:inline" />
@@ -131,6 +141,7 @@ export function InventoryBar({
   onEat,
   onToggleLantern,
   inForest,
+  floating = false,
 }: {
   state: GameState;
   onSelect: (slot: number) => void;
@@ -138,6 +149,8 @@ export function InventoryBar({
   onToggleLantern: () => void;
   /** Klawisz L działa tylko w lesie, więc tylko tam pokazujemy jego podpowiedź. */
   inForest: boolean;
+  /** Las na komputerze: mały półprzezroczysty panel na dole ekranu zamiast paska na całą szerokość. */
+  floating?: boolean;
 }) {
   const selectedId = state.slots[state.selected]?.id ?? null;
   const selectedItem = selectedId ? ITEMS[selectedId] : null;
@@ -156,9 +169,14 @@ export function InventoryBar({
   return (
     <footer
       data-testid="inventory"
-      className="relative z-20 shrink-0 border-t border-white/10 bg-slate-900/90 px-3 pb-3 pt-2 backdrop-blur sm:px-5"
+      data-floating={floating}
+      className={cn(
+        floating
+          ? "absolute bottom-3 left-1/2 z-30 w-[min(30rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl border border-white/15 bg-slate-900/60 px-2.5 pb-2.5 pt-1.5 shadow-xl backdrop-blur-sm"
+          : "relative z-20 shrink-0 border-t border-white/10 bg-slate-900/90 px-3 pb-3 pt-2 backdrop-blur sm:px-5",
+      )}
     >
-      <div className="mx-auto mb-2 flex h-9 max-w-xl items-center justify-between gap-3 text-xs sm:text-sm">
+      <div className={cn("mx-auto mb-2 flex max-w-xl items-center justify-between gap-3 text-xs sm:text-sm", floating ? "min-h-6" : "h-9")}>
         <div className="min-w-0 truncate text-slate-300">
           {selectedItem ? (
             <>
@@ -179,7 +197,7 @@ export function InventoryBar({
           </button>
         )}
       </div>
-      <div className="mx-auto flex max-w-[41rem] items-center gap-3">
+      <div className={cn("mx-auto flex items-center gap-3", floating ? "max-w-[28rem]" : "max-w-[41rem]")}>
       <div className="grid min-w-0 flex-1 grid-cols-8 gap-1.5 sm:gap-2" role="list" aria-label="Ekwipunek">
         {Array.from({ length: INVENTORY_SLOTS }, (_, i) => {
           const stack = state.slots[i];

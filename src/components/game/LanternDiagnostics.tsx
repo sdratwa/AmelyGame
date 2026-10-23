@@ -10,6 +10,7 @@ import {
 } from "@/lib/forest-view/lantern/config";
 import { lanternConfigStore } from "@/lib/forest-view/lantern/configStore";
 import type { LanternStats } from "@/lib/forest-view/lantern/system";
+import { DiagSection } from "./DiagnosticsSection";
 
 const GROUP_ORDER: readonly LanternGroupId[] = ["light", "flicker", "glow", "far", "perf", "attach"];
 const IS_DEV = process.env.NODE_ENV !== "production";
@@ -97,8 +98,8 @@ export function LanternDiagnostics({ stats }: { stats: LanternStats | null }) {
   };
 
   return (
-    <div data-testid="lantern-diagnostics" className="mt-1 border-t border-white/20 pt-1">
-      <div className="font-semibold">Lampa naftowa (dev) · zmienione parametry: {changed}</div>
+    <DiagSection id="lantern" summary={`zmienione parametry: ${changed}`}>
+    <div data-testid="lantern-diagnostics">
       <div data-testid="lantern-stats">
         {stats
           ? `zapalone ${stats.lit} · światła ${stats.lights}/${stats.poolSize} · NEAR ${stats.near} MID ${stats.mid} FAR ${stats.far} · blaski ${stats.glows} · zasłonięte ${stats.occluded} · cienie ${stats.shadows ? "tak" : "nie"}`
@@ -132,7 +133,7 @@ export function LanternDiagnostics({ stats }: { stats: LanternStats | null }) {
         </div>
       )}
       {json && <textarea data-testid="lantern-json" readOnly value={json} rows={6} className="pointer-events-auto mt-1 w-full rounded bg-slate-800 p-1 text-[10px]" onFocus={(e) => e.currentTarget.select()} />}
-      <div className="pointer-events-auto mt-1 max-h-[45vh] overflow-y-auto pr-1">
+      <div className="mt-1">
       {GROUP_ORDER.map((group) => (
         <details key={group} open={group === "light"} className="pointer-events-auto mt-1">
           <summary className="cursor-pointer select-none font-semibold text-amber-200">{LANTERN_GROUP_LABELS[group]}</summary>
@@ -145,5 +146,6 @@ export function LanternDiagnostics({ stats }: { stats: LanternStats | null }) {
       ))}
       </div>
     </div>
+    </DiagSection>
   );
 }

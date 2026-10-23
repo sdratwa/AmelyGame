@@ -5,8 +5,8 @@ import type { QuestView } from "@/lib/game/engine";
 import { useTouchUi } from "@/components/input/hooks";
 import { ObjectiveList } from "./ObjectiveList";
 
-/** `touchTop`: odstęp od góry kompaktowej wersji na telefonie (pod HUD i innymi chipami). */
-export function QuestTracker({ quest, touchTop = "3.25rem" }: { quest: QuestView | null; touchTop?: string }) {
+/** `touchTop`: odstęp od góry kompaktowej wersji na telefonie (pod HUD i innymi chipami); `desktopTop`: to samo na komputerze, gdy HUD jest nakładką. */
+export function QuestTracker({ quest, touchTop = "3.25rem", desktopTop }: { quest: QuestView | null; touchTop?: string; desktopTop?: string }) {
   const touch = useTouchUi();
   const [open, setOpen] = useState(false);
   if (!quest || !quest.stage) return null;
@@ -51,6 +51,7 @@ export function QuestTracker({ quest, touchTop = "3.25rem" }: { quest: QuestView
       data-testid="quest-tracker"
       aria-label="Aktywne zadanie"
       className="pointer-events-none absolute right-2 top-2 z-20 w-60 rounded-xl border border-white/10 bg-slate-950/80 p-3 text-white shadow-lg backdrop-blur sm:w-72"
+      style={desktopTop ? { top: desktopTop } : undefined}
     >
       <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">Zadanie</p>
       <p data-testid="tracker-title" className="text-sm font-bold leading-tight">

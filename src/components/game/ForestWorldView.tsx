@@ -29,6 +29,7 @@ import { TOUCH_MINIMAP_SIZE, TouchMinimap } from "./mobile/TouchMinimap";
 import { nearestCreature } from "@/lib/forest-view/diagnostics";
 import { getForestAudio } from "@/lib/audio/controller";
 import { nextClockTime } from "@/lib/game/systems/devClock";
+import { HOURS_PER_DAY, SECONDS_PER_GAME_HOUR } from "@/lib/game/core/constants";
 import { AudioControls } from "./AudioControls";
 import { AudioDiagnostics, type AudioSnapshot } from "./AudioDiagnostics";
 import { useForestAudio } from "./useForestAudio";
@@ -41,6 +42,7 @@ import type { AppearanceStats } from "@/lib/forest-view";
 import type { CharacterAppearanceV1 } from "@/lib/character";
 import { Minimap } from "./Minimap";
 import { LanternDiagnostics } from "./LanternDiagnostics";
+import { DiagSection, DiagSectionsToolbar } from "./DiagnosticsSection";
 import { useGamePause } from "./quest/useGamePause";
 import type { DialogOutcome } from "@/lib/npc/encounter";
 import type { TrollMaterialMode } from "@/lib/npc/trollMaterials";
@@ -93,6 +95,8 @@ function DiagnosticsPanel({
   audio,
   onRestartEncounter,
   onSetHour,
+  clockPreview,
+  onResetClockPreview,
   onTestWolves,
   onSetTrollMaterial,
   onPreviewSteps,
@@ -106,6 +110,9 @@ function DiagnosticsPanel({
   audio: AudioSnapshot | null;
   onRestartEncounter: () => void;
   onSetHour: (hour: number) => void;
+  /** Lokalny podgląd pory dnia jest aktywny (przesunięcie względem czasu gry). */
+  clockPreview: boolean;
+  onResetClockPreview: () => void;
   onTestWolves: () => void;
   onSetTrollMaterial: (mode: TrollMaterialMode) => void;
   onPreviewSteps: (owner: "player" | "npc") => void;
@@ -118,7 +125,17 @@ function DiagnosticsPanel({
   const s = stats.stream;
   const nearest = nearestCreature(stats);
   return (
-    <div data-testid="forest-diagnostics" className="pointer-events-none max-w-xs rounded-lg bg-black/60 p-2 font-mono text-[11px] leading-snug text-slate-100">
+    <div data-testid="forest-diagnostics" className="pointer-events-auto max-h-[calc(100dvh-8rem)] max-w-xs overflow-y-auto overscroll-contain rounded-lg bg-black/60 p-2 font-mono text-[11px] leading-snug text-slate-100">
+      <DiagSectionsToolbar />
+      <DiagSection id="perf" summary={`FPS ${stats.fps.toFixed(0)}`}>
+      {clockPreview && (
+        <div data-testid="clock-preview" className="mb-1 text-amber-300">
+          pora dnia: lokalny podgląd (dev), inni gracze widzą czas serwera{" "}
+          <button type="button" data-testid="clock-preview-reset" onClick={onResetClockPreview} className="pointer-events-auto rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950 hover:bg-amber-300">
+            Wróć do czasu gry
+          </button>
+        </div>
+      )}
       <div>
         FPS {stats.fps.toFixed(0)} ({stats.frameMs.toFixed(1)} ms) · jakość {stats.quality}
       </div>
@@ -136,8 +153,10 @@ function DiagnosticsPanel({
       <div data-testid="diag-nearest">
         najbliższy NPC/zwierzę: {nearest ? `${nearest.name} ${nearest.distance.toFixed(1)} m` : "brak"}
       </div>
+      </DiagSection>
+      <LanternDiagnostics stats={stats.lantern ?? null} />
+      <DiagSection id="npc">
       {!stats.npc && !stats.npcError && <div data-testid="npc-diagnostics-empty">troll: niedostępny</div>}
-      {!stats.deer && !stats.deerError && <div data-testid="deer-diagnostics-empty">jeleń: niedostępny</div>}
       {stats.npc && (
         <div data-testid="npc-diagnostics" className="mt-1 border-t border-white/20 pt-1">
           <div>
@@ -167,6 +186,10 @@ function DiagnosticsPanel({
           <TrollMaterialDiagnostics npc={stats.npc} onSetMode={onSetTrollMaterial} />
         </div>
       )}
+      {stats.npcError && <div className="text-red-300">model trolla: {stats.npcError}</div>}
+      </DiagSection>
+      <DiagSection id="bridge">
+      {!stats.bridge && !stats.bridgeError && <div>most: niedostępny</div>}
       {stats.bridge && (
         <div data-testid="bridge-diagnostics" className="mt-1 border-t border-white/20 pt-1">
           <div>
@@ -186,7 +209,9 @@ function DiagnosticsPanel({
         </div>
       )}
       {stats.bridgeError && <div className="text-red-300">model mostu: {stats.bridgeError}</div>}
-      {stats.npcError && <div className="text-red-300">model trolla: {stats.npcError}</div>}
+      </DiagSection>
+      <DiagSection id="deer">
+      {!stats.deer && !stats.deerError && <div data-testid="deer-diagnostics-empty">jeleń: niedostępny</div>}
       {stats.deer && (
         <div data-testid="deer-diagnostics" className="mt-1 border-t border-white/20 pt-1">
           <div>
@@ -209,8 +234,9 @@ function DiagnosticsPanel({
         </div>
       )}
       {stats.deerError && <div className="text-red-300">model jelenia: {stats.deerError}</div>}
-      <div data-testid="appearance-diagnostics" className="mt-1 border-t border-white/20 pt-1">
-        <div>Wygląd (dev) · zapisywany w grze</div>
+      </DiagSection>
+      <DiagSection id="appearance" summary="zapisywany w grze">
+      <div data-testid="appearance-diagnostics">
         <AppearanceControls appearance={appearance} onChange={onChangeAppearance} compact />
         {appearanceStats ? (
           <div>
@@ -225,7 +251,8 @@ function DiagnosticsPanel({
           </div>
         ))}
       </div>
-      <LanternDiagnostics stats={stats.lantern ?? null} />
+      </DiagSection>
+      <DiagSection id="audio">
       <AudioDiagnostics
         snapshot={audio}
         onSetHour={onSetHour}
@@ -234,16 +261,65 @@ function DiagnosticsPanel({
         onPreviewSteps={onPreviewSteps}
         onSetStepVolume={onSetStepVolume}
       />
+      </DiagSection>
     </div>
   );
 }
 
+const CONTROLS_HELP_KEY = "miasto.controlsHelp.hidden.v1";
+
+/** Okienko z podpowiedzią sterowania: można je zamknąć (X); wtedy zostaje mały przycisk "Sterowanie", a wybór jest zapamiętany lokalnie. */
 function ControlsHelp() {
   const device = useInputDevice();
   const entries = device === "keyboard" ? FOREST_CONTROLS : padForestHelp(device);
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem(CONTROLS_HELP_KEY) === "1";
+    } catch {
+      return false; // brak localStorage: okienko zostaje widoczne
+    }
+  });
+  const change = (next: boolean) => {
+    setHidden(next);
+    try {
+      window.localStorage.setItem(CONTROLS_HELP_KEY, next ? "1" : "0");
+    } catch {
+      // ustawienie działa do końca sesji
+    }
+  };
+  if (hidden) {
+    return (
+      <button
+        type="button"
+        data-testid="controls-help-show"
+        onClick={(e) => {
+          change(false);
+          e.currentTarget.blur();
+        }}
+        className="hidden rounded-md bg-black/45 px-2 py-1 text-xs font-medium text-slate-200 backdrop-blur transition hover:bg-white/15 sm:block"
+      >
+        Sterowanie
+      </button>
+    );
+  }
   return (
     <div data-testid="controls-help" className="hidden max-w-[17rem] rounded-lg bg-black/45 px-3 py-2 text-xs text-white backdrop-blur sm:block">
-      <p className="mb-1 font-semibold">Sterowanie</p>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <p className="font-semibold">Sterowanie</p>
+        <button
+          type="button"
+          data-testid="controls-help-close"
+          aria-label="Zamknij podpowiedź sterowania"
+          title="Zamknij"
+          onClick={(e) => {
+            change(true);
+            e.currentTarget.blur();
+          }}
+          className="flex size-5 items-center justify-center rounded bg-white/15 text-sm leading-none hover:bg-white/30"
+        >
+          ×
+        </button>
+      </div>
       <ul className="space-y-0.5">
         {entries.map((c) => (
           <li key={c.label} className="flex items-baseline gap-1.5">
@@ -427,7 +503,12 @@ export function ForestWorldView({
     return () => onLoadingChange(false);
   }, [loading, onLoadingChange]);
 
-  useEffect(() => rendererRef.current?.setHour(hour), [hour]);
+  // Podgląd pory dnia (dev): w multiplayerze czas należy do serwera, więc przyciski godziny w Diagnostyce przesuwają tylko
+  // lokalny widok (niebo, światło, dźwięk tego klienta). Nie zmienia to stanu gry, zapisu ani tego, co widzą inni gracze.
+  const [devClockOffset, setDevClockOffset] = useState(0);
+  const devClockOffsetRef = useRef(0);
+  const shownHour = (((hour + devClockOffset / SECONDS_PER_GAME_HOUR) % HOURS_PER_DAY) + HOURS_PER_DAY) % HOURS_PER_DAY;
+  useEffect(() => rendererRef.current?.setHour(shownHour), [shownHour]);
   useEffect(() => rendererRef.current?.setQuality(quality), [quality]);
   useEffect(() => rendererRef.current?.setBridgeBuilt(bridgeBuilt), [bridgeBuilt]);
   // Zmiana wyglądu w trakcie gry (panel deweloperski): wymiana elementów bez restartu świata, kontrolera i animacji.
@@ -451,7 +532,7 @@ export function ForestWorldView({
   const npcDialog = trollDialog || trollMessage !== null || gameState.dialog !== null;
   const saveId = gameState.world?.saveId ?? null;
   const getPose = useCallback(() => rendererRef.current?.getPose() ?? null, []);
-  useForestAudio({ elapsed: gameState.worldElapsed ?? gameState.elapsed, saveId, dialog: npcDialog, frozen: frozen || npcDialog, getPose });
+  useForestAudio({ elapsed: (gameState.worldElapsed ?? gameState.elapsed) + devClockOffset, saveId, dialog: npcDialog, frozen: frozen || npcDialog, getPose });
   const [audioSnap, setAudioSnap] = useState<AudioSnapshot | null>(null);
   useEffect(() => {
     rendererRef.current?.setSuspended(frozen);
@@ -569,11 +650,26 @@ export function ForestWorldView({
     return () => clearInterval(id);
   }, [debug]);
   const setClockHour = useCallback((hour: number) => {
-    if (multiplayer) return;
-    const target = nextClockTime(stateRef.current.elapsed, hour);
+    const state = stateRef.current;
+    if (multiplayer || state.worldElapsed !== undefined) {
+      // Czas autorytatywny (serwer): tylko lokalny podgląd, bez komendy do silnika.
+      const base = state.worldElapsed ?? state.elapsed;
+      const target = nextClockTime(base + devClockOffsetRef.current, hour);
+      getForestAudio().jumpClock(target);
+      devClockOffsetRef.current = target - base;
+      setDevClockOffset(target - base);
+      return;
+    }
+    const target = nextClockTime(state.elapsed, hour);
     getForestAudio().jumpClock(target);
     dispatchRef.current({ type: "dev.setClock", elapsed: target });
   }, [multiplayer]);
+  const resetClockPreview = useCallback(() => {
+    const state = stateRef.current;
+    getForestAudio().jumpClock((state.worldElapsed ?? state.elapsed));
+    devClockOffsetRef.current = 0;
+    setDevClockOffset(0);
+  }, []);
   const testWolves = useCallback(() => {
     getForestAudio().testWolves();
   }, []);
@@ -773,7 +869,7 @@ export function ForestWorldView({
         />
       )}
 
-      <div className={cn("absolute left-3 top-3 z-10 flex-col items-start gap-2 sm:left-5 sm:top-5", touchUi ? "hidden" : "flex")}>
+      <div className={cn("absolute left-3 top-14 z-10 max-h-[calc(100dvh-4rem)] flex-col items-start gap-2 overflow-y-auto overscroll-contain sm:left-5 sm:top-14", touchUi ? "hidden" : "flex")}>
         <Button data-testid="leave-forest" variant="secondary" onClick={onLeave}>
           ← Wróć do miasta
         </Button>
@@ -814,12 +910,12 @@ export function ForestWorldView({
           </button>
         )}
         {debug && stats && (
-          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} onPreviewSteps={previewSteps} onSetStepVolume={setStepVolume} onToggleLampMarkers={toggleLampMarkers} appearance={gameState.appearance} appearanceStats={stats.appearance ?? null} onChangeAppearance={changeAppearance} />
+          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} clockPreview={devClockOffset !== 0} onResetClockPreview={resetClockPreview} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} onPreviewSteps={previewSteps} onSetStepVolume={setStepVolume} onToggleLampMarkers={toggleLampMarkers} appearance={gameState.appearance} appearanceStats={stats.appearance ?? null} onChangeAppearance={changeAppearance} />
         )}
       </div>
 
       {!loading && !error && !locked && !suspended && !trollDialog && device === "keyboard" && !touchUi && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-32 z-10 flex justify-center">
           <p data-testid="forest-click-hint" className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white backdrop-blur">
             Kliknij w scenę, aby sterować myszą
           </p>

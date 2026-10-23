@@ -507,6 +507,8 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
   const healthPct = Math.round((state.health / MAX_HEALTH) * 100);
   const cold = clock.season === "winter" && !sheltered;
   const inForest = state.view === "forest";
+  // Las na komputerze: bez granatowych pasków; HUD i ekwipunek są małymi nakładkami na grę (jak na telefonie).
+  const floatingHud = !touchUi && inForest;
 
   return (
     <div className="relative flex h-full flex-col">
@@ -527,10 +529,10 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
           onReconnect={onReconnect}
         />
       ) : (
-        <TopBar state={state} sheltered={sheltered} onOpenJournal={openJournal} onOpenMenu={openMenu} />
+        <TopBar state={state} sheltered={sheltered} onOpenJournal={openJournal} onOpenMenu={openMenu} floating={floatingHud} />
       )}
       <main
-        className={cn("relative min-h-0 flex-1", touchUi && "absolute inset-0")}
+        className={cn("relative min-h-0 flex-1", (touchUi || floatingHud) && "absolute inset-0")}
         style={
           touchUi && !inForest
             ? { paddingTop: "calc(max(0.25rem, var(--sat)) + 2.5rem)", paddingLeft: "var(--sal)", paddingRight: "var(--sar)", paddingBottom: "var(--sab)" }
@@ -581,6 +583,7 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
           <QuestTracker
             quest={trackedQuest(state)}
             touchTop={`calc(max(0.25rem, var(--sat)) + ${inForest ? "6.25rem" : "4.25rem"})`}
+            desktopTop={floatingHud ? "3.5rem" : undefined}
           />
         )}
 
@@ -591,7 +594,7 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
             role="status"
             className={cn(
               "pointer-events-none absolute inset-x-3 z-30 mx-auto w-fit max-w-full rounded-full px-4 py-2 text-sm font-semibold shadow-xl",
-              touchUi ? "top-[calc(max(0.25rem,var(--sat))+2.75rem)]" : "bottom-3",
+              touchUi ? "top-[calc(max(0.25rem,var(--sat))+2.75rem)]" : floatingHud ? "bottom-28" : "bottom-3",
               state.toast.tone === "error"
                 ? "bg-red-500 text-white"
                 : "bg-emerald-400 text-emerald-950",
@@ -643,7 +646,7 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
           aboveControls={inForest}
         />
       ) : (
-        <InventoryBar state={state} onSelect={select} onEat={eat} onToggleLantern={toggleLantern} inForest={inForest} />
+        <InventoryBar state={state} onSelect={select} onEat={eat} onToggleLantern={toggleLantern} inForest={inForest} floating={floatingHud} />
       )}
       {state.dead && <DeathOverlay onRespawn={() => dispatch({ type: "respawn" })} />}
       {saveError && (
