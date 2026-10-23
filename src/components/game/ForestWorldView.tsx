@@ -44,6 +44,7 @@ import type { CharacterAppearanceV1 } from "@/lib/character";
 import { Minimap } from "./Minimap";
 import { LanternDiagnostics } from "./LanternDiagnostics";
 import { DiagSection, DiagSectionsToolbar } from "./DiagnosticsSection";
+import { HideSeekDiagnostics } from "./hideseek/HideSeekDiagnostics";
 import { useGamePause } from "./quest/useGamePause";
 import type { DialogOutcome } from "@/lib/npc/encounter";
 import type { TrollMaterialMode } from "@/lib/npc/trollMaterials";
@@ -106,8 +107,10 @@ function DiagnosticsPanel({
   appearance,
   appearanceStats,
   onChangeAppearance,
+  multiplayer,
 }: {
   stats: PanelStats;
+  multiplayer?: MultiplayerClient;
   audio: AudioSnapshot | null;
   onRestartEncounter: () => void;
   onSetHour: (hour: number) => void;
@@ -169,6 +172,7 @@ function DiagnosticsPanel({
         )}
       </DiagSection>
       <LanternDiagnostics stats={stats.lantern ?? null} />
+      <HideSeekDiagnostics multiplayer={multiplayer} />
       <DiagSection id="npc">
       {!stats.npc && !stats.npcError && <div data-testid="npc-diagnostics-empty">troll: niedostępny</div>}
       {stats.npc && (
@@ -572,6 +576,11 @@ export function ForestWorldView({
     const state = stateRef.current;
     if (!renderer || !pose) return;
     if (state.dialog) return;
+    // Uczestnik zabawy w chowanego nie prowadzi rozmów questowych: kończymy spotkanie bez zmiany stanu gry.
+    if (multiplayer?.hs.restricted) {
+      renderer.resolveNpcDialog("dismissed");
+      return;
+    }
     if (state.troll.phase === "solved") {
       const taken = state.chests["chest.bridge.blueprint"]?.taken;
       setTrollMessage(taken ? "Dobrze ci poszło! Powodzenia przy budowie mostu." : "Zagadkę już rozwiązałeś. Skrzynia ze schematem jest dla ciebie otwarta.");
@@ -581,7 +590,7 @@ export function ForestWorldView({
     const out = applyCommand(state, command);
     dispatchRef.current(command);
     if (!out.state.dialog) renderer.resolveNpcDialog("dismissed");
-  }, []);
+  }, [multiplayer]);
   useEffect(() => {
     trollRequestRef.current = requestTrollTalk;
   }, [requestTrollTalk]);
@@ -704,10 +713,12 @@ export function ForestWorldView({
    */
   const triggerInteract = useCallback((): boolean => {
     if (suspendedRef.current || trollDialogRef.current || !ready.current) return false;
+    // Zabawa w chowanego: uczestnicy nie zbierają materiałów, nie otwierają skrzyń i nie budują mostu.
+    if (multiplayer?.hs.restricted) return false;
     const handled = getInputHub().interactGate.run(performance.now(), () => interactor.press() || (rendererRef.current?.talkToNpc() ?? false));
     if (handled) setSnap(interactor.snapshot);
     return handled;
-  }, [interactor]);
+  }, [interactor, multiplayer]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -784,6 +795,8 @@ export function ForestWorldView({
     const onKey = (e: KeyboardEvent) => {
       if (isDiagnosticsShortcut(e)) {
         e.preventDefault();
+        // Zamrożony szukający nie może podglądać innych graczy przez panel diagnostyczny.
+        if (multiplayer?.hs.view?.phase === "HIDING" && multiplayer.hs.view.you.role === "SEEKER") return;
         setDebug((d) => !d);
         return;
       }
@@ -809,8 +822,13 @@ export function ForestWorldView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [requestMinimapToggle, requestLanternToggle, restartEncounter]);
+  }, [requestMinimapToggle, requestLanternToggle, restartEncounter, multiplayer]);
 
+  // Zabawa w chowanego: uczestnik nie widzi podpowiedzi interakcji, a zamrożony szukający nie ma panelu diagnostycznego
+  // (podglądu w czasie chowania się innych).
+  const hsView = multiplayer?.hs.view ?? null;
+  const hsRestricted = multiplayer?.hs.restricted ?? false;
+  const hsFrozenSeeker = hsView?.phase === "HIDING" && hsView.you.role === "SEEKER";
   const error = fatal ?? stats?.error ?? null;
   const percent = Math.round((stats?.loadProgress ?? 0) * 100);
 
@@ -830,7 +848,7 @@ export function ForestWorldView({
         />
       )}
 
-      {!loading && !error && talkable && !snap.prompt && !windowOpen && !trollDialog && (
+      {!loading && !error && !hsRestricted && talkable && !snap.prompt && !windowOpen && !trollDialog && (
         <div className="pointer-events-none absolute inset-x-0 top-[58%] z-10 flex justify-center px-4">
           <p data-testid="troll-talk-prompt" className="flex items-center gap-2 rounded-full bg-amber-100/90 px-4 py-2 text-sm font-semibold text-amber-950 shadow-xl backdrop-blur">
             <InputHint action="interact" className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-100" />
@@ -839,7 +857,7 @@ export function ForestWorldView({
         </div>
       )}
 
-      {!loading && !error && snap.prompt && !windowOpen && (
+      {!loading && !error && !hsRestricted && snap.prompt && !windowOpen && (
         <div className="pointer-events-none absolute inset-x-0 top-[58%] z-10 flex justify-center px-4">
           <p
             data-testid="interaction-prompt"
@@ -869,7 +887,7 @@ export function ForestWorldView({
       )}
 
       {!loading && !error && touchUi && !frozen && (
-        <TouchControls touch={touch} interactReady={snap.prompt !== null || talkable} onInteract={interactFromTouch} lanternOn={gameState.lantern.enabled} onLantern={lanternFromTouch} />
+        <TouchControls touch={touch} interactReady={!hsRestricted && (snap.prompt !== null || talkable)} onInteract={interactFromTouch} lanternOn={gameState.lantern.enabled} onLantern={lanternFromTouch} />
       )}
 
       {touchUi && (
@@ -906,7 +924,7 @@ export function ForestWorldView({
         </div>
         <AudioControls />
         {!loading && !error && <ControlsHelp />}
-        {!loading && !error && process.env.NODE_ENV !== "production" && (
+        {!loading && !error && !hsFrozenSeeker && process.env.NODE_ENV !== "production" && (
           <button
             type="button"
             data-testid="open-diagnostics"
@@ -923,8 +941,8 @@ export function ForestWorldView({
             Diagnostyka
           </button>
         )}
-        {debug && stats && (
-          <DiagnosticsPanel stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} clockPreview={devClockOffset !== 0} onResetClockPreview={resetClockPreview} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} onPreviewSteps={previewSteps} onSetStepVolume={setStepVolume} onToggleLampMarkers={toggleLampMarkers} appearance={gameState.appearance} appearanceStats={stats.appearance ?? null} onChangeAppearance={changeAppearance} />
+        {debug && stats && !hsFrozenSeeker && (
+          <DiagnosticsPanel multiplayer={multiplayer} stats={stats} audio={audioSnap} onRestartEncounter={restartEncounter} onSetHour={setClockHour} clockPreview={devClockOffset !== 0} onResetClockPreview={resetClockPreview} onTestWolves={testWolves} onSetTrollMaterial={setTrollMaterial} onPreviewSteps={previewSteps} onSetStepVolume={setStepVolume} onToggleLampMarkers={toggleLampMarkers} appearance={gameState.appearance} appearanceStats={stats.appearance ?? null} onChangeAppearance={changeAppearance} />
         )}
       </div>
 

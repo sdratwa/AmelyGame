@@ -83,3 +83,6 @@ export const FOREST_CONTROLS: readonly ControlEntry[] = [
   { keys: ["O", "F3"], label: "panel diagnostyczny" },
   { keys: ["Esc"], label: "zamknięcie okna, zwolnienie myszy" },
 ];
+
+/** Zabawa w chowanego: jeden klawisz kontekstowy (TO MOJA KRYJÓWKA! w chowaniu, ZNALAZŁEM! w szukaniu). Podpowiedź jest tylko na przycisku w grze. */
+export const HIDESEEK_KEY = "h";

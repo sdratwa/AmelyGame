@@ -1,6 +1,8 @@
 import type { SharedWorld } from "./sharedWorld";
 import type { CharacterAppearanceV1 } from "../character/appearance";
-export const PROTOCOL = 4;
+import type { HsMini, HsStateView } from "../hideseek/types";
+/** 5: zabawa w chowanego (wiadomości `hs.*`, snapshot per odbiorca, `resumeToken`, `Player.mini` / `lanternForced`). */
+export const PROTOCOL = 5;
 export const NET = { hz: 20, interpolationMs: 100, maxPlayers: 8 };
 export type Motion = {
   sequence: number;
@@ -27,6 +29,13 @@ export type Player = Motion & {
    * ponownie połączeni widzą aktualny stan. Parametry światła i migotanie liczy lokalnie każdy klient.
    */
   lanternOn: boolean;
+  /**
+   * Chwilowy stan wymuszony przez minigrę (podpowiedź lampą w ostatnich 30 s zabawy w chowanego). Osobny od `lanternOn`:
+   * ręcznego wyboru gracza nigdy nie nadpisuje, a po rundzie znika. Efektywne świecenie = `lanternOn || lanternForced`.
+   */
+  lanternForced?: boolean;
+  /** Rola w trwającej zabawie widoczna dla odbiorcy (etykiety i minimapa); brak = zwykły gracz. */
+  mini?: HsMini;
 };
 /** Wiadomość klient -> serwer: włącz/wyłącz własną lampę. Identyfikator gracza ustala serwer z sesji, nie z treści. */
 export type LanternMessage = { enabled: boolean };
@@ -44,8 +53,9 @@ export type WorldConfig = {
 };
 /** Wygląd graczy po `playerId`; brak wpisu = wygląd domyślny. Wysyłany osobno od snapshotów ruchu (zmienia się rzadko). */
 export type Appearances = Record<string, CharacterAppearanceV1>;
-export type Snapshot = { serverTime: number; worldElapsed: number; players: Player[] };
-export type Welcome = { config: WorldConfig; player: Player; worldElapsed: number; world: SharedWorld; appearances?: Appearances };
+/** `players` jest przefiltrowane dla odbiorcy (izolacja zabawy); `online` to łączna liczba graczy w pokoju. */
+export type Snapshot = { serverTime: number; worldElapsed: number; players: Player[]; online?: number };
+export type Welcome = { config: WorldConfig; player: Player; worldElapsed: number; world: SharedWorld; appearances?: Appearances; resumeToken?: string; hs?: HsStateView | null };
 export const SOUND_REGISTRY: Record<
   "HELP_SHOUT",
   {

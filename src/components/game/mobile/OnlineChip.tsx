@@ -24,13 +24,13 @@ export function OnlineChip({
   onReconnect?: () => Promise<void>;
 }) {
   const [status, setStatus] = useState(client.status);
-  const [count, setCount] = useState(client.players.length);
+  const [count, setCount] = useState(client.online || client.players.length);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
     const read = () => {
       setStatus(client.status);
-      setCount(client.players.length);
+      setCount(client.online || client.players.length);
     };
     read();
     const id = setInterval(read, POLL_MS);

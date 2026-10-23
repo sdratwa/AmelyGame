@@ -81,7 +81,7 @@ export function GameEntry() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="relative z-10 shrink-0 bg-slate-900 px-3 py-2 text-sm text-white">
         <p>
-          {client.status} · Online: {client.players.length}/8
+          {client.status} · Online: {client.online || client.players.length}/8
         </p>
 
         <button className="mr-4"

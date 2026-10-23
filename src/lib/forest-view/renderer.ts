@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { RemotePlayers, createRemoteTemplate } from "./remotePlayers";
 import { gameSettings } from "@/lib/settings/gameSettings";
 import { PLAYER_COLLISION_RADIUS, playersVerticallyOverlap } from "@/lib/multiplayer/playerCollision";
+import { FREE_GATE } from "@/lib/hideseek/types";
+import { bodiesCollide, roleOfMini } from "@/lib/hideseek/visibility";
 import type { MultiplayerClient } from "../multiplayer/client";
 import { getForestAudio } from "../audio/controller";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
@@ -886,6 +888,8 @@ export class ForestRenderer {
   }
 
   dispose(): void {
+    // Wyjście z widoku lasu: serwer przestaje traktować gracza jako dostępnego do zabawy w chowanego.
+    this.multiplayer?.syncPresence(false);
     this.remotePlayers?.dispose();
     getForestAudio().clearRemotePlayers();
     this.disposed = true;
@@ -1706,10 +1710,14 @@ export class ForestRenderer {
         }
       } else if (!this.loading && !this.suspended) {
         const otherPlayers = this.multiplayer?.remote() ?? NO_PLAYERS;
+        const hsView = this.multiplayer?.hs.view ?? null;
+        const hsPhase = hsView?.phase ?? "INACTIVE";
+        const hsRole = hsView?.you.role ?? null;
         ctl.blockers = [
           ...(this.npcLayer?.blockers() ?? []),
           ...(this.deerLayer?.blockers() ?? []),
           ...otherPlayers
+            .filter((p) => bodiesCollide(hsPhase, hsRole, roleOfMini(p.mini)))
             .filter((p) => playersVerticallyOverlap({ y: this.tpp?.rig.controller.state.y ?? ctl.state.eyeY - 1.6, crouching: false }, p))
             .map((p) => ({ x: p.x, z: p.z, r: PLAYER_COLLISION_RADIUS })),
         ];
@@ -1719,6 +1727,10 @@ export class ForestRenderer {
         const tpp = this.tpp;
         if (tpp) {
           tpp.rig.blockers = ctl.blockers;
+          // Zabawa w chowanego: bramka ruchu z serwera (zamrożony szukający, zablokowany ukrywający się) i korekta pozycji.
+          tpp.rig.setGate(this.multiplayer?.hs.gate ?? FREE_GATE);
+          const fix = this.multiplayer?.hs.takeCorrection();
+          if (fix) tpp.rig.snapHorizontal(fix.x, fix.z);
           // Ruch, skok, kucanie i kamera z dotyku (joystick ma pierwszeństwo przed padem); bez dotyku ruch idzie z pada.
           applyTouchToTpp(this.touchInput, pad, { input: tpp.rig.input, camera: tpp.rig.camera }, this.extMove, this.touchLook);
           if (pad) {
@@ -1775,6 +1787,7 @@ export class ForestRenderer {
       this.remotePlayers ??= new RemotePlayers(this.scene, this.remoteTemplate);
       this.multiplayer.syncAppearance(this.playerAppearance);
       this.multiplayer.syncLantern(this.lanternOn);
+      this.multiplayer.syncPresence(true);
       const players = this.multiplayer.remote();
       remoteList = players;
       this.remotePlayers.update(players, dt, this.multiplayer.appearances, gameSettings.get().showPlayerNames);
@@ -1886,10 +1899,10 @@ export class ForestRenderer {
     const sources = this.lanternSources;
     sources.length = 0;
     const model = this.tpp?.model;
-    if (model) sources.push({ id: LOCAL_LANTERN_ID, enabled: this.lanternOn, hand: findHandBone(model.asset.scene), seed: 0.37, priority: true });
+    if (model) sources.push({ id: LOCAL_LANTERN_ID, enabled: this.lanternOn || (this.multiplayer?.localLanternForced() ?? false), hand: findHandBone(model.asset.scene), seed: 0.37, priority: true });
     const others = this.remotePlayers;
     if (others) {
-      for (const p of remote) sources.push({ id: p.playerId, enabled: p.lanternOn === true, hand: others.handBone(p.playerId), seed: hash(stringSeed(p.playerId)) * 97, priority: false });
+      for (const p of remote) sources.push({ id: p.playerId, enabled: p.lanternOn === true || p.lanternForced === true, hand: others.handBone(p.playerId), seed: hash(stringSeed(p.playerId)) * 97, priority: false });
     }
     const pos = this.camera.position;
     const fog = this.scene.fog as THREE.FogExp2 | null;

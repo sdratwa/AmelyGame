@@ -102,3 +102,62 @@ describe("ThirdPersonRig w prawdziwym lesie gry", () => {
     expect(rig.config.walkSpeed).toBeLessThanOrEqual(5);
   }, 60_000);
 });
+
+describe("ThirdPersonRig: bramka ruchu zabawy w chowanego", () => {
+  const frozen = { anchor: { x: 0, z: 0 }, allowJump: false, allowCrouch: false, allowLook: false, cameraDown: true };
+
+  it("zamrożony szukający: ruch, bieg, skok, kucanie i obrót kamery nie działają, kamera patrzy w dół", () => {
+    const { rig } = makeRig();
+    const start = { x: rig.controller.state.x, z: rig.controller.state.z };
+    rig.setGate({ ...frozen, anchor: start });
+    const yaw = rig.camera.yaw;
+    press(rig, "KeyW", "ShiftLeft", "Space", "KeyC");
+    rig.input.look(300, 200);
+    run(rig, 3);
+    const s = rig.controller.state;
+    expect(s.x).toBeCloseTo(start.x, 6);
+    expect(s.z).toBeCloseTo(start.z, 6);
+    expect(s.crouching).toBe(false);
+    expect(s.grounded).toBe(true);
+    expect(rig.camera.yaw).toBeCloseTo(yaw, 6);
+    expect(rig.cameraPose.pitch).toBeLessThan(-1.5);
+  });
+
+  it("zablokowany ukrywający się: stoi w miejscu, ale skacze, kuca i obraca kamerę; po zdjęciu bramki znów chodzi", () => {
+    const { rig } = makeRig();
+    const start = { x: rig.controller.state.x, z: rig.controller.state.z };
+    rig.setGate({ anchor: start, allowJump: true, allowCrouch: true, allowLook: true, cameraDown: false });
+    press(rig, "KeyW");
+    rig.input.look(200, 0);
+    let airborne = false;
+    rig.input.handleKey("Space", true);
+    for (let i = 0; i < 90; i++) {
+      rig.update(1 / 60);
+      if (!rig.controller.state.grounded) airborne = true;
+    }
+    expect(airborne).toBe(true);
+    expect(rig.controller.state.x).toBeCloseTo(start.x, 6);
+    expect(rig.controller.state.z).toBeCloseTo(start.z, 6);
+    expect(rig.camera.yaw).not.toBeCloseTo(0, 3);
+    rig.input.handleKey("Space", false);
+    rig.input.handleKey("KeyC", true);
+    rig.update(1 / 60);
+    expect(rig.controller.state.crouching).toBe(true);
+    rig.input.handleKey("KeyC", false);
+    rig.setGate({ anchor: null, allowJump: true, allowCrouch: true, allowLook: true, cameraDown: false });
+    rig.input.handleKey("KeyC", true);
+    rig.input.handleKey("KeyC", false);
+    run(rig, 2);
+    expect(Math.hypot(rig.controller.state.x - start.x, rig.controller.state.z - start.z)).toBeGreaterThan(0.5);
+  });
+
+  it("korekta z serwera przenosi postać w poziomie i zeruje prędkość", () => {
+    const { rig } = makeRig();
+    press(rig, "KeyW");
+    run(rig, 1);
+    rig.snapHorizontal(5, 6);
+    expect(rig.controller.state.x).toBe(5);
+    expect(rig.controller.state.z).toBe(6);
+    expect(rig.controller.state.speed).toBe(0);
+  });
+});

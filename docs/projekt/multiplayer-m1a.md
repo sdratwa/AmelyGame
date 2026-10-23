@@ -233,3 +233,7 @@ Weryfikacja: pełny `npm test` — **1169 zaliczonych, 2 pominięte, 1 istnieją
 ## Fizyka skał (generator v5)
 
 Świat online działa na generatorze **v5** (skały z profilem pionowym, patrz [fizyka-skal.md](fizyka-skal.md)). Serwer wciąż nie symuluje ruchu (klient jest autorytatywny), ale ocenia wykonalność kolejnych próbek `motion` (`src/lib/multiplayer/motionPhysics.ts`) i ignoruje niemożliwe stany, np. "stanie" na wysokiej skale po biegu z ziemi. Reguły używają stałych wartości domyślnych TPP, więc lokalne suwaki skoku nie omijają zasad. Brak kanału korekcji. Protokół pozostaje **4**; niezgodny klient (inna wersja generatora) nie dołączy z powodu odcisku świata. Uwaga: tabela kształtów skał v5 została skorygowana w miejscu (odcisk zamrożony), więc klient i serwer muszą pochodzić z tego samego buildu. Istniejący plik świata v4 wymaga uruchomienia serwera z `MIGRATE_WORLD_V4=1` (kopia `.v4.bak`).
+
+## Protokół 5 i zabawa w chowanego
+
+Protokół wzrósł do **5** (opcjonalny tryb „Zabawa w chowanego”, szczegóły w [chowany-h1.md](chowany-h1.md)): wiadomości `hs.*`, filtrowane per odbiorca migawki z polami `mini` i `lanternForced`, `resumeToken` w `welcome` (powrót po zerwaniu połączenia w 20 s na ten sam `playerId`) oraz `hs.correct` jako pierwszy kanał korekcji pozycji (tylko dla uczestników zabawy; ruch w trybie ścisłym). Po aktualizacji zrestartuj serwer (np. `pm2 restart amelygame-mp`) i odśwież klientów. Parametry deweloperskie rundy działają tylko przy `MIASTO_HIDESEEK_DEV=1`. Przy wyłączonym trybie zachowanie jest takie jak wcześniej.

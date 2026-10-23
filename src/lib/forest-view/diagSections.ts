@@ -10,6 +10,7 @@ export const DIAG_SECTIONS = [
   { id: "perf", title: "Wydajność i świat", defaultOpen: true },
   { id: "movement", title: "Ruch i podparcie (dev)", defaultOpen: false },
   { id: "lantern", title: "Lampa naftowa (dev)", defaultOpen: true },
+  { id: "hideseek", title: "Zabawa w chowanego (dev)", defaultOpen: false },
   { id: "npc", title: "NPC troll", defaultOpen: false },
   { id: "bridge", title: "Most", defaultOpen: false },
   { id: "deer", title: "Jeleń", defaultOpen: false },

@@ -6,6 +6,7 @@ Dokumenty opisują zatwierdzony plan etapu 1 ("Most do nieznanego" jako pierwszy
 
 - [multiplayer-m1a.md](multiplayer-m1a.md) - multiplayer LAN, przestrzenne audio, osobny zapis online, wspólny zegar serwera, uruchamianie i testy odbioru.
 
+- [chowany-h1.md](chowany-h1.md) - H1: opcjonalna „Zabawa w chowanego” (multiplayer w lesie): maszyna stanów, role, protokół 5, izolacja, reconnect, testy Node, test ręczny 2-8 graczy.
 - [architektura.md](architektura.md) - moduły, komendy i zdarzenia, pauza czasu, dane vs kod.
 - [model-danych.md](model-danych.md) - stan gry, ekwipunek i kontenery, skrzynie, depozyt trolla, docelowy zapis.
 - [swiat-w0.md](swiat-w0.md) - rdzeń świata po W0: współrzędne i sektory, teren, indeks przestrzenny, walkable, punkty i strefy.
@@ -58,6 +59,7 @@ Praca etapami; po każdym większym etapie: zmienione pliki, funkcjonalności, w
 - [fizyka-skal.md](fizyka-skal.md): ROCK1+ROCK2, przeskakiwanie i stanie na skałach (profil kolizji w generatorze v5, kroki cząstkowe, krawędzie, diagnostyka, migracja v4→v5, walidacja serwera M1a, test ręczny); kod, testy jednostkowe i integracyjne, lint, typecheck i build po stronie agenta, wygląd, dopasowanie powierzchni i FPS czekają na ocenę autora.
 - [jelen.md](jelen.md): animowany jeleń w lesie (pierwszy zwierzak): zasób, animacje, głowa, zachowanie, położenie, F3, wydajność.
 - [modele-skrzynia-troll.md](modele-skrzynia-troll.md): finalne modele skrzyni i trolla, animacje, koszt renderowania.
+- [chowany-h1.md](chowany-h1.md): H1, zabawa w chowanego (protokół 5, serwer autorytatywny, `HideSeekHost`); testy jednostkowe i integracyjne Node, lint, typecheck i build po stronie agenta; wygląd, dźwięk, dotyk, pad i FPS czekają na ocenę autora.
 - [troll-materialy.md](troll-materialy.md): matowe materiały trolla (przyczyna połysku i migotania oczu, klasy powierzchni, przełącznik ORIGINAL/MATTE w panelu O).
 - [troll-spotkanie.md](troll-spotkanie.md): animowany troll (7 klipów), maszyna spotkania (patrol, alert, zauważenie, dialog), testowe okno PRAWIDŁOWY/ZŁY, F3, instrukcja testu w przeglądarce.
 - Przebudowa pierwszego questa (20 października 2026): nowa kolejność (schemat -> narzędzia -> materiały -> budowa -> przeprawa), okno budowy (E), most z modelu GLB z latarniami nocnymi, usunięcie telefonu i ręki, SaveV3 z migracją. Kod i testy napisane, **testy i przeglądarka nie były uruchamiane** (zakaz autora); czeka na wyniki ręcznego testu wg [test-reczny-pierwszy-quest.md](test-reczny-pierwszy-quest.md).

@@ -7,7 +7,8 @@ import type { AnimIntent } from "./animationState";
 import { ThirdPersonCamera, type CameraPose, type CameraWorld } from "./cameraRig";
 import { mergeTppConfig, TPP_DEFAULTS, type TppConfig } from "./config";
 import { PlayerController, type LandingInfo, type PlayerState, type PlayerWorld, type SupportInfo } from "./playerController";
-import { PlayerInput } from "./playerInput";
+import { PlayerInput, type PlayerIntent } from "./playerInput";
+import { FREE_GATE, type MovementGate } from "@/lib/hideseek/types";
 
 /** Dane diagnostyczne (panel deweloperski); wypełniane bez alokacji w klatce, czytane rzadko. */
 export type TppSnapshot = {
@@ -57,6 +58,9 @@ export class ThirdPersonRig {
   flags: WorldFlags | undefined;
   blockers: readonly Blocker[] = [];
   deckHeight: ((x: number, z: number) => number | null) | null = null;
+  /** Bramka ruchu z zabawy w chowanego (domyślnie wolny ruch); ten sam opis egzekwuje serwer w handlerze `motion`. */
+  private gate: MovementGate = FREE_GATE;
+  private readonly gated: PlayerIntent = { moveX: 0, moveY: 0, run: false, crouchToggle: false, jump: false, lookDx: 0, lookDy: 0 };
   private cfg: TppConfig;
   private readonly anim: AnimIntent = { crouching: false, airborne: false, speed: 0, forward: 0, right: 0 };
   private readonly snap: TppSnapshot = {
@@ -142,11 +146,41 @@ export class ThirdPersonRig {
     this.camera.snap();
   }
 
+  /** Ustawia bramkę ruchu (wołane co klatkę z aktualnego stanu zabawy; ta sama bramka nic nie zmienia). */
+  setGate(gate: MovementGate): void {
+    if (gate === this.gate) return;
+    this.gate = gate;
+    this.camera.lookLocked = !gate.allowLook;
+    this.camera.lockedDown = gate.cameraDown;
+  }
+
+  /** Korekta pozycji z serwera (odrzucony ruch): natychmiastowe przeniesienie w poziomie bez zmiany pionu. */
+  snapHorizontal(x: number, z: number): void {
+    this.controller.anchorHorizontal(x, z);
+  }
+
   /** Jedna aktualizacja na klatkę: wejście, ruch kapsuły, kamera. Zwraca stan gracza (współdzielony obiekt). */
   update(dt: number): PlayerState {
-    const intent = this.input.consume();
+    const raw = this.input.consume();
+    const gate = this.gate;
+    let intent = raw;
+    if (gate !== FREE_GATE) {
+      const g = this.gated;
+      g.lookDx = raw.lookDx;
+      g.lookDy = raw.lookDy;
+      g.moveX = gate.anchor ? 0 : raw.moveX;
+      g.moveY = gate.anchor ? 0 : raw.moveY;
+      g.run = gate.anchor ? false : raw.run;
+      g.jump = gate.allowJump && raw.jump;
+      g.crouchToggle = gate.allowCrouch && raw.crouchToggle;
+      intent = g;
+    }
     this.camera.look(intent.lookDx, intent.lookDy);
     const s = this.controller.update(dt, intent, this.camera.yaw);
+    if (gate.anchor) {
+      this.controller.anchorHorizontal(gate.anchor.x, gate.anchor.z);
+      if (gate.allowLook) this.controller.turnToward(this.camera.yaw, dt);
+    }
     const c = this.cfg;
     this.camera.update(dt, { x: s.x, y: s.y + c.cameraTargetHeight * (s.capsuleHeight / c.standHeight), z: s.z });
     return s;

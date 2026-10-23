@@ -14,10 +14,37 @@ import {
   type WorldConfig,
   type Welcome,
 } from "./protocol";
+import { HideSeekClientState } from "../hideseek/clientState";
+import type { HideSeekConfig, HsEvent, HsNoticeCode, HsStateView } from "../hideseek/types";
 import { fingerprintWorld, generateWorld } from "../game/world/registry";
 import { CURRENT_GEN_VERSION } from "../game/world/registry";
+const RESUME_KEY = "miasto.mp.resume";
+const readResume = (): string | null => {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage.getItem(RESUME_KEY);
+  } catch {
+    return null;
+  }
+};
+const writeResume = (token: string | null) => {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (token) sessionStorage.setItem(RESUME_KEY, token);
+    else sessionStorage.removeItem(RESUME_KEY);
+  } catch {
+    /* brak pamięci sesji: reconnect po przeładowaniu strony będzie zwykłym dołączeniem */
+  }
+};
 export class MultiplayerClient {
   world: SharedWorld | null = null;
+  /** Stan zabawy w chowanego (źródłem prawdy jest serwer; tu tylko ostatni widok i zdarzenia). */
+  readonly hs = new HideSeekClientState(() => performance.now(), () => this.ping);
+  /** Liczba graczy online w pokoju (serwer liczy wszystkich, także niewidocznych dla tego klienta). */
+  online = 0;
+  /** Token wznowienia tożsamości po zerwaniu połączenia (serwer wydaje go przy dołączeniu). */
+  private resumeToken: string | null = readResume();
+  private hsRequest = 0;
+  private sentPresence: boolean | null = null;
   private worldListeners = new Set<(world: SharedWorld) => void>();
   private requestId = 0;
   private pending = new Map<number, (reply: WorldReply | null) => void>();
@@ -79,8 +106,22 @@ export class MultiplayerClient {
         worldInstanceId: "world_001",
         protocol: PROTOCOL,
         fingerprint: fingerprintWorld(generateWorld(2030, CURRENT_GEN_VERSION)),
+        ...(this.resumeToken ? { resumeToken: this.resumeToken } : {}),
       });
       this.room = room;
+      this.sentPresence = null;
+      room.onMessage("hs.state", (view: HsStateView) => {
+        if (this.room === room) this.hs.accept(view);
+      });
+      room.onMessage("hs.event", (event: HsEvent) => {
+        if (this.room === room && event && typeof event === "object") this.hs.pushEvent(event);
+      });
+      room.onMessage("hs.notice", (n: { code?: HsNoticeCode }) => {
+        if (this.room === room && n && typeof n.code === "string") this.hs.setNotice(n.code);
+      });
+      room.onMessage("hs.correct", (c: { x: number; y: number; z: number }) => {
+        if (this.room === room && c && [c.x, c.y, c.z].every(Number.isFinite)) this.hs.setCorrection(c.x, c.y, c.z);
+      });
       room.onMessage("world", (world: SharedWorld) => this.receiveWorld(world));
       room.onMessage("worldReply", (reply: WorldReply) => {
         this.pending.get(reply.requestId)?.(reply);
@@ -93,6 +134,7 @@ export class MultiplayerClient {
         this.worldElapsed = s.worldElapsed;
         this.serverOffset = s.serverTime - Date.now();
         this.players = s.players;
+        this.online = typeof s.online === "number" ? s.online : s.players.length;
         this.updates++;
         this.history.push({ time: performance.now(), players: s.players });
         if (this.history.length > 30) this.history.shift();
@@ -129,6 +171,8 @@ export class MultiplayerClient {
         this.sentAppearance = "";
         this.sentLantern = false;
         this.history = [];
+        this.online = 0;
+        this.hs.reset();
         if (this.timer) clearInterval(this.timer);
       });
       await new Promise<void>((resolve, reject) => {
@@ -155,6 +199,12 @@ export class MultiplayerClient {
             this.worldElapsed = w.worldElapsed;
             this.config = w.config;
             this.local = w.player;
+            if (typeof w.resumeToken === "string") {
+              this.resumeToken = w.resumeToken;
+              writeResume(w.resumeToken);
+            }
+            this.hs.reset();
+            if (w.hs) this.hs.accept(w.hs);
             this.appearances = w.appearances ?? {};
             this.sentAppearance = "";
             this.sentLantern = w.player.lanternOn === true;
@@ -174,6 +224,40 @@ export class MultiplayerClient {
       this.status = "błąd połączenia";
       throw e;
     }
+  }
+  /** Czy własna lampa jest chwilowo wymuszona przez zabawę (serwer ustawia to na własnym rekordzie gracza). */
+  localLanternForced(): boolean {
+    const id = this.local?.playerId;
+    return !!id && this.players.some((p) => p.playerId === id && p.lanternForced === true);
+  }
+  /** Zgłasza serwerowi, czy gracz jest w widoku lasu (tylko tacy dostają zaproszenia). Wołaj co klatkę: wysyła przy zmianie. */
+  syncPresence(inForest: boolean) {
+    if (this.status !== "połączony" || !this.room || this.sentPresence === inForest) return;
+    this.sentPresence = inForest;
+    this.room.send("hs.presence", { inForest });
+  }
+  private hsSend(type: string, payload?: unknown) {
+    if (this.status === "połączony") this.room?.send(type, payload);
+  }
+  hsStart(seekMinutes: number, dev?: Partial<HideSeekConfig>) {
+    this.hsSend("hs.start", { ...dev, seekMinutes });
+  }
+  hsCancel() {
+    this.hsSend("hs.cancel");
+  }
+  hsRespond(accept: boolean) {
+    this.hsSend("hs.respond", { accept, sessionId: this.hs.view?.sessionId });
+  }
+  hsHide() {
+    this.hsSend("hs.hide");
+  }
+  hsFound() {
+    // Pierwszy identyfikator z zegara (rośnie także po odświeżeniu strony); liczone dopiero przy użyciu, nie przy renderze.
+    this.hsRequest = Math.max(this.hsRequest + 1, Date.now());
+    this.hsSend("hs.found", { requestId: this.hsRequest });
+  }
+  hsWithdraw() {
+    this.hsSend("hs.withdraw");
   }
   setSoundHandler(handler: ((event: PlayerSoundEvent) => void) | null) {
     this.onSound = handler;
@@ -264,6 +348,8 @@ export class MultiplayerClient {
     this.sentAppearance = "";
     this.sentLantern = false;
     this.history = [];
+    this.online = 0;
+    this.hs.reset();
     this.sounds.clear();
     this.sequence = 0;
     this.jumpSequence = 0;

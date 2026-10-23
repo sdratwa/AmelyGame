@@ -3,6 +3,7 @@ import type { GameState } from "../game/core/state";
 import { serializeState } from "../game/save/serialize";
 import type { MultiplayerClient } from "./client";
 import { isWorldCommand, type SharedWorld } from "./sharedWorld";
+import { blockedDuringGame } from "../hideseek/restrictions";
 
 /** Serialize local changes while a shared transaction is awaiting the room's decision. */
 export class GameCommands {
@@ -25,6 +26,11 @@ export class GameCommands {
     this.publish(this.state);
   }
   dispatch = (command: Command): void => {
+    // Zabawa w chowanego: uczestnik nie wykonuje komend questowych ani zmieniających świat (serwer pilnuje wspólnego świata).
+    if (this.client?.hs.restricted && blockedDuringGame(command)) {
+      this.client.hs.setNotice("WORLD_BLOCKED");
+      return;
+    }
     if (this.pending) {
       this.queue.push(command);
       return;

@@ -23,7 +23,8 @@ describe("lampa naftowa: protokół", () => {
     expect(validLantern(null)).toBe(false);
     expect(validLantern("włącz")).toBe(false);
     expect(validLantern([true])).toBe(false);
-    expect(PROTOCOL).toBe(4);
+    // Protokół 5: zabawa w chowanego (wiadomości `hs.*`, migawki per odbiorca, `resumeToken`). Zmiana 4 -> 5 jest zamierzona.
+    expect(PROTOCOL).toBe(5);
   });
 
   it("ruch nie może przenosić stanu lampy (klucz spoza listy jest odrzucany)", () => {

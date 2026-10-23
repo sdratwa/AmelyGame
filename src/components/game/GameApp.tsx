@@ -1,5 +1,9 @@
 "use client";
 
+import { HideSeekLayer } from "./hideseek/HideSeekLayer";
+import { useHideSeekView } from "./hideseek/useHideSeek";
+import { resignKindOf } from "@/lib/hideseek/clientState";
+import { ACTIONS } from "@/lib/hideseek/texts";
 import dynamic from "next/dynamic";
 import { GameCommands } from "@/lib/multiplayer/commands";
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -146,6 +150,10 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
   const [forestLoading, setForestLoading] = useState(false);
   const [forestQuality, setForestQuality] = useState<QualityId>(readQuality);
   const [panel, setPanel] = useState<Panel | null>(null);
+  /** Okno modalne zabawy w chowanego (zaproszenie, potwierdzenie, wyniki) zasłania grę: wejście sceny jest wstrzymane. */
+  const [hsModal, setHsModal] = useState(false);
+  const hsView = useHideSeekView(multiplayer);
+  const hsResign = resignKindOf(hsView);
 
   // Wejście (pad, wykrywanie urządzenia, nawigacja po interfejsie): jeden nasłuch na całą aplikację.
   useEffect(() => startBrowserInput(), []);
@@ -409,7 +417,14 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
   const onWorldReady = useCallback(() => dispatch({ type: "worldReady" }), [dispatch]);
   const onPose = useCallback((pose: ForestPose) => dispatch({ type: "forest.pose", pose }), [dispatch]);
 
-  const leave = useCallback(() => dispatch({ type: "leave" }), [dispatch]);
+  const leave = useCallback(() => {
+    // Zabawa w chowanego: uczestnik nie wychodzi z lasu (zrezygnować można w menu).
+    if (multiplayer?.hs.restricted) {
+      multiplayer.hs.setNotice("LEAVE_BLOCKED");
+      return;
+    }
+    dispatch({ type: "leave" });
+  }, [dispatch, multiplayer]);
   const select = useCallback((slot: number) => dispatch({ type: "select", slot }), [dispatch]);
   const eat = useCallback(() => dispatch({ type: "eat" }), [dispatch]);
   const toggleLantern = useCallback(() => dispatch({ type: "lantern.toggle" }), [dispatch]);
@@ -575,12 +590,14 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
             hour={clock.hour + clock.minute / 60}
             quality={forestQuality}
             onQualityChange={changeForestQuality}
-            suspended={panel !== null || !!state.dialog || state.dead}
+            suspended={panel !== null || !!state.dialog || state.dead || hsModal}
             onPose={onPose}
             onLeave={leave}
             onLoadingChange={setForestLoading}
           />
         )}
+
+        <HideSeekLayer multiplayer={multiplayer} touchUi={touchUi} inForest={inForest} blocked={panel !== null || !!state.dialog || state.dead} onModalChange={setHsModal} />
 
         {state.view !== "shop" && (
           <QuestTracker
@@ -635,9 +652,21 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
           setPanel(null);
           leave();
         }}
+        canLeave={!hsView?.you.restricted}
+        resign={
+          hsResign
+            ? {
+                label: hsResign === "cancel" ? ACTIONS.cancel : ACTIONS.resign,
+                onPress: () => {
+                  setPanel(null);
+                  multiplayer?.hs.askConfirm(hsResign);
+                },
+              }
+            : null
+        }
       />
       <ControllerSettingsDialog open={settingsOpen} onClose={() => setPanel("pause")} />
-      <GameSettingsDialog open={gameSettingsOpen} onClose={() => setPanel("pause")} />
+      <GameSettingsDialog open={gameSettingsOpen} onClose={() => setPanel("pause")} multiplayer={multiplayer} inForest={inForest} onHideSeekAction={() => setPanel(null)} />
       {touchUi ? (
         <MobileInventoryDrawer
           slots={state.slots}

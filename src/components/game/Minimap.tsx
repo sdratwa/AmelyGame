@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import type { GameState } from "@/lib/game/engine";
+import { minimapMarkerVisible, playerLabelVisible } from "@/lib/hideseek/visibility";
 import { arrowRotation, buildMinimapModel, projectToMap, searchAreas, type MinimapModel } from "@/lib/game/systems/minimap";
 
 export type MinimapPose = { x: number; z: number; yaw: number };
@@ -132,7 +133,31 @@ export function Minimap({ multiplayer, seed, state, getPose, size = 200 }: { mul
       last = time;
       ctx.clearRect(0, 0, px, px);
       ctx.drawImage(base, 0, 0);
-      for(const p of multiplayer?.remote() ?? []) { const q=at(p);ctx.beginPath();ctx.arc(q.x,q.y,4*k,0,Math.PI*2);ctx.fillStyle='#7ee7ff';ctx.fill();ctx.fillText(p.name,q.x+6*k,q.y); }
+      // Zabawa w chowanego: ukryci i szukający nie mają znaczników (centralna reguła `minimapMarkerVisible`), a nazwy
+      // rysujemy tylko tam, gdzie wolno je pokazać (`playerLabelVisible`).
+      for (const p of multiplayer?.remote() ?? []) {
+        if (!minimapMarkerVisible(p.mini)) continue;
+        const q = at(p);
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, 4 * k, 0, Math.PI * 2);
+        ctx.fillStyle = "#7ee7ff";
+        ctx.fill();
+        if (playerLabelVisible(true, p.mini)) ctx.fillText(p.name, q.x + 6 * k, q.y);
+      }
+      // Szukający widzi tylko okręgi obszarów (promień 50 m), bez dokładnych punktów ani nazw ukrywających się.
+      const hsAreas = multiplayer?.hs.view?.phase === "SEEKING" ? multiplayer.hs.view.areas : null;
+      for (const a of hsAreas ?? []) {
+        const c = at(a);
+        const r = (a.r / (model.bounds.maxX - model.bounds.minX)) * px;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,120,170,0.16)";
+        ctx.fill();
+        ctx.setLineDash([]);
+        ctx.lineWidth = 2 * k;
+        ctx.strokeStyle = "rgba(255,150,190,0.95)";
+        ctx.stroke();
+      }
 
       for (const a of areasRef.current) {
         const c = at(a);

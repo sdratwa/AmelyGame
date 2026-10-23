@@ -18,6 +18,8 @@ export function PauseMenu({
   onGameSettings,
   onSave,
   onLeave,
+  canLeave = true,
+  resign,
 }: {
   open: boolean;
   view: View;
@@ -26,6 +28,10 @@ export function PauseMenu({
   onGameSettings: () => void;
   onSave: () => void;
   onLeave: () => void;
+  /** Uczestnik zabawy w chowanego nie wychodzi z lasu (najpierw rezygnuje). */
+  canLeave?: boolean;
+  /** Przycisk rezygnacji z zabawy w chowanego (null = brak zabawy). */
+  resign?: { label: string; onPress: () => void } | null;
 }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onResume()}>
@@ -49,7 +55,12 @@ export function PauseMenu({
           <Button data-testid="pause-save" variant="secondary" onClick={onSave}>
             Zapisz teraz
           </Button>
-          {view !== "world" && (
+          {resign && (
+            <Button data-testid="pause-hideseek-resign" variant="secondary" onClick={resign.onPress}>
+              {resign.label}
+            </Button>
+          )}
+          {view !== "world" && canLeave && (
             <Button data-testid="pause-leave" variant="secondary" onClick={onLeave}>
               Wróć do miasta
             </Button>

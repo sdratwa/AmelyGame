@@ -37,7 +37,7 @@ export const MOTION_RULES = Object.freeze({
   bodyTolerance: 0.08,
 });
 
-export type MotionReason = "below_ground" | "unsupported" | "too_high" | "rise_too_fast" | "inside_rock";
+export type MotionReason = "below_ground" | "unsupported" | "too_high" | "rise_too_fast" | "inside_rock" | "teleport";
 
 /** Stan ostatniej PRZYJĘTEJ wiadomości ruchu sesji. `anchorY` to wysokość stóp ostatnio na ziemi (podstawa limitu skoku). */
 export type MotionTrack = { x: number; y: number; z: number; at: number; grounded: boolean; anchorY: number; rockId: string | null };
@@ -69,7 +69,7 @@ export function initialTrack(x: number, y: number, z: number, now: number): Moti
  * 4. nieciągłość (odrodzenie, pierwsza wiadomość): tylko reguły statyczne (2 oraz limity wysokości nad terenem); serwer nie
  *    weryfikuje tu położenia poziomego, tak jak dotąd (M1a).
  */
-export function checkMotion(world: MotionWorld, prev: MotionTrack | null, next: Sample, now: number): MotionVerdict {
+export function checkMotion(world: MotionWorld, prev: MotionTrack | null, next: Sample, now: number, options: { strict?: boolean } = {}): MotionVerdict {
   const R = MOTION_RULES;
   const { walk } = world;
   const terrainY = walk.terrain.height(next.x, next.z);
@@ -79,6 +79,8 @@ export function checkMotion(world: MotionWorld, prev: MotionTrack | null, next: 
   const elapsed = prev ? Math.min(Math.max(now - prev.at, 0), R.maxElapsed) : 0;
   const reach = R.runSpeed * R.continuitySpeedFactor * (elapsed + R.jitterAllowance) + R.continuityPad;
   const continuous = prev !== null && Math.hypot(next.x - prev.x, next.z - prev.z) <= reach;
+  // Tryb ścisły (uczestnicy zabawy w chowanego): nieciągłość to teleport, nie odrodzenie, więc nie jest przyjmowana.
+  if (options.strict && prev && !continuous) return { ok: false, reason: "teleport" };
 
   // Podparcie przy deklaracji "na ziemi".
   let rockId: string | null = null;

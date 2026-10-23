@@ -1,3 +1,4 @@
+import { playerLabelVisible } from "@/lib/hideseek/visibility";
 import * as THREE from "three";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { type PlayerAsset, sceneNodeName } from "../assets/characters";
@@ -123,7 +124,7 @@ export class RemotePlayers {
           a.rig.apply(wanted);
         }
       }
-      a.label.visible = showNames;
+      a.label.visible = playerLabelVisible(showNames, p.mini);
       a.model.setPose(p.x, p.y, p.z, p.bodyYaw);
       const f = { x: -Math.sin(p.bodyYaw), z: -Math.cos(p.bodyYaw) };
       a.anim.update(

@@ -43,6 +43,10 @@ export class ThirdPersonCamera {
   private started = false;
   /** Aktualny dystans po kolizjach (m). */
   distance: number;
+  /** Blokada sterowania kamerą (zabawa w chowanego): `look` i `lookAnalog` nic nie zmieniają, kąty zadane zostają. */
+  lookLocked = false;
+  /** Kamera skierowana pionowo w dół (wygładzone przejście); kąty zadane są zachowane na czas blokady. */
+  lockedDown = false;
   readonly pose: CameraPose = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 };
 
   constructor(
@@ -65,6 +69,7 @@ export class ThirdPersonCamera {
 
   /** Obrót kamery ruchem myszy (piksele); pitch ograniczony zakresem z konfiguracji. */
   look(dx: number, dy: number): void {
+    if (this.lookLocked) return;
     const c = this.config;
     this.yaw -= dx * c.cameraSensitivity;
     this.pitch = this.clampPitch(this.pitch - dy * c.cameraSensitivity);
@@ -72,6 +77,7 @@ export class ThirdPersonCamera {
 
   /** Obrót analogowy (pad), rad/s. */
   lookAnalog(x: number, y: number, dt: number, yawRate: number, pitchRate: number): void {
+    if (this.lookLocked) return;
     const step = Math.min(Math.max(dt, 0), 0.1);
     this.yaw -= x * yawRate * step;
     this.pitch = this.clampPitch(this.pitch - y * pitchRate * step);
@@ -104,7 +110,7 @@ export class ThirdPersonCamera {
     }
     const kr = blend(step, c.cameraRotationSmoothness);
     this.shownYaw += wrapPi(this.yaw - this.shownYaw) * kr;
-    this.shownPitch += (this.pitch - this.shownPitch) * kr;
+    this.shownPitch += ((this.lockedDown ? -Math.PI / 2 : this.pitch) - this.shownPitch) * kr;
 
     const yaw = this.shownYaw;
     const pitch = this.shownPitch;

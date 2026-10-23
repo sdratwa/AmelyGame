@@ -3,20 +3,25 @@
  * dane wracają do domyślnych. Nowe przełączniki dodajemy tutaj (typ, domyślna wartość, normalizacja) i w `GameSettingsDialog`.
  */
 
+import { clampSeekMinutes } from "@/lib/hideseek/config";
+
 export type GameSettings = {
   /** Nazwy graczy nad postaciami w multiplayerze. */
   showPlayerNames: boolean;
+  /** Zabawa w chowanego: czas poszukiwań w minutach (1-15). Włączenie zabawy NIE jest ustawieniem trwałym - to akcja na serwerze. */
+  hideSeekMinutes: number;
 };
 
 export const GAME_SETTINGS_KEY = "miasto.game.settings";
 
-export const DEFAULT_GAME_SETTINGS: GameSettings = { showPlayerNames: true };
+export const DEFAULT_GAME_SETTINGS: GameSettings = { showPlayerNames: true, hideSeekMinutes: 5 };
 
 export function normalizeGameSettings(input: unknown): GameSettings {
   const d = DEFAULT_GAME_SETTINGS;
   const o = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   return {
     showPlayerNames: typeof o.showPlayerNames === "boolean" ? o.showPlayerNames : d.showPlayerNames,
+    hideSeekMinutes: typeof o.hideSeekMinutes === "number" && Number.isFinite(o.hideSeekMinutes) ? clampSeekMinutes(o.hideSeekMinutes) : d.hideSeekMinutes,
   };
 }
 

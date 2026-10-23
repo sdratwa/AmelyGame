@@ -81,6 +81,8 @@ export const BUTTON_BINDINGS: readonly ButtonBinding[] = [
   { button: BTN.r1, game: "slotPrev" },
   { button: BTN.r2, game: "slotNext" },
   { button: BTN.options, game: "pause", ui: "pause" },
+  // Prawy drążek wciśnięty (R3/RS): kontekstowa akcja zabawy w chowanego (TO MOJA KRYJÓWKA! / ZNALAZŁEM!).
+  { button: BTN.r3, game: "hideSeek" },
   // Krzyżak w górę: lampa naftowa w lesie (wolny przycisk; w interfejsie dalej nawigacja).
   { button: BTN.up, game: "lantern", ui: "navUp", repeat: true },
   { button: BTN.down, ui: "navDown", repeat: true },
@@ -123,6 +125,7 @@ const PS_GLYPHS: Record<number, string> = {
   [BTN.r2]: "R2",
   [BTN.options]: "OPTIONS",
   [BTN.l3]: "L3",
+  [BTN.r3]: "R3",
   [BTN.up]: "↑",
   [BTN.down]: "↓",
   [BTN.left]: "←",
@@ -140,6 +143,7 @@ const XBOX_GLYPHS: Record<number, string> = {
   [BTN.r2]: "RT",
   [BTN.options]: "MENU",
   [BTN.l3]: "LS",
+  [BTN.r3]: "RS",
   [BTN.up]: "↑",
   [BTN.down]: "↓",
   [BTN.left]: "←",
@@ -160,6 +164,7 @@ export const KEYBOARD_LABELS: Record<HintAction, string | null> = {
   journal: "J",
   minimap: "M",
   lantern: "L",
+  hideSeek: "H",
   pause: null,
   slotPrev: "1-8",
   slotNext: "1-8",
@@ -188,6 +193,8 @@ export function buttonForHint(action: HintAction): number | null {
       return bindingButton("minimap", "game");
     case "lantern":
       return bindingButton("lantern", "game");
+    case "hideSeek":
+      return bindingButton("hideSeek", "game");
     case "pause":
       return bindingButton("pause", "game");
     case "slotPrev":

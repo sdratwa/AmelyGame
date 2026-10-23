@@ -149,6 +149,25 @@ export class PlayerController {
   }
 
   /**
+   * Zamraża położenie poziome w punkcie (x, z) i zeruje prędkość poziomą; pion (skok, spadanie) działa dalej. Używane przy
+   * kotwicy zabawy w chowanego i przy korekcie pozycji z serwera.
+   */
+  anchorHorizontal(x: number, z: number): void {
+    const s = this.state;
+    s.x = x;
+    s.z = z;
+    s.vx = s.vz = s.speed = 0;
+  }
+
+  /** Obrót ciała w stronę kierunku `yaw` (np. kamery) z prędkością obrotu z konfiguracji; dla stojącej postaci. */
+  turnToward(yaw: number, dt: number): void {
+    const s = this.state;
+    const diff = wrapPi(yaw - s.bodyYaw);
+    const maxTurn = this.config.turnSpeed * Math.min(Math.max(dt, 0), MAX_TPP_DT);
+    s.bodyYaw += Math.abs(diff) <= maxTurn ? diff : Math.sign(diff) * maxTurn;
+  }
+
+  /**
    * Powierzchnia, na którą postać opadłaby teraz (najwyższa pod stopami: teren, most albo wierzch skały); do diagnostyki.
    * Skała jest brana pod uwagę tylko wtedy, gdy stopy są nad jej powierzchnią, więc u podstawy skały wynikiem jest teren.
    */

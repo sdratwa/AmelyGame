@@ -23,7 +23,7 @@ describe("ustawienia gry", () => {
   it("zapisuje i odczytuje wyłączenie nazw (round-trip)", () => {
     const storage = memoryStorage();
     new GameSettingsStore(() => storage).set({ showPlayerNames: false });
-    expect(JSON.parse(storage.data.get(GAME_SETTINGS_KEY)!)).toEqual({ showPlayerNames: false });
+    expect(JSON.parse(storage.data.get(GAME_SETTINGS_KEY)!)).toEqual({ showPlayerNames: false, hideSeekMinutes: 5 });
     expect(new GameSettingsStore(() => storage).get().showPlayerNames).toBe(false);
   });
 
@@ -40,6 +40,16 @@ describe("ustawienia gry", () => {
     off();
     store.set({ showPlayerNames: false });
     expect(cb).toHaveBeenCalledTimes(2);
+  });
+
+  it("czas poszukiwań w chowanego: domyślnie 5 min, przycinany do 1-15", () => {
+    expect(DEFAULT_GAME_SETTINGS.hideSeekMinutes).toBe(5);
+    expect(normalizeGameSettings({ hideSeekMinutes: 99 }).hideSeekMinutes).toBe(15);
+    expect(normalizeGameSettings({ hideSeekMinutes: 0 }).hideSeekMinutes).toBe(1);
+    expect(normalizeGameSettings({ hideSeekMinutes: "dużo" }).hideSeekMinutes).toBe(5);
+    const store = new GameSettingsStore(() => memoryStorage());
+    store.set({ hideSeekMinutes: 8 });
+    expect(store.get().hideSeekMinutes).toBe(8);
   });
 
   it("brak dostępu do magazynu nie psuje ustawień", () => {
