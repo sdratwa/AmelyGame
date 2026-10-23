@@ -56,8 +56,9 @@ import { useInputActions, useTouchUi } from "@/components/input/hooks";
 import { isHubSource } from "@/lib/input/actions";
 import { PauseMenu } from "./PauseMenu";
 import { ControllerSettingsDialog } from "./ControllerSettingsDialog";
+import { GameSettingsDialog } from "./GameSettingsDialog";
 
-type Panel = "board" | "journal" | "inventory" | "blueprint" | "pause" | "settings";
+type Panel = "board" | "journal" | "inventory" | "blueprint" | "pause" | "settings" | "gameSettings";
 
 const ForestWorldView = dynamic(() => import("./ForestWorldView").then((m) => m.ForestWorldView), {
   ssr: false,
@@ -308,7 +309,8 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
   useGamePause(dispatch, "ui.panel", "ui.blueprint", blueprintOpen);
   const pauseOpen = panel === "pause" && playing && !state.dialog;
   const settingsOpen = panel === "settings" && playing && !state.dialog;
-  useGamePause(dispatch, "ui.panel", "ui.pause_menu", pauseOpen || settingsOpen);
+  const gameSettingsOpen = panel === "gameSettings" && playing && !state.dialog;
+  useGamePause(dispatch, "ui.panel", "ui.pause_menu", pauseOpen || settingsOpen || gameSettingsOpen);
   // Zdobycie schematu (komunikat z silnika) otwiera okno z wymaganymi materiałami; id komunikatu jest unikalne,
   // więc wczytanie zapisu nie otwiera okna ponownie.
   const toastId = state.toast?.id ?? null;
@@ -338,7 +340,7 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
   const togglePanel = useCallback((which: "journal" | "inventory" | "pause") => {
     setPanel((cur) => {
       if (cur === which) return null;
-      if (which === "pause" && cur === "settings") return null;
+      if (which === "pause" && (cur === "settings" || cur === "gameSettings")) return null;
       if (cur !== null) return cur;
       if (document.querySelector('[data-slot="dialog-content"]')) return cur;
       document.exitPointerLock?.();
@@ -627,6 +629,7 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
         view={state.view}
         onResume={closePanel}
         onSettings={() => setPanel("settings")}
+        onGameSettings={() => setPanel("gameSettings")}
         onSave={saveNow}
         onLeave={() => {
           setPanel(null);
@@ -634,6 +637,7 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
         }}
       />
       <ControllerSettingsDialog open={settingsOpen} onClose={() => setPanel("pause")} />
+      <GameSettingsDialog open={gameSettingsOpen} onClose={() => setPanel("pause")} />
       {touchUi ? (
         <MobileInventoryDrawer
           slots={state.slots}

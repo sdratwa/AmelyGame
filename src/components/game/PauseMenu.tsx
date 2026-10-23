@@ -7,7 +7,7 @@ import { preferredInitialFocus } from "@/lib/input/domNavigator";
 import { HintText } from "@/components/input/InputHint";
 
 /**
- * Menu gry (OPTIONS / MENU na padzie albo przycisk "Menu"): wznowienie, ustawienia kontrolera, zapis i powrót do miasta.
+ * Menu gry (OPTIONS / MENU na padzie albo przycisk "Menu"): wznowienie, ustawienia gry i kontrolera, zapis i powrót do miasta.
  * Zegar stoi, dopóki menu jest otwarte (powód pauzy dodaje `GameApp`). To jedyna droga wyjścia z lasu padem.
  */
 export function PauseMenu({
@@ -15,6 +15,7 @@ export function PauseMenu({
   view,
   onResume,
   onSettings,
+  onGameSettings,
   onSave,
   onLeave,
 }: {
@@ -22,6 +23,7 @@ export function PauseMenu({
   view: View;
   onResume: () => void;
   onSettings: () => void;
+  onGameSettings: () => void;
   onSave: () => void;
   onLeave: () => void;
 }) {
@@ -37,6 +39,9 @@ export function PauseMenu({
         <div className="grid gap-2">
           <Button data-testid="pause-resume" data-gamepad-initial="" onClick={onResume}>
             Wznów grę
+          </Button>
+          <Button data-testid="pause-game-settings" variant="secondary" onClick={onGameSettings}>
+            Ustawienia gry
           </Button>
           <Button data-testid="pause-settings" variant="secondary" onClick={onSettings}>
             Ustawienia kontrolera

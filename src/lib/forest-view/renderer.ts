@@ -1,6 +1,7 @@
 import { NET, type Player } from "../multiplayer/protocol";
 import * as THREE from "three";
 import { RemotePlayers, createRemoteTemplate } from "./remotePlayers";
+import { gameSettings } from "@/lib/settings/gameSettings";
 import { PLAYER_COLLISION_RADIUS, playersVerticallyOverlap } from "@/lib/multiplayer/playerCollision";
 import type { MultiplayerClient } from "../multiplayer/client";
 import { getForestAudio } from "../audio/controller";
@@ -1776,7 +1777,7 @@ export class ForestRenderer {
       this.multiplayer.syncLantern(this.lanternOn);
       const players = this.multiplayer.remote();
       remoteList = players;
-      this.remotePlayers.update(players, dt, this.multiplayer.appearances);
+      this.remotePlayers.update(players, dt, this.multiplayer.appearances, gameSettings.get().showPlayerNames);
       getForestAudio().remotePlayersMotion(players, dt);
       const s = this.tpp.rig.controller.state;
       getForestAudio().setPose({

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Settings, X } from "lucide-react";
 import type { QualityId } from "@/lib/assets";
 import { TOUCH_SETTING_LIMITS, touchSettings } from "@/lib/input/touchSettings";
-import { useTouchSettings } from "@/components/input/hooks";
+import { useGameSettings, useTouchSettings } from "@/components/input/hooks";
+import { gameSettings } from "@/lib/settings/gameSettings";
 import { cn } from "@/lib/utils";
 import { AudioControls } from "../AudioControls";
 
@@ -36,6 +37,7 @@ export function TouchForestMenu({
 }) {
   const [open, setOpen] = useState(false);
   const prefs = useTouchSettings();
+  const game = useGameSettings();
   const l = TOUCH_SETTING_LIMITS.lookSensitivity;
 
   return (
@@ -88,6 +90,15 @@ export function TouchForestMenu({
             className={cn("h-9 w-full rounded-lg font-semibold", minimap ? "bg-emerald-500 text-emerald-950" : "bg-white/15 active:bg-white/30")}
           >
             Minimapa: {minimap ? "włączona" : "wyłączona"}
+          </button>
+          <button
+            type="button"
+            data-testid="touch-menu-player-names"
+            aria-pressed={game.showPlayerNames}
+            onClick={() => gameSettings.set({ showPlayerNames: !game.showPlayerNames })}
+            className={cn("h-9 w-full rounded-lg font-semibold", game.showPlayerNames ? "bg-emerald-500 text-emerald-950" : "bg-white/15 active:bg-white/30")}
+          >
+            Nazwy graczy: {game.showPlayerNames ? "włączone" : "wyłączone"}
           </button>
           <label className="block">
             <span className="mb-0.5 flex justify-between text-slate-200">

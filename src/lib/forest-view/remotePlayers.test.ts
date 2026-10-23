@@ -69,4 +69,25 @@ describe("gracze zdalni mają własny wygląd", () => {
     remote.dispose();
     local.dispose();
   });
+
+  it("nazwy nad graczami zdalnymi można ukryć i przywrócić", async () => {
+    const template = createRemoteTemplate(await loadTestPlayer());
+    const scene = new THREE.Scene();
+    const remote = new RemotePlayers(scene, template);
+    const labels = () => {
+      const found: THREE.Sprite[] = [];
+      scene.traverse((o) => {
+        if ((o as THREE.Sprite).isSprite) found.push(o as THREE.Sprite);
+      });
+      return found;
+    };
+    const players = [player("a"), player("b")];
+    remote.update(players, 0.016);
+    expect(labels().map((l) => l.visible)).toEqual([true, true]);
+    remote.update(players, 0.016, {}, false);
+    expect(labels().map((l) => l.visible)).toEqual([false, false]);
+    remote.update(players, 0.016, {}, true);
+    expect(labels().map((l) => l.visible)).toEqual([true, true]);
+    remote.dispose();
+  });
 });

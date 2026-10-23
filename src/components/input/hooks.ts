@@ -7,6 +7,7 @@ import { controllerSettings, DEFAULT_CONTROLLER_SETTINGS, type ControllerSetting
 import type { PadStatus } from "@/lib/input/gamepadInput";
 import { hintLabel } from "@/lib/input/prompts";
 import { isTouchUi, parseTouchOverride, TOUCH_UI_STORAGE_KEY, type TouchOverride } from "@/lib/input/touchMode";
+import { gameSettings, DEFAULT_GAME_SETTINGS, type GameSettings } from "@/lib/settings/gameSettings";
 import { touchSettings, DEFAULT_TOUCH_SETTINGS, type TouchSettings } from "@/lib/input/touchSettings";
 
 /** Subskrypcja akcji wejścia (pad; klawiatura korzysta z tych samych funkcji akcji w komponentach). */
@@ -95,6 +96,14 @@ function subscribeTouchUi(cb: () => void): () => void {
  */
 export function useTouchUi(): boolean {
   return useSyncExternalStore(subscribeTouchUi, touchUiSnapshot, () => false);
+}
+
+export function useGameSettings(): GameSettings {
+  return useSyncExternalStore(
+    (cb) => gameSettings.subscribe(cb),
+    () => gameSettings.get(),
+    () => DEFAULT_GAME_SETTINGS,
+  );
 }
 
 export function useTouchSettings(): TouchSettings {

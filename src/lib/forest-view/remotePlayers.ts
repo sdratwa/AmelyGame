@@ -48,7 +48,8 @@ export class RemotePlayers {
   handBone(playerId: string): THREE.Object3D | null {
     return this.actors.get(playerId)?.hand ?? null;
   }
-  update(players: Player[], dt: number, appearances: Appearances = {}) {
+  /** `showNames`: czy pokazywać nazwy nad postaciami (ustawienie gry); ukrycie nie usuwa tekstury, więc przełącznik jest tani. */
+  update(players: Player[], dt: number, appearances: Appearances = {}, showNames = true) {
     for (const [id, a] of this.actors)
       if (!players.some((p) => p.playerId === id)) {
         a.anim.dispose();
@@ -122,6 +123,7 @@ export class RemotePlayers {
           a.rig.apply(wanted);
         }
       }
+      a.label.visible = showNames;
       a.model.setPose(p.x, p.y, p.z, p.bodyYaw);
       const f = { x: -Math.sin(p.bodyYaw), z: -Math.cos(p.bodyYaw) };
       a.anim.update(
