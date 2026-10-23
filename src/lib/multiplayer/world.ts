@@ -3,12 +3,13 @@ import { chestCollider } from "../game/world/chests";
 import { WalkWorld } from "../game/world/walk";
 import { generateWorld, fingerprintWorld } from "../game/world/registry";
 import { fingerprintOf } from "../game/world/fingerprint";
+import { CURRENT_GEN_VERSION } from "../game/world/registry";
 import { idleMotion, type WorldConfig } from "./protocol";
 export function createInstance(
   worldInstanceId = "world_001",
   worldSeed = 2030,
 ) {
-  const ref = { seed: worldSeed, genVersion: 3 };
+  const ref = { seed: worldSeed, genVersion: CURRENT_GEN_VERSION };
   const forest = authoritativeForestOf(ref);
   const objects = forest.allSectors().flatMap((s) => s.colliders);
   const walk = new WalkWorld({
@@ -21,12 +22,12 @@ export function createInstance(
     barriers: structuredClone(forest.plan.barriers),
     passages: structuredClone(forest.plan.passages),
   });
-  const base = generateWorld(worldSeed, 3);
+  const base = generateWorld(worldSeed, CURRENT_GEN_VERSION);
   const config: WorldConfig = {
     worldId: "forest_start",
     worldInstanceId,
     worldSeed,
-    generatorVersion: 3,
+    generatorVersion: CURRENT_GEN_VERSION,
     fingerprint: fingerprintWorld(base),
   };
   // Connected component, every edge verified by actual movement; deterministic grid on the western bank.

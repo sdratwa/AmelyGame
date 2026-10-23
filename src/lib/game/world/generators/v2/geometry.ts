@@ -49,7 +49,7 @@ export class ForestGeometry {
   /** Profile w kolejności wag zwracanych przez `profileWeights`; ostatni to profil bazowy. */
   readonly weightProfiles: readonly EnvironmentProfile[];
   private readonly waterIndex = new SegmentIndex(10, 16);
-  private readonly trailIndex = new SegmentIndex(8, 16);
+  private readonly trailIndex: SegmentIndex;
   private readonly zones: ZoneGeom[] = [];
   private readonly quadrants: QuadrantLayout | null;
 
@@ -58,7 +58,9 @@ export class ForestGeometry {
     readonly region: RegionDef,
     profiles: ProfileTable,
     quadrants?: QuadrantLayout,
+    trailReach = 8,
   ) {
+    this.trailIndex = new SegmentIndex(trailReach, 16);
     this.quadrants = quadrants ?? null;
     const river = plan.terrain.find((r): r is RiverRequest => r.kind === "river");
     if (!river) throw new Error("Plan lasu nie zawiera rzeki");

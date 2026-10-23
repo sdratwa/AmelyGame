@@ -4,6 +4,7 @@ import { bridgeRailBoxes, planBridge, type BridgeLayout } from "./bridgeLayout";
 import { chestCollider, chestPlacements, type ChestPlacement } from "./chests";
 import { createForest, type ForestSector, type ForestWorld } from "./generators/v2/forest";
 import { PRO_OPTIONS } from "./generators/v2/pro";
+import { DUNE_TRAIL_REACH_V4 } from "./generators/v4/world";
 import type { WorldRef } from "./types";
 import { FOREST_START } from "./generators/v2/plan";
 import { makeObject, type WorldObject } from "./objects";
@@ -27,7 +28,7 @@ export function worldRefOf(key: WorldKey): WorldRef {
 const cacheKey = (ref: WorldRef) => `${ref.genVersion}:${ref.seed}`;
 
 function build(ref: WorldRef, layers: "gameplay" | "all"): ForestWorld {
-  if (ref.genVersion >= 3) return createForest(ref.seed, { pro: PRO_OPTIONS, layers });
+  if (ref.genVersion >= 3) return createForest(ref.seed, { pro: PRO_OPTIONS, layers, duneTrailReach: ref.genVersion >= 4 ? DUNE_TRAIL_REACH_V4 : undefined });
   return createForest(ref.seed, layers === "all" ? {} : { layers });
 }
 

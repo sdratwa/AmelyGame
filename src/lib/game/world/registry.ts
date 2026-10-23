@@ -2,6 +2,7 @@ import { fingerprintOf } from "./fingerprint";
 import { generateWorldV1 } from "./generators/v1";
 import { generateWorldV2 } from "./generators/v2/world";
 import { generateWorldV3 } from "./generators/v3/world";
+import { generateWorldV4 } from "./generators/v4/world";
 import type { WorldBase } from "./types";
 
 type Generator = (seed: number) => WorldBase;
@@ -11,10 +12,11 @@ const GENERATORS: Record<number, Generator> = {
   1: generateWorldV1,
   2: generateWorldV2,
   3: generateWorldV3,
+  4: generateWorldV4,
 };
 
 /** Nowe gry: v3 (las z paczką Pro). Zapisy v2 nadal działają na zamrożonym generatorze v2. */
-export const CURRENT_GEN_VERSION = 3;
+export const CURRENT_GEN_VERSION = 4;
 
 const CACHE_LIMIT = 6;
 const cache = new Map<string, WorldBase>();

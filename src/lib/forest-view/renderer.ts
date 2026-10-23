@@ -1,6 +1,7 @@
 import { NET, type Player } from "../multiplayer/protocol";
 import * as THREE from "three";
 import { RemotePlayers, createRemoteTemplate } from "./remotePlayers";
+import { PLAYER_COLLISION_RADIUS, playersVerticallyOverlap } from "@/lib/multiplayer/playerCollision";
 import type { MultiplayerClient } from "../multiplayer/client";
 import { getForestAudio } from "../audio/controller";
 import { AssetLibrary, DEFAULT_QUALITY, type QualityId } from "@/lib/assets";
@@ -1703,7 +1704,14 @@ export class ForestRenderer {
           ctl.state.pitch = pose.pitch;
         }
       } else if (!this.loading && !this.suspended) {
-        ctl.blockers = [...(this.npcLayer?.blockers() ?? []), ...(this.deerLayer?.blockers() ?? [])];
+        const otherPlayers = this.multiplayer?.remote() ?? NO_PLAYERS;
+        ctl.blockers = [
+          ...(this.npcLayer?.blockers() ?? []),
+          ...(this.deerLayer?.blockers() ?? []),
+          ...otherPlayers
+            .filter((p) => playersVerticallyOverlap({ y: this.tpp?.rig.controller.state.y ?? ctl.state.eyeY - 1.6, crouching: false }, p))
+            .map((p) => ({ x: p.x, z: p.z, r: PLAYER_COLLISION_RADIUS })),
+        ];
         const px = ctl.state.x;
         const pz = ctl.state.z;
         const pad = this.inputHub;

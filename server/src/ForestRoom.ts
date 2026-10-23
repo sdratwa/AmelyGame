@@ -4,6 +4,7 @@ import { createSoundEvent } from "../../src/lib/multiplayer/soundEvents";
 import { Room, type Client } from "@colyseus/core";
 import { randomUUID } from "node:crypto";
 import { createInstance } from "../../src/lib/multiplayer/world";
+import { playersOverlap } from "../../src/lib/multiplayer/playerCollision";
 import { normalizeAppearance, type CharacterAppearanceV1 } from "../../src/lib/character/appearance";
 import {
   NET,
@@ -39,12 +40,12 @@ export class ForestRoom extends Room {
     string,
     { time: number; count: number; sound: number }
   >();
-  onCreate(options: { worldInstanceId?: string; worldSavePath?: string }) {
+  onCreate(options: { worldInstanceId?: string; worldSavePath?: string; migrateWorldV3?: boolean }) {
     this.roomId = options.worldInstanceId ?? "world_001";
     if (options.worldInstanceId && options.worldInstanceId !== "world_001")
       this.world = createInstance(options.worldInstanceId);
     if (options.worldSavePath) {
-      this.store = new WorldStore(options.worldSavePath, this.world.config);
+      this.store = new WorldStore(options.worldSavePath, this.world.config, options.migrateWorldV3 === true);
       this.sharedWorld = this.store.load();
       for (const id of this.sharedWorld.harvested) this.world.walk.removeObject(id);
     }
@@ -76,6 +77,7 @@ export class ForestRoom extends Room {
         data.jumpSequence < p.jumpSequence
       )
         return;
+      if ([...this.players.values()].some((other) => other !== p && playersOverlap(data, other))) return;
       Object.assign(p, data);
     });
     // Lampa naftowa: stan zmienia wyłącznie właściciel sesji. Treść wiadomości to tylko flaga (żadnego playerId, żadnych

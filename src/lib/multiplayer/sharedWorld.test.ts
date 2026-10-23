@@ -18,7 +18,7 @@ import { countOf } from "../game/systems/containers";
 import { forestBridgeOf, forestWalkOf, syncBridgeColliders, syncHarvestedColliders } from "../game/world/lookup";
 import { BRIDGE_FLAG } from "../game/world/generators/v2/plan";
 
-const ref = { seed: 2030, genVersion: 3 };
+const ref = { seed: 2030, genVersion: 4 };
 const config = createInstance().config;
 function prepared() {
   let state = { ...newPlaying(2030), view: "forest" as const };

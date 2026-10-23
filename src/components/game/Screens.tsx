@@ -104,11 +104,13 @@ export function ContinueScreen({
   save,
   notice,
   onContinue,
+  onUpgrade,
   onNewGame,
 }: {
   save: SaveV5;
   notice?: string;
   onContinue: () => void;
+  onUpgrade?: () => void;
   onNewGame: () => void;
 }) {
   const clock = getClock(save.time.elapsed);
@@ -157,6 +159,7 @@ export function ContinueScreen({
       >
         Kontynuuj
       </Button>
+      {onUpgrade && <Button variant="secondary" size="lg" onClick={onUpgrade} className="mt-3 h-12 w-full text-base">Napraw teren w zapisie (kopia zostanie zachowana)</Button>}
       <Button
         data-testid="new-game-button"
         variant="secondary"

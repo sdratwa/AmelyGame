@@ -15,6 +15,7 @@ import {
   type Welcome,
 } from "./protocol";
 import { fingerprintWorld, generateWorld } from "../game/world/registry";
+import { CURRENT_GEN_VERSION } from "../game/world/registry";
 export class MultiplayerClient {
   world: SharedWorld | null = null;
   private worldListeners = new Set<(world: SharedWorld) => void>();
@@ -77,7 +78,7 @@ export class MultiplayerClient {
       const room = await new Client(endpoint).joinById("world_001", {
         worldInstanceId: "world_001",
         protocol: PROTOCOL,
-        fingerprint: fingerprintWorld(generateWorld(2030, 3)),
+        fingerprint: fingerprintWorld(generateWorld(2030, CURRENT_GEN_VERSION)),
       });
       this.room = room;
       room.onMessage("world", (world: SharedWorld) => this.receiveWorld(world));
@@ -141,7 +142,7 @@ export class MultiplayerClient {
             clearTimeout(timeout);
             if (
               !Number.isFinite(w.worldElapsed) || w.worldElapsed < 0 ||
-              w.config.generatorVersion !== 3 ||
+              w.config.generatorVersion !== CURRENT_GEN_VERSION ||
               fingerprintWorld(
                 generateWorld(w.config.worldSeed, w.config.generatorVersion),
               ) !== w.config.fingerprint

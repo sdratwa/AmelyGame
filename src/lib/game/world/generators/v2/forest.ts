@@ -35,6 +35,8 @@ export type ForestOptions = {
   pro?: ProOptions;
   /** `gameplay`: tylko warstwa autorytatywna świata (drzewa i skały z ich ID i kolizjami); domyślnie `all`. */
   layers?: "gameplay" | "all";
+  /** v4: pełny zasięg wygaszania wydm; v3 zachowuje 8 m. */
+  duneTrailReach?: number;
 };
 
 export type ForestSector = {
@@ -107,6 +109,7 @@ export type ForestWorldInit = {
    */
   dunes?: boolean;
   layers?: "gameplay" | "all";
+  duneTrailReach?: number;
 };
 
 /**
@@ -139,7 +142,7 @@ export class ForestWorld {
     this.features = init.features;
     this.profiles = init.profiles ?? DEFAULT_PROFILES;
     this.pro = init.pro ?? null;
-    this.geometry = new ForestGeometry(init.plan, this.region, this.profiles, this.pro?.quadrants);
+    this.geometry = new ForestGeometry(init.plan, this.region, this.profiles, this.pro?.quadrants, init.duneTrailReach);
     const dunes = init.dunes ? this.pro?.tuning?.dunes : undefined;
     this.terrain = dunes ? withDunes(init.terrain, this.geometry, this.seed, dunes) : init.terrain;
     this.sectorGrid = sectorCount(this.region);
@@ -309,6 +312,7 @@ export function createForest(seed: number, options: ForestOptions = {}): ForestW
     pro: options.pro,
     dunes: true,
     layers: options.layers,
+    duneTrailReach: options.duneTrailReach,
   });
 }
 

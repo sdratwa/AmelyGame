@@ -6,7 +6,7 @@ import { fingerprintWorld, generateWorld } from "../game/world/registry";
 import { loadOnlineGame, onlineSavePrefix } from "./save";
 import type { Player, WorldConfig } from "./protocol";
 
-const config: WorldConfig = { worldId: "forest_start", worldInstanceId: "world_001", worldSeed: 2030, generatorVersion: 3, fingerprint: fingerprintWorld(generateWorld(2030, 3)) };
+const config: WorldConfig = { worldId: "forest_start", worldInstanceId: "world_001", worldSeed: 2030, generatorVersion: 4, fingerprint: fingerprintWorld(generateWorld(2030, 4)) };
 const player = { playerId: "first-session", name: "Odkrywca", x: 12, z: 18, bodyYaw: 0 } as Player;
 function storage(): KeyValueStorage {
   const data = new Map<string, string>();

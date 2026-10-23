@@ -13,7 +13,7 @@ describe("generator świata v3 (las Pro, warstwa autorytatywna)", () => {
   it("jest zarejestrowany i jest bieżącą wersją nowych gier", () => {
     expect(WORLD_GEN_V3).toBe(3);
     expect(hasGenerator(3)).toBe(true);
-    expect(CURRENT_GEN_VERSION).toBe(3);
+    expect(CURRENT_GEN_VERSION).toBe(4);
   });
 
   it("jest deterministyczny i zwraca niezależne kopie", () => {

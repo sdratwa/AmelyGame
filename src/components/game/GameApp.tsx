@@ -23,6 +23,7 @@ import {
 import { loadOnlineGame, onlineSavePrefix } from "@/lib/multiplayer/save";
 import { Autosaver } from "@/lib/game/save/autosave";
 import { loadGame, type BootResult } from "@/lib/game/save/loader";
+import { migrateWorldV3ToV4 } from "@/lib/game/save/worldV3ToV4";
 import { createNewGameParams } from "@/lib/game/save/newGame";
 import { LocalStorageSaveStore, type SaveStore } from "@/lib/game/save/store";
 import { cn } from "@/lib/utils";
@@ -422,6 +423,18 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
     };
     if (multiplayer) {
       return safe(<div role="alert" className="p-6">Nie można wczytać postępu online. Zapis pozostaje zachowany.
+        {result.kind === "world_mismatch" && result.save.world.genVersion === 3 && multiplayer.config?.generatorVersion === 4 &&
+          <button onClick={() => {
+            try {
+              const migrated = migrateWorldV3ToV4(result.save);
+              void getStore().save(migrated).then((outcome) => {
+                if (!outcome.ok) throw Error(outcome.error);
+                retry();
+              }).catch((error) => setSaveError(error instanceof Error ? error.message : String(error)));
+            } catch (error) {
+              setSaveError(error instanceof Error ? error.message : String(error));
+            }
+          }}>Zaktualizuj świat online (kopia zapisu zostanie zachowana)</button>}
         <button onClick={retry}>Spróbuj ponownie</button>
       </div>);
     }
@@ -439,6 +452,17 @@ export const GameApp = memo(function GameApp({ multiplayer, exitSaverRef, onExit
                   : undefined
             }
             onContinue={() => dispatch({ type: "game.load", save: result.save })}
+            onUpgrade={result.save.world.genVersion === 3 ? () => {
+              try {
+                const migrated = migrateWorldV3ToV4(result.save);
+                void getStore().save(migrated).then((outcome) => {
+                  if (!outcome.ok) throw Error(outcome.error);
+                  setBoot({ status: "ready", result: { kind: "ok", save: migrated, source: "primary" } });
+                }).catch((error) => setSaveError(error instanceof Error ? error.message : String(error)));
+              } catch (error) {
+                setSaveError(error instanceof Error ? error.message : String(error));
+              }
+            } : undefined}
             onNewGame={newGame}
           />
           {devReset}
